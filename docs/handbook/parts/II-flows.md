@@ -54,9 +54,10 @@ memory entry) is the inner cycle of step 4; F3 and F5 carry its contracts.
    admitted under its configured policy.
 2. The scheduler delivers round-admission.v1 and the total-worker allowance
    through Crier (CT-02 target; legacy transport: internal/bus/dispatch.go:202,266);
-   the node's bus worker pulls the message and holds a 30-second lease (`CT-03`,
-   PROVEN; `scripts/node-bus-worker.py:1356,1383`), and the execution adapter
-   launches the project foreman inside its Bunker.
+   the target consumer holds the 60-second `custody.v1` lease (M10 §16), and the
+   resident supervisor launches the project foreman inside its Bunker. The measured
+   legacy node bus worker uses a 30-second lease (`scripts/node-bus-worker.py:1356,1383`),
+   not proof of target custody or crash-safe execution.
 3. The foreman reads the current board and project memory, analyzes impact through
    Hilo, selects and claims useful compatible work, and assembles worker briefs
    with acceptance criteria, model/provider access and isolated workspaces. Each
@@ -693,10 +694,11 @@ replay/redelivery record.
    events and allocation metrics if convergence remains impossible.
 
 **Exceptional branches:** the replay ledger only proves what it durably contains —
-the dispatcher replays the recorded result on redelivery instead of re-running
+the legacy dispatcher replays the recorded result on redelivery instead of re-running
 (`dispatcher.py:470-475`, M11 §3 S2), but a result lost with the process is re-run
 from scratch, and a missing ledger row does not prove no external side effect
-occurred. Crier redelivers an unacked message after lease expiry; an empty list is
+occurred. Legacy Crier redelivers an unacked message after lease expiry; target
+`custody.v1` instead holds it for reconciliation (M10 §16). An empty list is
 not a lost message (M10 §11). The scheduler's `--reap-sessions` closes stale
 sessions, dry-run without `--apply` (M9 §5); `board_read` resolves the board from
 origin/main when the working copy drifts (M4 §3); a `board_lock` ERROR verdict
@@ -706,6 +708,10 @@ group, so the kill-the-group guarantee is withdrawn (M11 §2); unknown-start
 reconciliation is a required behavior, not an implemented one (M11 §2). Restarting
 the controller must not replenish worker allowance or dispatch to a stale target,
 and automatic repair stays within configured authority and capacity.
+
+The target recovery query and independently checkable interruption vector are M9
+§17.1; it reconciles all simultaneous local/custody/native/sink states without
+inventing a distributed transaction. Runtime conformance is unverified.
 
 **Target fencing:** Part I §§1.9.3–1.9.3a and M7 §17–17.1 govern the
 independent authority, effect gate and each protected resource, including the

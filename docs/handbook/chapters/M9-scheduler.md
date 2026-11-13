@@ -450,8 +450,10 @@ scheduler behavior in §§1–13 is not proof of it.
 
 Scheduler execution uses SQLite WAL with synchronous FULL and one write transaction
 per transition; manager/config logs retain Part I's Git-backed JSONL authority.
-The resident foreman uses the same record model for its round-local worker ledger,
-with fsynced transaction records as Part I §1.9.2. Scheduler does not independently
+The resident supervisor owns the authoritative round-local worker ledger and launch
+journal, using fsynced transaction records as Part I §1.9.2 and M2 §15.2; the
+foreman selects and submits workers and reads its ledger, but cannot write the
+supervisor's journal. Scheduler does not independently
 debit worker allowance. The round report names the count `consumed`; ledger state
 `charged` is counted by `consumed`, while a refused admission increments neither
 `consumed` nor `reserved`. Keys are unique and all foreign references must exist:
@@ -489,7 +491,7 @@ use the original message ID, backoff 5,10,20,40,80,160,300 s capped, until deadl
 exhaustion is dead and remains visible for recovery, not deleted.
 
 Restart scans attempts in intent/start_unknown/running/quarantined and queries
-M11's launch_id. NEVER_ACCEPTED permits same-ID launch; running resumes observation;
+the M11 §16 supervisor by launch_id. NEVER_ACCEPTED permits same-ID launch; running resumes observation;
 terminal imports the exact result; unavailable lookup quarantines. It scans unacked
 outboxes by available_at,message_id, expired claims included; scans projections where
 state != applied and reads the destination effect before replay; scans returned
@@ -503,6 +505,129 @@ revocations before reopening admission. An older `cf.backup.v1` watermark cannot
 authorize an old owner, and a pending outbox/round is restored once by identity rather
 than relaunched. A failed checkpoint or known-row readback leaves admission closed and
 `RESTORE_RESULT` not ready.
+
+### 17.1 Durable transition groups and recovery oracle (P5G-02)
+
+This is the target contract, not a claim that the measured tables in §3 implement
+these logical records or that the current dispatcher provides crash safety. The
+logical record names in §17 are not physical SQLite table names. The scheduler
+owns its round/capacity, result, projection, outbox and event records; the supervisor
+owns its worker/attempt/result/outbox/event and launcher journal; Crier owns its
+delivery, lease, result custody and receipt; the manager owns its own §1.9.2 log.
+The foreman requests a reservation and receives a receipt; it does not mutate the
+supervisor's private journal. M1 §17.4–17.5 specifies its protected mount. The
+broker and each sink own their effect/receipt; no cross-store transaction is assumed.
+Manager/supervisor JSONL uses `store_version: 1`; scheduler schema migration must
+pin its version before accepting work. External envelopes remain `cf2a.v1`, with
+`round-admission.v1`, `worker-brief.v1`, `worker-result.v1`, `round-report.v1`
+and `custody.v1` bodies; these versions do not name a new internal wire protocol.
+
+Each §17 record has a mandatory immutable key and all listed fields; IDs, digest,
+Fence and time types are Part IV §IV.2. Nullable fields are explicitly null until
+known. Every state change has a nonnegative integer `state_version` incremented
+once by CAS, and each event has a unique transition_id and monotonically increasing
+per-aggregate seq. The supervisor binds a unique launch_id, execution_key,
+dispatch_id and native_name to the input digest (M2 §15.4); one attempt ID cannot
+be reused for other input. Result key is the attempt_id for a worker or round_id
+for a round, not an ambiguous untagged union: the kind and ID form the key.
+The same key and canonical digest returns the original receipt; changed bytes are
+`LAUNCH_CONFLICT`, `RESULT_CONFLICT`, or the applicable idempotency conflict, never
+an overwrite. Foreign keys and allowance >= consumed + reserved are checked in the
+same transaction; concurrent reservations cannot both spend the last unit. A sink
+projection key is `(round_id,sink)` and its digest and effect identity cannot be
+changed on retry. Outbox key is `(destination,message_id)` with immutable bytes and
+digest. A revision of a final settlement is identified by
+`(round_id,report_digest,settlement_revision)` (§1.9.9), not a replacement result.
+The required §17 fields are extended as follows: every mutable round, capacity,
+worker, attempt, result, projection and outbox record carries `state_version`;
+attempt also carries `execution_key` and `native_name`; projection also carries
+`effect_id`; outbox also carries `deadline`; result also carries `kind` and its
+receipt identity. Settlement stores `round_id`, `report_digest`,
+`settlement_revision`, state, outcome, evidence and hook receipt references,
+revocation and quiescence references, accounting effect ID and follow-up message
+ID (null until applicable), and `state_version`. These are logical fields, not
+assertions about deployed SQL columns.
+
+| Commit point, in order | One local atomic transaction; action permitted only after durable commit |
+|---|---|
+| Manager admission | §1.9.2 CAS, operation, dedupe receipt and event outbox; return accepted only after fsync and required config projection readback. |
+| Scheduler admission | round, held capacity, admission digest and dispatch outbox/event; then send the same `round-admission.v1` identity to Crier. Grant consume and delivery custody are separate commits (§1.9.10; M10 §16). |
+| Crier delivery/retrieve | Delivery plus initial reservation/receipt; later lease plus signed chain receipt. Only then return that operation's receipt; lease receipt is not a launch or result acknowledgement. |
+| Supervisor worker intent | reserve worker, attempt intent, launch identity and launch outbox/event together; only then call create-or-discover. Launcher fsyncs START_INTENT before creating a gated child, fsyncs STARTED with native identity before release (M2 §15.2). Charge exactly once upon proven start; unproven start stays reserved. |
+| Supervisor terminal | terminal state CAS, canonical `worker-result.v1` bytes/digest, event and result-delivery outbox together; only then send result. No input ack until Crier durably accepts matching result and returns its custody receipt (M10 §16). |
+| Crier result/ack | result custody, result outbox and receipt commit together; ack separately commits the same delivery/lease/result digest and receipt before returning ack. Lost response is read back, not a new execution. |
+| Scheduler report | `round-report.v1` canonical bytes/digest, immutable execution outcome, received state, event and required pending projection/outbox records together; only then acknowledge report custody. Projection owner reads the sink and sends the stable effect ID only after its intent commits. |
+| Projection / settlement | After sink readback, CAS its exact digest and receipt to applied with event; unavailable/conflicting readback cannot become applied. Scheduler commits settlement revision, final accounting and follow-up outbox/event together only after §1.9.9 evidence, hooks, revocation and quiescence requirements; only then emit success/follow-up. Terminal failure or partial remains distinct from success. |
+
+Failure of any commit, fsync, uniqueness check or CAS yields no corresponding
+acknowledgement or external action; retry from durable state. An external call is
+never made while holding a local transaction open. A timed-out call is unknown,
+not failed or absent. Broken hash/sequence or inaccessible authoritative store
+stops writes and launches; a torn uncommitted tail is handled by §1.9.2. F15
+restores only a verified coordinated cut, reconciles current fences and then runs
+this same recovery; host loss can exceed the backup watermark and is not zero-loss.
+
+**Recovery query, applied to every interrupted combination.** On restart, first
+fence the old owner and validate local replay/indexes. For each round, read its
+round/capacity/result and settlement revision by round_id; read every worker and
+attempt by round_id, their result by `(kind,id)`, and their event sequence. Read
+outboxes where `state=pending AND available_at<=now` OR
+`state=claimed AND claim_until<=now`, ordered by `(available_at,message_id)`; `dead` remains visible
+as an incident. Read projections where `state != applied` and returned rounds with
+missing required receipts. A claimed outbox not yet expired waits for its owner or
+expiry; matching owner/digest is required to complete the claim. For each delivery,
+read M10 §16's signed GET by delivery_id and, for an existing lease, its lease_id;
+for each unresolved attempt GET M11 §16's launch resource by the original launch_id
+and its result subresource, validating execution_key, digest, fence and native
+incarnation. For each non-applied projection read the destination by its stable
+effect identity and compare digest/OID before replay. Read missing evidence and
+hook receipts by the identities in §1.9.9. Store or readback unavailable means
+unknown/hold, never an empty set. Repeat these scans until each pending item is
+resolved or explicitly quarantined/abandoned under a newer fence.
+
+Apply all matching rules independently, in this precedence: (1) corrupt/inaccessible
+authority or stale fence: stop; (2) committed terminal result: replay its exact
+outbox, never relaunch, and reject a different digest; (3) no terminal: reconcile
+the supervisor/launcher: authoritative `NEVER_ACCEPTED` permits the same-ID
+create-or-discover, an existing gated child is recovered and released only after
+STARTED is durable, running is observed, terminal is imported, all other or
+unavailable states are `START_UNKNOWN` and quarantined; (4) custody accepted but
+ack unknown: GET the same delivery/result and retry only the missing operation;
+(5) sink effect exists with matching digest: persist its receipt; absent with
+authoritative readback: replay the same effect ID; conflict or unavailable: hold;
+(6) all required evidence and quiescence present: complete the same settlement
+revision once, otherwise remain pending or apply the specified timeout/failure.
+An impossible combination, such as acknowledged input without matching durable
+result custody, or an applied projection without its matching receipt, is an
+integrity incident: fence, retain evidence and do not synthesize the missing fact.
+This precedence covers simultaneous lost replies, retries, expired claims and
+partial projections without assuming the clocks or commits of different stores
+are atomic.
+
+**Standalone vector P5G-02-V1.** Treat `D`, `R`, `P` as three distinct immutable
+digests; every identity below is a distinct literal. Start each row independently
+with round `r`, allowance 1, worker `w`, attempt `a`, launch `l`, delivery `d`,
+and one required board projection `b`. A dash means no committed fact; `?` means
+the named external read is unavailable, not absent. Run the ordered query/rules
+above once; the expected counts are `(consumed,reserved,native starts,final success
+effects)`, including already committed starts/effects. A sink lookup marked absent
+is authoritative, and matching means exact identity and digest.
+
+| Durable / observed facts at crash | Required next action and expected counts |
+|---|---|
+| No admission commit; no external effects | Retry original request; before its new commit `(0,0,0,0)` and no acknowledgement. |
+| Admission and Crier delivery `d` committed, response lost; no worker | Read `d`, replay original receipt; `(0,0,0,0)`, no launch. |
+| `w=reserved`, `a=intent`, launch outbox committed, `l=NEVER_ACCEPTED` | Submit `l` once; before start observation `(0,1,0,0)`. On proven start charge once: `(1,0,1,0)`. |
+| Same reservation, `l=?` | Quarantine; consumed 0, reserved 1, known native starts 0, final success effects 0; no new start or refund, and actual prior start count is unknown. |
+| Started `l`, charged `w`, no result; native is running | Reattach, never submit another; `(1,0,1,0)`. If native state is unknown, quarantine instead. |
+| Result `R` and outbox durable, result custody and input ack replies lost | GET `d` and result; replay exact `R` and missing ack only; `(1,0,1,0)`. A different result is `RESULT_CONFLICT`. |
+| Report `D`, projection `b` pending for `P`, sink contains matching `P`, receipt lost | Adopt readback receipt and CAS `b=applied`; `(1,0,1,0)`. No second sink effect. |
+| Same report/projection, sink authoritatively absent | Replay original effect identity once, verify `P`, then persist receipt; `(1,0,1,0)`. Unknown or conflicting sink instead holds. |
+| All required receipts, passing report, revocation and quiescence durable; final commit absent | Commit one `settled_success` revision and follow-up outbox; after its delivery `(1,0,1,1)`. Repeat query returns the same revision, never a second success effect. |
+| Crier says acked but supervisor has no result and no Crier result custody | Integrity incident, fence and hold; `(1,0,1,0)` if the start was proven; never invent `R` or rerun. |
+
+This vector is a specification oracle, not a runtime test or live qualification.
+[Part I §§1.9.2/1.9.9–1.9.10; M2 §15; M10 §16; M11 §16; F1/F8/F15]
 
 ## 18. Hook plan and receipts (P5-C-11)
 

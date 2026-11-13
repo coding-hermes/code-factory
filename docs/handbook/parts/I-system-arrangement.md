@@ -1079,9 +1079,10 @@ transaction; its durable intent precedes it and readback resolves unknown outcom
 **Cross-store crash procedure (III.M9.S3 / F8; P5G-02).** This manager
 transaction format is not the scheduler's database format. M9 §17 specifies
 the scheduler's SQLite WAL/synchronous FULL round, capacity, result, projection,
-event and outbox records and the resident foreman's fsynced worker ledger. The
-scheduler owns admission and settlement; the foreman owns worker reservation,
-launch and results; Crier owns custody; the broker owns protected effect
+event and outbox records and the resident supervisor's fsynced worker ledger. The
+scheduler owns admission and settlement; the foreman selects and requests workers,
+while the resident supervisor owns the authoritative worker reservation, native
+launch journal and result; Crier owns custody; the broker owns protected effect
 mediation. Their transactions are local to each authority, not one distributed
 transaction. Part IV §IV.1/IV.2 fixes the `cf2a.v1` wire and the
 `round-admission.v1`, `worker-result.v1` and `round-report.v1` bodies.
@@ -1092,7 +1093,7 @@ the identities and recovery scans in M9 §17 and the terminal mapping in §1.9.1
 | Last durable fact / interruption | Required recovery outcome |
 |---|---|
 | Admission committed; acknowledgement lost | Replay the original receipt or delivery identity; custody is not execution success. |
-| Worker reservation, attempt intent and launch outbox committed; start uncertain | Query the original `launch_id`; observe running, import terminal, or quarantine if unavailable. Only `NEVER_ACCEPTED` permits the same-ID launch. |
+| Worker reservation, attempt intent and launch outbox committed; start uncertain | Query the original `launch_id`; observe running, import terminal, or quarantine if unavailable. Only authoritative `NEVER_ACCEPTED` permits the same-ID launch; an existing gated child follows M2 §15.2. |
 | Result, digest, event and result-delivery outbox committed; input acknowledgement lost | Replay the same result/outbox; do not relaunch. A changed result is `RESULT_CONFLICT`. |
 | Round result and projections committed; sink effect or receipt uncertain | Scan non-applied projections, read the destination before replay, and adopt only matching evidence; unavailable readback cannot prove success. |
 | Report received; evidence, postcheck or settlement interrupted | Resume the same report/revision under §1.9.9, withhold success and follow-up until required proofs exist, and never rerun completed work. |
@@ -1103,6 +1104,12 @@ unknown external effects remain fenced until readback resolves them. Manager
 admission dedupe uses the stored request digest and original receipt; changed
 bytes are refused. For the actual versioned records, constraints, retry and
 expired-claim scans, use M9 §17 rather than a second record schema here.
+
+The exact transition groups, cross-store recovery algorithm and standalone vector
+are M9 §17.1. They specialize this `store_version: 1` journal and the `cf2a.v1`
+wire; they do not claim the current node worker has this durability. In particular,
+M2 §10/§12 records that `save_seen` failure only warns, so redelivery after a
+crash can re-execute; M11 §10 records its analogous crash-before-ledger gap.
 
 ch:trace row=P5G-02 spec=docs/handbook/parts/I-system-arrangement.md#1.9.2-durable-records-and-acknowledgement wave=none:serial test=none doc=docs/handbook/parts/I-system-arrangement.md evidence=none:worker-local-handbook-change witness=none:repository-local-spec-only verdict=none commit=none memory=none
 
