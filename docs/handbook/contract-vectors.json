@@ -102,7 +102,10 @@
         "expected": {
           "accepted": false,
           "refusal": "DIGEST_MISMATCH",
-          "side_effects_before_refusal": ["none:reservation", "none:native-start"]
+          "side_effects_before_refusal": [
+            "none:reservation",
+            "none:native-start"
+          ]
         }
       },
       "expected": {
@@ -112,6 +115,39 @@
         "attempt_timeout_s": 1800
       },
       "domain": "execution",
+      "static_controls": []
+    },
+    {
+      "id": "CV-01-G",
+      "kind": "negative",
+      "name": "criteria mutation refuses before execution effects",
+      "canonical_json": "{\"attachments\":[],\"brief\":{\"digest\":\"aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a\"},\"brief_ref\":\"cas+sha256://code-factory/924e4d1712dec3552b39c730675b778c1e7a5ac3dbd0f965f122119bcd673119\",\"criteria\":[{\"argv\":[\"verify\",\"--fixture\",\"--extra-token\"],\"cwd\":\".\",\"description\":\"The admitted change is verified.\",\"expected_exit\":0,\"id\":\"AC-1\",\"oracle_digest\":\"fc360a2ecbbd5eec0f5748b31a5ae732497b5c2ee81ebce4feee6a15acbd7eb8\",\"timeout_s\":60}],\"skills\":[],\"task\":{\"acceptance_criteria\":[{\"argv\":[\"verify\",\"--fixture\"],\"cwd\":\".\",\"description\":\"The admitted change is verified.\",\"expected_exit\":0,\"id\":\"AC-1\",\"oracle_digest\":\"fc360a2ecbbd5eec0f5748b31a5ae732497b5c2ee81ebce4feee6a15acbd7eb8\",\"timeout_s\":60}],\"cancel_request\":null,\"claim\":{\"claim_generation\":1,\"claim_id\":\"claim-cf1-1\",\"claimant_id\":\"foreman-1\",\"lease_expires_at\":\"2026-11-11T19:03:00Z\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"}},\"completion\":null,\"complexity\":3,\"created_at\":\"2026-11-11T18:00:00Z\",\"created_seq\":1,\"deferral\":null,\"depends_on\":[],\"fixture\":false,\"id\":\"CF-1\",\"initiative_id\":\"initiative-1\",\"kind\":\"task\",\"operation_id\":\"op-claim-cf1\",\"paths\":[\".\"],\"reasoning\":\"A complete vector is required before implementation.\",\"resources\":[],\"revision\":2,\"schema_version\":\"cf.board-task.v1\",\"status\":\"in_progress\",\"title\":\"Prove the execution contract\",\"updated_at\":\"2026-11-11T19:01:00Z\"},\"text_b64\":\"Q29tcGxldGUgdGhlIGFkbWl0dGVkIGJvYXJkIHRhc2tzIGFuZCByZXR1cm4gZXZpZGVuY2Uu\"}",
+      "canonical_sha256": "a6f83b0e6ef66fac995d428b2f9c5e976608b77b087a92119c5e48915fb63847",
+      "related_objects": {
+        "brief_input_canonical_json": "{\"attachments\":[],\"criteria\":[{\"argv\":[\"verify\",\"--fixture\",\"--extra-token\"],\"cwd\":\".\",\"description\":\"The admitted change is verified.\",\"expected_exit\":0,\"id\":\"AC-1\",\"oracle_digest\":\"fc360a2ecbbd5eec0f5748b31a5ae732497b5c2ee81ebce4feee6a15acbd7eb8\",\"timeout_s\":60}],\"directive\":\"Complete the admitted board tasks and return evidence.\",\"schema_version\":\"cf.brief-input.v1\",\"skills\":[],\"task\":{\"acceptance_criteria\":[{\"argv\":[\"verify\",\"--fixture\"],\"cwd\":\".\",\"description\":\"The admitted change is verified.\",\"expected_exit\":0,\"id\":\"AC-1\",\"oracle_digest\":\"fc360a2ecbbd5eec0f5748b31a5ae732497b5c2ee81ebce4feee6a15acbd7eb8\",\"timeout_s\":60}],\"cancel_request\":null,\"claim\":{\"claim_generation\":1,\"claim_id\":\"claim-cf1-1\",\"claimant_id\":\"foreman-1\",\"lease_expires_at\":\"2026-11-11T19:03:00Z\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"}},\"completion\":null,\"complexity\":3,\"created_at\":\"2026-11-11T18:00:00Z\",\"created_seq\":1,\"deferral\":null,\"depends_on\":[],\"fixture\":false,\"id\":\"CF-1\",\"initiative_id\":\"initiative-1\",\"kind\":\"task\",\"operation_id\":\"op-claim-cf1\",\"paths\":[\".\"],\"reasoning\":\"A complete vector is required before implementation.\",\"resources\":[],\"revision\":2,\"schema_version\":\"cf.board-task.v1\",\"status\":\"in_progress\",\"title\":\"Prove the execution contract\",\"updated_at\":\"2026-11-11T19:01:00Z\"}}",
+        "brief_input_sha256": "924e4d1712dec3552b39c730675b778c1e7a5ac3dbd0f965f122119bcd673119",
+        "brief_ref": "cas+sha256://code-factory/924e4d1712dec3552b39c730675b778c1e7a5ac3dbd0f965f122119bcd673119",
+        "declared_brief_digest": "aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a",
+        "canonicalization": "RFC 8785 JCS; UTF-8 without BOM or trailing LF; hash exactly brief_input_canonical_json bytes",
+        "verification_procedure": "sha256sum of the UTF-8 bytes in brief_input_canonical_json must equal brief_input_sha256 and the brief_ref suffix; the dispatch declaration intentionally remains CV-01-B brief_digest"
+      },
+      "expected": {
+        "accepted": false,
+        "refusal": "DIGEST_MISMATCH",
+        "detail_class": "DIGEST_MISMATCH",
+        "side_effects_before_refusal": [
+          "none:gate-execution",
+          "none:harness-start",
+          "none:reservation",
+          "none:attempt-start"
+        ]
+      },
+      "domain": "execution",
+      "base": "CV-01-B",
+      "mutate_only": {
+        "path": "criteria[0].argv",
+        "append": "--extra-token"
+      },
       "static_controls": []
     },
     {

@@ -34,9 +34,11 @@ Refusals (named, non-zero exit, no side effects when possible):
   signing_key  the private key is absent, unreadable, not PKCS#8 PEM, or not ed25519
   bus_bearer   no bearer token (file or CRIER_AUTH_TOKEN) to send with the signature
   bus_health   the bus does not answer /health (000) from this node
-  brief_digest a dispatch's brief.digest does not cover every field this node executes (text,
-               gate, repo, ref, workdir, vars), or a gate arrives with no digest / a text-only
-               legacy digest — refused, not warned; an unbound gate.cmd is never run
+  brief_digest a dispatch's cf.brief-input.v1 digest is absent or does not cover every field this
+               node executes — refused, not warned; an unbound gate.cmd is never run
+
+cf-brief-v1 is retired. Senders must upgrade to cf.brief-input.v1 and reproduce the node value
+with --print-brief-digest.
   text_b64     a dispatch's `text_b64` does not decode to UTF-8 text — refused, no fallback
   brief_project a dispatch names a project other than this node's
   brief_workdir a dispatch names a workdir that is not inside this node's clone
@@ -77,8 +79,10 @@ The §5 variable contract (specs/HARNESS-MATRIX.md §5):
 
 import argparse
 import base64
+import copy
 import hashlib
 import json
+import math
 import os
 import re
 import shlex
@@ -136,11 +140,8 @@ SECTION5_INTS = {
 
 EMPTY_SHA256 = hashlib.sha256(b"").hexdigest()
 
-# The reachable node-adapter digest scheme carried by `brief.digest` (CF-275). This is
-# deliberately not the supervisor's `cf.brief-input.v1` contract: the adapter receives a flat
-# legacy dispatch and has no BriefInput CAS resolver. Naming this scheme prevents the two
-# reachable/target contracts from being mistaken for one another.
-BRIEF_DIGEST_SCHEME = "node-dispatch.v1"
+# The only executable brief digest scheme is the immutable BriefInput contract.
+BRIEF_DIGEST_SCHEME = "cf.brief-input.v1"
 
 # The plain members a dispatch may carry instead of `text_b64`, in the order older senders use
 # (docs/MASTER-DOC-SCHEMA.md §3c). Read by directive_text().
@@ -1071,117 +1072,97 @@ def directive_text(dispatch):
     return "", "brief"
 
 
-def brief_canonical(dispatch, text):
-    """The node-dispatch.v1 object `brief.digest` is sha256 over — every member that can change what
-    this reachable adapter EXECUTES, and nothing else (`specs/ENVELOPE.md`, CF-275).
-
-    This is the flat node-adapter contract. The supervisor's separate `cf.brief-input.v1` JCS
-    object is not reachable from this script and must not be reconstructed here.
-
-    `text` is the decoded directive; `gate` is the command `run_gate()` hands to `/bin/sh -lc` in
-    the clone; `workdir`/`repo`/`ref` are the declared identity (the node still executes only
-    inside its own clone, but a rewritten member must be detectable); `vars` is the §5 set the
-    harness child inherits, so a swapped model, provider or key path is an alteration too.
-
-    Equivalent spellings collapse to one digest, because the digest binds the EFFECT: a gate with
-    no `expect_exit` hashes exactly like `expect_exit: 0` (that is the value the node compares
-    against), and member order is irrelevant. Without this, two senders that mean the same thing
-    would disagree with the node over nothing.
-    """
-    gate = dispatch.get("gate")
-    if isinstance(gate, dict):
-        canonical_gate = {
-            "cmd": gate.get("cmd"),
-            "expect_exit": gate.get("expect_exit", 0),
-            # `run_gate()` treats a falsy timeout as "fall back to the wall limit", so a 0 and an
-            # absent value are the same effect and must hash the same.
-            "timeout_s": gate.get("timeout_s") or None,
-        }
-    else:
-        canonical_gate = None
-    declared_vars = dispatch.get("vars")
+def _task_image(dispatch):
+    """Return the supplied TaskRow image, or the deterministic envelope identity projection."""
+    task = dispatch.get("task")
+    if isinstance(task, dict):
+        return copy.deepcopy(task)
     return {
-        "scheme": BRIEF_DIGEST_SCHEME,
-        "text": text,
-        "gate": canonical_gate,
+        "project_id": dispatch.get("project_id"),
+        "round_id": dispatch.get("round_id"),
+        "task_id": dispatch.get("task_id"),
+        "attempt_id": dispatch.get("attempt_id"),
         "repo": dispatch.get("repo"),
         "ref": dispatch.get("ref"),
         "workdir": dispatch.get("workdir"),
-        "vars": declared_vars if isinstance(declared_vars, dict) else None,
+        "gate": copy.deepcopy(dispatch.get("gate")),
+        "vars": copy.deepcopy(dispatch.get("vars")) if isinstance(dispatch.get("vars"), dict) else {},
     }
 
 
-def brief_canonical_bytes(dispatch, text):
-    """The exact bytes a sender hashes: canonical JSON, UTF-8, sorted keys, no whitespace.
+def brief_canonical(dispatch, text):
+    """Build the normative cf.brief-input.v1 BriefInput projection.
 
-    A sender in another language reproduces this by emitting the members in sorted order with
-    `,`/`:` separators and no insignificant spaces, UTF-8 encoded — non-ASCII is NOT \\u-escaped.
-    `--print-brief-digest` prints the value this helper computes, so a sender never has to guess.
+    The wire envelope is projected deterministically: ``directive`` is the decoded brief text;
+    ``task`` is the dispatch's TaskRow image when present, otherwise a TaskRow image projected from
+    project_id, round_id, task_id, attempt_id, repo, ref, workdir, gate and vars; criteria, skills
+    and attachments use their dispatch members or empty arrays; schema_version is fixed. Every
+    member that can change execution (gate.cmd, criteria argv/cwd, repo, ref, workdir, vars, text,
+    skills and attachments) is therefore inside the hashed object.
     """
-    return json.dumps(
-        brief_canonical(dispatch, text),
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=False,
-    ).encode("utf-8")
+    return {
+        "attachments": copy.deepcopy(dispatch.get("attachments", [])),
+        "criteria": copy.deepcopy(dispatch.get("criteria", [])),
+        "directive": text,
+        "schema_version": BRIEF_DIGEST_SCHEME,
+        "skills": copy.deepcopy(dispatch.get("skills", [])),
+        "task": _task_image(dispatch),
+    }
+
+
+def _jcs_number(value):
+    """RFC 8785 number spelling for the JSON values accepted in dispatches."""
+    if isinstance(value, bool) or isinstance(value, int):
+        return str(value).lower()
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise ValueError("non-finite number is not valid JCS")
+        return json.dumps(value, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+    raise TypeError(value)
+
+
+def _jcs(value):
+    if value is None or isinstance(value, (bool, int, float)):
+        return _jcs_number(value) if value is not None else "null"
+    if isinstance(value, str):
+        return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+    if isinstance(value, list):
+        return "[" + ",".join(_jcs(item) for item in value) + "]"
+    if isinstance(value, dict):
+        return "{" + ",".join(
+            json.dumps(key, ensure_ascii=False, separators=(",", ":")) + ":" + _jcs(value[key])
+            for key in sorted(value)
+        ) + "}"
+    raise TypeError(type(value))
+
+
+def brief_canonical_bytes(dispatch, text):
+    """Return RFC 8785 JCS canonical UTF-8 bytes, with no BOM or trailing LF."""
+    return _jcs(brief_canonical(dispatch, text)).encode("utf-8")
 
 
 def brief_digest(dispatch, text):
-    """The cf-brief-v1 digest: sha256 over `brief_canonical_bytes()`. Sender and node share it."""
+    """Return lowercase SHA-256 over the exact cf.brief-input.v1 JCS bytes."""
     return hashlib.sha256(brief_canonical_bytes(dispatch, text)).hexdigest()
 
 
-def legacy_brief_digest(text):
-    """sha256 over the directive text ALONE — the pre-CF-275 digest, blind to gate.cmd."""
-    return hashlib.sha256(text.encode()).hexdigest()
-
-
 def brief_digest_verdict(dispatch, text):
-    """Classify a dispatch's `brief.digest` against what this node would execute.
-
-    Returns (verdict, detail) with verdict one of:
-      "bound"   the cf-brief-v1 digest over text+gate+repo+ref+workdir+vars (detail = the digest)
-      "legacy"  a text-only digest, accepted ONLY because the brief carries no gate (detail = it)
-      "absent"  no digest and no executable field — nothing outside the text could be unbound
-      "refuse"  the digest does not cover what the node would run (detail names why)
-
-    A legacy digest is never silently upgraded: beside a `gate` it is refused by name, because
-    accepting it would execute an executable the digest does not bind. A `gate` with no digest at
-    all is refused for the same reason — an integrity check that covers nothing is not one.
-    """
+    """Refuse missing or mismatched cf.brief-input.v1 input before executable side effects."""
     brief = dispatch.get("brief")
-    expected = ""
-    if isinstance(brief, dict) and brief.get("digest"):
-        expected = str(brief["digest"]).strip().lower()
-    gate_present = isinstance(dispatch.get("gate"), dict)
-    bound = brief_digest(dispatch, text)
-    legacy = legacy_brief_digest(text)
+    expected = str(brief.get("digest") or "").strip().lower() if isinstance(brief, dict) else ""
     if not expected:
-        if gate_present:
-            return "refuse", (
-                "the brief carries gate.cmd but no brief.digest — an executable the digest does "
-                f"not bind is never run; send the {BRIEF_DIGEST_SCHEME} digest over "
-                "text+gate+repo+ref+workdir+vars"
-            )
-        return "absent", ""
-    if expected == bound:
-        return "bound", bound
-    if expected == legacy:
-        if gate_present:
-            return "refuse", (
-                f"brief.digest is a legacy text-only digest (sha256 of the text alone) but the "
-                f"brief carries gate.cmd — the executable is unbound; send the "
-                f"{BRIEF_DIGEST_SCHEME} digest over text+gate+repo+ref+workdir+vars instead"
-            )
-        return "legacy", legacy
-    return "refuse", (
-        f"brief.digest {expected[:16]}… != {BRIEF_DIGEST_SCHEME} {bound[:16]}… and != legacy "
-        f"sha256(text) {legacy[:16]}… — the brief was altered in flight; refused, not run"
-    )
+        return "refuse", "BRIEF_UNAVAILABLE: no digestable cf.brief-input.v1 input"
+    bound = brief_digest(dispatch, text)
+    if expected != bound:
+        return "refuse", f"DIGEST_MISMATCH: declared brief.digest {expected} != recomputed {bound}"
+    brief_ref = dispatch.get("brief_ref")
+    if brief_ref and not str(brief_ref).endswith(bound):
+        return "refuse", f"DIGEST_MISMATCH: brief_ref suffix does not match {bound}"
+    return "bound", bound
 
 
 def print_brief_digest(path):
-    """Sender helper: print the digest a dispatch's `brief.digest` must carry (cf-brief-v1).
+    """Sender helper: print the digest a dispatch's `brief.digest` must carry (cf.brief-input.v1).
 
     It reads the dispatch exactly as the node will — `text_b64` decoded, a defaulted
     `gate.expect_exit` normalised — so a sender cannot hash a form the node does not apply.
@@ -1274,19 +1255,8 @@ def process(dispatch, ident, signer, args, seen, in_reply_to=""):
     if verdict == "bound":
         ok(
             "brief_digest",
-            f"{label} {BRIEF_DIGEST_SCHEME} {detail[:16]}… binds text+gate+repo+ref+workdir+vars "
-            f"({len(text.encode())} bytes of text)",
-        )
-    elif verdict == "legacy":
-        ok(
-            "brief_digest",
-            f"{label} legacy sha256(text) {detail[:16]}… matches, and the brief carries no gate — "
-            f"nothing outside the text executes",
-        )
-    else:
-        ok(
-            "brief_digest",
-            f"{label} carries no brief.digest and no gate — nothing outside the text could run",
+            f"{label} {BRIEF_DIGEST_SCHEME} {detail[:16]}… binds the projected BriefInput "
+            f"({len(brief_canonical_bytes(dispatch, text))} canonical bytes)",
         )
 
     claimed_project = dispatch.get("project")
@@ -1782,7 +1752,7 @@ def main(argv):
         "--print-brief-digest",
         metavar="DISPATCH.json",
         help=(
-            "sender helper: print the cf-brief-v1 digest a dispatch's brief.digest must carry "
+            "sender helper: print the cf.brief-input.v1 digest a dispatch's brief.digest must carry "
             "('-', or no value, reads stdin)"
         ),
         nargs="?",

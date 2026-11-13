@@ -143,11 +143,20 @@ class BusDispatchEncodingTest(unittest.TestCase):
             "dispatch_id": "cf354-a1",
             "corr_id": "lane-cf354-a1",
             "lane": "code-factory",
+            "project_id": "code-factory",
+            "round_id": "round-a1",
+            "task_id": "task-a1",
+            "attempt_id": "attempt-a1",
+            "repo": "https://example.invalid/code-factory.git",
+            "ref": "main",
             "text_b64": b64(DIRECTIVE),
-            "brief": {
-                "digest": hashlib.sha256(DIRECTIVE.encode("utf-8")).hexdigest(),
-                "bytes": len(DIRECTIVE.encode("utf-8")),
-            },
+            "criteria": [],
+            "skills": [],
+            "attachments": [],
+        }
+        dispatch["brief"] = {
+            "digest": WORKER_MOD.brief_digest(dispatch, DIRECTIVE),
+            "bytes": len(DIRECTIVE.encode("utf-8")),
         }
         rows_ok, result, ack = self.run_dispatch(dispatch)
         self.assertIsNotNone(
@@ -177,8 +186,18 @@ class BusDispatchEncodingTest(unittest.TestCase):
         dispatch = {
             "dispatch_id": "cf354-a2",
             "corr_id": "lane-cf354-a2",
+            "project_id": "code-factory",
+            "round_id": "round-a2",
+            "task_id": "task-a2",
+            "attempt_id": "attempt-a2",
+            "repo": "https://example.invalid/code-factory.git",
+            "ref": "main",
             "text": DIRECTIVE,
+            "criteria": [],
+            "skills": [],
+            "attachments": [],
         }
+        dispatch["brief"] = {"digest": WORKER_MOD.brief_digest(dispatch, DIRECTIVE)}
         rows_ok, result, ack = self.run_dispatch(dispatch)
         self.assertTrue(rows_ok, f"the legacy member no longer runs: {self.output}")
         self.assertEqual("completed", result.get("status"), f"status: {self.output}")

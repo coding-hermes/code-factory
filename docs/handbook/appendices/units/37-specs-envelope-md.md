@@ -197,7 +197,7 @@ The spec reads no environment. The implementations do:
 
 ## 8. Evidence of record
 
-- `specs/ENVELOPE.md` (67 lines) at revision `3c4c639`; unchanged in `70db164` (verified by diff).
+- `specs/ENVELOPE.md` at this reconciliation revision: the single executable `cf.brief-input.v1` JCS projection, named `DIGEST_MISMATCH`/`BRIEF_UNAVAILABLE` refusals, and no-side-effect ordering are now authoritative; the prior competing `node-dispatch.v1` text was removed.
 - crier `~/crier` at `f2b051a2` — `internal/registry/handler.go`, `internal/registry/dispatch.go`,
   `internal/registry/types.go`, `internal/guard/patterns.go`, `internal/guard/guard.go`,
   `internal/guard/types.go`.
@@ -211,6 +211,5 @@ The spec reads no environment. The implementations do:
   instruction" [.coding-hermes/board/tasks.jsonl:114].
 - Measured round trip, reply shapes and the five uncorrelated replies:
   `~/code-factory-reports/crier-scheduler-roundtrip-2026-11-05.md:258`.
-- A second, competing brief contract in the same scheduler (`schema_version`, `brief_digest` over canonical
-  JSON, invocation-id idempotency) at `~/sched-base-check/internal/execution/parent.go:98` — it is
-  not on the bus, it is not the spec, and it should not be mistaken for either.
+- The scheduler's `~/sched-base-check/internal/execution/parent.go:98` digest is an off-bus scheduler
+  implementation detail; it is not the bus contract and does not compete with `cf.brief-input.v1`.

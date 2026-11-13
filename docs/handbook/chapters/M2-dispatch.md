@@ -146,7 +146,7 @@ on this field, not a "sample" claimed complete:
 | — | `  PASS  %s — %s` / `  FAIL  %s — %s` (`node-bus-worker.py:125,129`) | every measurement row | descriptive (same rule as M0 F0-4) |
 | — | `  FAIL  identity — …; refusing` (`:608`) | unparseable/absent identity | evidentiary |
 | — | `inbox — GET /agents/cf-node/inbox/stats -> 200` | a valid signed inbox read (FACT-04) | evidentiary |
-| — | `  FAIL  brief_digest — {label} brief.digest … — the brief was altered in flight; refused, not run` (`node-bus-worker.py:1263-1269`) | reachable node-adapter `node-dispatch.v1` digest mismatch over decoded text, gate, repo, ref, workdir and vars | evidentiary — refusal is before project, workdir, vars, harness and gate checks; the separate supervisor `cf.brief-input.v1` contract is normative in §15.1/Part IV |
+| — | `  FAIL  brief_digest — {label} …` (`node-bus-worker.py:1263-1269`) | `cf.brief-input.v1` JCS digest mismatch or unavailable input | evidentiary — `DIGEST_MISMATCH`/`BRIEF_UNAVAILABLE` refusal is before project, workdir, vars, harness and gate checks |
 
 ## 10. Failure modes, indications and recovery
 
@@ -315,8 +315,10 @@ summary, the `worker-brief.v1` envelope, transport framing, base64 text, skill/a
 CAS bytes, or mutable source paths. If a legacy transport base64-encodes the object, the
 receiver decodes to exactly the UTF-8 bytes first, then verifies `brief_ref` and
 `brief_digest`; base64 text is never hashed. CV-01-B in `docs/handbook/contract-vectors.json`
-is the normative reproducible vector: hash its `related_objects.brief_input_canonical_json`
-bytes and compare with `related_objects.brief_input_sha256` and `brief_ref`.
+is the normative positive vector, and CV-01-G is its deterministic negative control: it changes
+one criteria argv token while leaving the declared CV-01-B digest, proving refusal before effects.
+Hash CV-01-B's `related_objects.brief_input_canonical_json` bytes and compare with
+`related_objects.brief_input_sha256` and `brief_ref`.
 
 `worker-brief.v1` carries the launch-custody identity plus `brief_ref` and
 `brief_digest`; it does not redefine BriefInput or its digest. The receiver resolves the
