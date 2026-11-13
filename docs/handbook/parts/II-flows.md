@@ -199,10 +199,11 @@ binding whose identity/version matches the readiness result.
 
 **Exceptional branches:** the certification ladder awards VERIFIED per leg — agent,
 gateway, auth, artifact, tree, seed — and an unreachable port is UNVERIFIED
-(exit 3), not FAIL (M1 §10, CF-224). Normatively, the authority/controller creates
-`registration_id` at enrollment, issues the Crier identity and class-`crier`
-`credential_ref`, and the node performs CT-22 `register.v1` (outer `cf2a.v1`) before
-the verified signed bus read. Implementation coverage remains UNVERIFIED: no in-repo
+(exit 3), not FAIL (M1 §10, CF-224). Normatively, the authority creates
+`registration_id` and the class-`crier` credential reference at enrollment, the Crier
+registrar is the only actor that admits CT-22 `register.v1` (outer `cf2a.v1`), allocates
+the node identity and returns that reference, and the node proves the verified signed
+bus read before it is schedulable. Implementation coverage remains UNVERIFIED: no in-repo
 producer was measured; `bunker-crier-connect.sh` stages and probes only (CF-276),
 while crier's `HandleRegister`/`HandleRegisterByID` are the measured receiver surface.
 A partial failure re-runs from the manifest: the seed reapplies

@@ -397,7 +397,9 @@ interpretation of queue emptiness, lease or result status.
 All target routes are under `/v1/factory`. The `/factory/v1/*` spellings are temporary
 migration aliases with identical semantics; unversioned `/agents` and `/agents/*/inbox/*`
 return `410 ROUTE_RETIRED` to target clients. Registration is
-`POST /v1/factory/registrations` with `register.v1`; collection read is
+`POST /v1/factory/registrations` with `register.v1`; the individual registration read is
+`GET /v1/factory/registrations/{registration_id}` (the durable registration, never a
+synthesized one when the store is unavailable); collection read is
 `GET /deliveries?agent_id=<id>&state=<queued|leased|reconciliation-held|acked|dead>&request_id=<id>&idempotency_key=<key>`;
 individual read is
 `GET /deliveries/{delivery_id}?request_id=<id>&idempotency_key=<key>`. Reads return the same durable
