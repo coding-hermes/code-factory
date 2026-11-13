@@ -14,7 +14,7 @@ ambiguity.
   "reply_to": "mdp-collector",
   "lane": "crier",
   "text_b64": "<base64 of the UTF-8 directive — e.g. You are the foreman for lane crier. …>",
-  "brief": {"digest": "<cf-brief-v1: sha256 over the canonical object of text, gate, repo, ref, workdir, vars>", "bytes": 4211},
+  "brief": {"digest": "<node-dispatch.v1: sha256 over the canonical object of decoded text, gate, repo, ref, workdir and vars>", "bytes": 4211},
   "route": {"provider": "xkiro", "model": "openai/gpt-6.1-sol", "harness": "hermes"},
   "vars": {"CF_MODEL": "openai/gpt-6.1-sol", "CF_PROVIDER": "xkiro",
            "CF_API_KEY_FILE": "~/.node/keys/xkiro.key",
@@ -43,10 +43,10 @@ text. The decoding rule is therefore part of the contract, not an implementation
 - Only when `text_b64` is **absent** does the receiver fall back to the plain members, in this
   order: `task`, `text`, `prompt`, `message`, `body` (first non-empty string wins). Plain `text` is
   the historical member; the others are tolerated for older senders.
-- `brief.digest` is the node's only in-flight integrity check, so it covers **every member that can
-  change what the node executes**, not just the prose it reads: the decoded directive text, `gate`,
-  `repo`, `ref`, `workdir` and `vars`. The digest is `sha256` over the **cf-brief-v1 canonical
-  object**, serialized as canonical JSON — keys sorted, `,`/`:` separators, no insignificant
+- `brief.digest` is the node adapter's only in-flight integrity check, so it covers **every member
+  that can change what the node executes**, not just the prose it reads: the decoded directive text,
+  `gate`, `repo`, `ref`, `workdir` and `vars`. The digest is `sha256` over the **node-dispatch.v1
+  canonical object**, serialized as canonical JSON — keys sorted, `,`/`:` separators, no insignificant
   whitespace, UTF-8 with non-ASCII **not** `\u`-escaped — and then hashed:
 
 ```json
@@ -60,8 +60,9 @@ text. The decoding rule is therefore part of the contract, not an implementation
   set. Equivalent spellings hash the same, so a sender never fails over a formality: member order is
   irrelevant, and a `gate` with no `expect_exit` hashes exactly like `expect_exit: 0` (the value the
   node compares against anyway), and a falsy `timeout_s` hashes like `null` (the node falls back to
-  the wall limit either way). `scripts/node-bus-worker.py` implements this as `brief_digest()`,
-  and a sender gets the value it must send without importing that file:
+  the wall limit either way). `scripts/node-bus-worker.py` implements this reachable node-adapter contract as `brief_digest()`;
+  the separate supervisor contract is `cf.brief-input.v1` in M2 §15.1 and is not implemented by this
+  adapter. A sender gets the node-adapter value it must send without importing that file:
 
 ```
 python3 scripts/node-bus-worker.py --print-brief-digest dispatch.json    # '-' or no value: stdin
@@ -76,10 +77,16 @@ python3 scripts/node-bus-worker.py --print-brief-digest dispatch.json    # '-' o
   still accepted on a brief that carries **no** gate: nothing outside the text executes, so the
   digest is complete for that purpose. A brief that carries a `gate` with **no** digest at all is
   refused too — an unbound executable is never run. Both refusals keep the named `brief_digest` row
-  (results are posted, the message is acked) and the detail text names the scheme. What the digest
-  does **not** cover: `dispatch_id`, `corr_id`, `issued_at`, `reply_to`, `lane`, `route`, `limits`
-  and `brief.bytes` — none of them changes an executed command, and `brief.bytes` is a length hint,
-  not an authorization. A mismatch is a refusal, not a warning.
+  (results are posted, the message is acked) and the detail text names `node-dispatch.v1`. What the
+  digest does **not** cover: `dispatch_id`, `corr_id`, `issued_at`, `reply_to`, `lane`, `route`,
+  `limits` and `brief.bytes` — none of them changes an executed command, and `brief.bytes` is a
+  length hint, not an authorization. A mismatch is a refusal, not a warning.
+
+This node-adapter section is intentionally separate from the supervisor's `cf.brief-input.v1`
+contract: the adapter consumes the flat dispatch shape above and does not receive or resolve a
+BriefInput CAS object. The supervisor contract owns `brief_ref` and `brief_digest` on
+`worker-brief.v1`; the adapter's `brief.digest` is only `node-dispatch.v1`. No caller may use one
+scheme's digest as the other scheme's value.
 
 **`vars` carries the harness variable contract** (`specs/HARNESS-MATRIX.md` §5). It is optional:
 a dispatch without it runs with no `CF_*` in the harness child's environment. When it is present,

@@ -136,10 +136,11 @@ SECTION5_INTS = {
 
 EMPTY_SHA256 = hashlib.sha256(b"").hexdigest()
 
-# The digest scheme `brief.digest` carries (CF-275). It exists so the refusal text can NAME what
-# was expected instead of printing two opaque hashes, and so a future scheme cannot collide with
-# this one: the name is inside the canonical object that is hashed.
-BRIEF_DIGEST_SCHEME = "cf-brief-v1"
+# The reachable node-adapter digest scheme carried by `brief.digest` (CF-275). This is
+# deliberately not the supervisor's `cf.brief-input.v1` contract: the adapter receives a flat
+# legacy dispatch and has no BriefInput CAS resolver. Naming this scheme prevents the two
+# reachable/target contracts from being mistaken for one another.
+BRIEF_DIGEST_SCHEME = "node-dispatch.v1"
 
 # The plain members a dispatch may carry instead of `text_b64`, in the order older senders use
 # (docs/MASTER-DOC-SCHEMA.md §3c). Read by directive_text().
@@ -1071,8 +1072,11 @@ def directive_text(dispatch):
 
 
 def brief_canonical(dispatch, text):
-    """The cf-brief-v1 object `brief.digest` is sha256 over — every member that can change what
-    this node EXECUTES, and nothing else (`specs/ENVELOPE.md`, CF-275).
+    """The node-dispatch.v1 object `brief.digest` is sha256 over — every member that can change what
+    this reachable adapter EXECUTES, and nothing else (`specs/ENVELOPE.md`, CF-275).
+
+    This is the flat node-adapter contract. The supervisor's separate `cf.brief-input.v1` JCS
+    object is not reachable from this script and must not be reconstructed here.
 
     `text` is the decoded directive; `gate` is the command `run_gate()` hands to `/bin/sh -lc` in
     the clone; `workdir`/`repo`/`ref` are the declared identity (the node still executes only

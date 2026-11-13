@@ -146,7 +146,7 @@ on this field, not a "sample" claimed complete:
 | — | `  PASS  %s — %s` / `  FAIL  %s — %s` (`node-bus-worker.py:125,129`) | every measurement row | descriptive (same rule as M0 F0-4) |
 | — | `  FAIL  identity — …; refusing` (`:608`) | unparseable/absent identity | evidentiary |
 | — | `inbox — GET /agents/cf-node/inbox/stats -> 200` | a valid signed inbox read (FACT-04) | evidentiary |
-| — | `  FAIL  brief_digest — {label} brief.digest … — the brief was altered in flight; refused, not run` (`node-bus-worker.py:1050-1052`) | **legacy implementation evidence:** node-side digest check over the measured dispatch shape | evidentiary — the target `cf.brief-input.v1` digest contract is the normative rule in §15.1/Part IV, not this historical text-only wording |
+| — | `  FAIL  brief_digest — {label} brief.digest … — the brief was altered in flight; refused, not run` (`node-bus-worker.py:1263-1269`) | reachable node-adapter `node-dispatch.v1` digest mismatch over decoded text, gate, repo, ref, workdir and vars | evidentiary — refusal is before project, workdir, vars, harness and gate checks; the separate supervisor `cf.brief-input.v1` contract is normative in §15.1/Part IV |
 
 ## 10. Failure modes, indications and recovery
 

@@ -6,7 +6,7 @@
 A brief whose gate was altered in flight therefore passed verification and then executed
 attacker-chosen shell. The digest bound the prose and not the executable.
 
-These arms hold the worker to the cf-brief-v1 contract, and each one is an assertion about a SIDE
+These arms hold the reachable node-dispatch.v1 contract, and each one is an assertion about a SIDE
 EFFECT — a marker the gate wrote, or failed to write — not about what the worker said it would do:
 
   B1 green  a bound digest (text+gate+repo+ref) is accepted, the gate RUNS, the harness runs
@@ -201,7 +201,7 @@ class BriefDigestBindingTest(unittest.TestCase):
         self.assertEqual(0, result.get("gate_exit"), f"gate exit: {self.output}")
         self.assertIn("  PASS  brief_digest — ", self.output)
         self.assertIn(
-            "cf-brief-v1",
+            "node-dispatch.v1",
             self.output,
             f"the row does not name the scheme: {self.output}",
         )
@@ -255,7 +255,7 @@ class BriefDigestBindingTest(unittest.TestCase):
             f"the refusal does not name the legacy scheme: {text!r}",
         )
         self.assertIn(
-            "cf-brief-v1",
+            "node-dispatch.v1",
             text,
             f"the refusal does not name the scheme to send: {text!r}",
         )
@@ -306,7 +306,7 @@ class BriefDigestBindingTest(unittest.TestCase):
         }
         pinned = (
             b'{"gate":{"cmd":"go test ./...","expect_exit":0,"timeout_s":null},'
-            b'"ref":"main","repo":"https://example.invalid/r.git","scheme":"cf-brief-v1",'
+            b'"ref":"main","repo":"https://example.invalid/r.git","scheme":"node-dispatch.v1",'
             b'"text":"hello","vars":{"CF_LANE":"x"},"workdir":null}'
         )
         self.assertEqual(

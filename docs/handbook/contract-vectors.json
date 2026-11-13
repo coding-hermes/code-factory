@@ -89,6 +89,22 @@
         "canonicalization": "RFC 8785 JCS; UTF-8 without BOM or trailing LF; hash exactly brief_input_canonical_json bytes",
         "verification_procedure": "sha256sum of the UTF-8 bytes in brief_input_canonical_json must equal brief_input_sha256 and the digest suffix of brief_ref"
       },
+      "negative_vector": {
+        "name": "effectful task snapshot mutation refuses before reservation",
+        "base": "CV-01-B",
+        "mutate_only": {
+          "path": "task.title",
+          "value": "Prove the execution contract (tampered)"
+        },
+        "mutated_brief_input_sha256": "bf068162c543a64b47f2d9f53b64fd6c752ab0e5f14af7959cb5c43f2c9faed2",
+        "mutated_brief_ref": "cas+sha256://code-factory/bf068162c543a64b47f2d9f53b64fd6c752ab0e5f14af7959cb5c43f2c9faed2",
+        "canonicalization": "Apply RFC 8785 JCS to the base brief_input_canonical_json object after changing only task.title, then hash exactly the UTF-8 bytes without BOM or trailing LF.",
+        "expected": {
+          "accepted": false,
+          "refusal": "DIGEST_MISMATCH",
+          "side_effects_before_refusal": ["none:reservation", "none:native-start"]
+        }
+      },
       "expected": {
         "accepted": true,
         "execution_key": "822015bf1408f7af9fd74d147b7fe6765aa4003730bd514d7264c01ea210055f",
