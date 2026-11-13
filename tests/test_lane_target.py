@@ -623,7 +623,7 @@ class VerifyBunker(unittest.TestCase):
         with open(path, "w", encoding="utf-8") as fh:
             fh.write(json.dumps({"name": "lane"}) + "\n")
         env = {**os.environ, "PATH": self.bin + os.pathsep + os.environ["PATH"], "BUNKER_BIN": os.path.join(self.bin, "bunker")}
-        for identity in ("HOME=/home/kara\\nPATH_EXISTS=1", "══════════ Agent: wrong ══════════"):
+        for identity in ("HOME=/opt/lane-home\\nPATH_EXISTS=1", "══════════ Agent: wrong ══════════"):
             with self.subTest(identity=identity):
                 with open(os.path.join(self.bin, "bunker"), "w", encoding="utf-8") as fh:
                     fh.write("#!/bin/sh\nprintf '" + identity + "\\n'\n")
