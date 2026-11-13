@@ -241,6 +241,21 @@ not authority. Resolved architecture applied throughout: the foreman runs inside
 Crier as the launch/return boundary (handoff §1.1); DuckBrain memory is a separate system — the
 board is **not** the project memory (§2 stands).
 
+### 14.1 Resolution status of R1–R8
+
+The following map records which review requirements are answered normatively by §15 and which remain open.
+
+| Requirement | Subject | Normative answer | Status | Proof |
+|---|---|---|---|---|
+| R1 | Per-project placement and Boardctl engine | §15 names the per-project board identity and Boardctl's validation role, but does not specify the pinned supported Boardctl release, installation/compatibility contract, or cross-host copy synchronization. | open | none |
+| R2 | Shared eligibility/dependency rule | §15.1 defines one reducer and eligibility oracle for Boardctl, the board reader, Scheduler and foreman, including dependency validation and lifecycle handling. | resolved | none |
+| R3 | Authoritative revision and copies | §15 and §§15.1–15.3 make the published ref authoritative, assign the broker as publisher, bind observations to the remote Git OID and freshness, and enforce protected-ref claim CAS and fencing across clones. | resolved | CV-04-A, CV-04-B, CV-04-D, CV-04-E |
+| R4 | Empty, unreadable, malformed and stale observations | §15.1 names read statuses, but does not complete the required reader-observation contract for all missing/unreadable/stale/malformed cases, partial observation, and alert/repair behavior. | open | none |
+| R5 | Accepted verdict and published closeout proof | §15.4 defines the staged-guard, judgment, publication, closure-CAS and remote-readback order, with validators and failure behavior. | resolved | none |
+| R6 | Partial-write recovery | §§15.1 and 15.3 define row/event pairing, staging and CAS failure states, partial-publication detection, operation-journal recovery, corrective publication, restore validation and admission re-enable. | resolved | CV-04-C, CV-04-F |
+| R7 | Scheduler-facing reads and ownership | §15 does not draw the scheduler-facing read paths or assign the owners across Scheduler, foreman, claims and published state. | open | none |
+| R8 | Required board metrics | §15 does not define the required board metric set with units, dimensions, ownership, denominator policy and acceptance verification. | open | none |
+
 **R1 — Per-project placement with Boardctl as the shared engine (required).** The board lives
 **in each project repository** — the store at §1 is this repo's instance of a per-project store,
 not one central Code Factory board. Boardctl is the separately maintained shared **engine** acting
@@ -262,15 +277,15 @@ path, cancelled prerequisites, fixtures and missing-dependency/cycle handling, a
 must be aligned to it; eligibility is defined separately from open-row count (review notes M4,
 proposal "one lifecycle and workability definition").
 
-**R3 — Authoritative revision and copies (required).** The chapter must define which board state
+**R3 — Authoritative revision and copies (resolved in §15.2).** The chapter defines which board state
 — local working copy, node copy, control-host copy, published ref — is **authoritative** for
 scheduling, claims and closeout; bind every read to repository/ref/commit and freshness; assign
 the publish-vs-refresh owners (refresh before admission, publish/refresh at lane end); explain
 how an uncommitted in-progress claim (the measured CF-150 divergence, §7) stays visible when the
-published state still says pending; and define an atomic claim/revision precondition across
+published state still says pending; and defines an atomic claim/revision precondition across
 dispatchers plus recovery of abandoned claims, so independent clones cannot schedule the same
 task. Which actor publishes versus merely refreshes is required content, not optional detail
-(review notes M4, proposal "authoritative copies, freshness and claims").
+(review notes M4, proposal "authoritative copies, freshness and claims"). Resolved normatively in §15.2 (and §15.1 for the reducer): the published ref and broker CAS are authoritative for claims, with revision-bound observations, fencing and recovery across clones.
 
 **R4 — Empty vs unreadable/malformed/stale are distinct observations (required).** The reader
 contract must return separate, named results for: healthy-empty board, no-workable-items, missing
@@ -295,13 +310,13 @@ the chapter must assign the checks it does not perform (verdict payload, tree eq
 remote-main ancestry) and define malformed/missing/expired/mismatched evidence plus retry/idempotent
 closeout behavior (review notes M4, proposal "evidence sufficient for completion").
 
-**R6 — Partial-write recovery (required).** Row updates and event appends are two file writes; a
+**R6 — Partial-write recovery (resolved in §15.3).** Row updates and event appends are two file writes; a
 lock around them is not a transaction. The engine can persist a task row and then fail its audit
-event (upstream write path, review notes M4 source findings) — the chapter must define
+event (upstream write path, review notes M4 source findings) — the chapter defines
 recoverable partial-result statuses, operation/event identity, replay/deduplication and repair so
 callers neither assume nothing happened nor blindly repeat a completion, plus backup/restore
 consistency across rows, events, evidence and the git revision, validated before scheduling
-resumes.
+resumes. Resolved normatively in §15.3: staging and publication failures have distinct statuses, operation-journal recovery and corrective row/event settlement, with restore validation before admission resumes.
 
 **R7 — Scheduler-facing reads in the text (required).** M9 reads board rows as its admission
 gates — that outgoing contract belongs in this chapter's text and in Figure 3.4 (the figure's
@@ -512,12 +527,12 @@ The broker serializes project effects against epoch advance (Part I §1.9.3a), t
    A duplicate task_id inside one request is INVALID_FIELD and rejects the entire
    group before candidate construction rather than deduplicating members.
 
-A stale ref/revision or ineligible member returns `CLAIM_CONFLICT` (HTTP 409), stale
+A stale ref/revision or ineligible member returns `CLAIM_CONFLICT` (HTTP 409) (CV-04-B), stale
 project fence returns `STALE_OWNER`, and lease setup failure returns
 `LEASE_SETUP_FAILED`; none grants any member permission to execute. The losing clone
 fetches, reruns eligibility and submits a new whole-group CAS at most five times,
 then defers with `CLAIM_BUSY`. It never merges stale claims. No process in a losing
-candidate starts, including its first member. If any launch fails after publication,
+candidate starts, including its first member (CV-04-E). If any launch fails after publication,
 the launcher fences/releases the entire group and proves quiescence before another
 wave reuses its paths/resources. Native-start permission requires the complete remote
 group receipt plus current owner fence, not a local file/flock. Reclaim requires
@@ -543,10 +558,10 @@ unpublished file in another clone. Broker startup repairs/removes its incomplete
 candidate from the durable intent; no remote operation ran before the complete candidate.
 A failed CAS likewise leaves canonical state unchanged. `PARTIAL_WRITE` is reserved
 for a published malformed marker/pair (unmanaged writer, storage corruption or violated
-server validation): readers expose UNAVAILABLE and the broker records REPAIR_REQUIRED.
+server validation): readers expose UNAVAILABLE and the broker records REPAIR_REQUIRED (CV-04-C).
 The recovery owner is the manager's board adapter. It preserves the bad commit as
 incident evidence, appends a corrective commit derived from the last verified parent,
-validates complete row/event correspondence and only then re-enables admission.
+validates complete row/event correspondence and only then re-enables admission (CV-04-F).
 It never resets shared history or guesses a missing completion verdict.
 
 Every Git publication, canonical memory sync and board transition enters the single
@@ -651,3 +666,5 @@ APPEND - boardctl update with --evidence-run-id on a closed row
 RECONCILE - audit a claimed-done row against its evidence
 √ MATCH - the row closes only on evidence tied to the exact tree
 ```
+
+ch:trace row=P5G-10 spec=docs/handbook/chapters/M4-board.md#15 wave=none:serial-worker test=docs/handbook/contract-vectors.json::CV-04-A..F doc=docs/handbook/chapters/M4-board.md prompt=none:worker-brief evidence=docs/handbook/contract-vectors.json witness=docs/handbook/contract-vectors.json verdict=none:foreman-runs-gitreins commit=none memory=none:foreman-writes
