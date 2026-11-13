@@ -1781,7 +1781,11 @@ The first exchange is ordered and has one wire/version pair only:
    carries `expected_generation=0`; the registrar atomically allocates exactly one
    `node_id` and `registration_generation=1`. CT-21's `credential.install` then
    installs the returned class-`crier` `credential_ref` for that node. No worker-class
-   principal, child identity or second allocation is permitted.
+   principal, child identity or second allocation is permitted. The registrar exposes that
+   durable registration at the single read route `GET /v1/factory/registrations/{registration_id}`,
+   returning `{registration_id, node_id, registration_generation, state, expires_at, credential_ref}`;
+   it is distinct from the authority's certificate-metadata read `GET /v1/registrations/{id}` and
+   never returns secret material.
 3. The node resolves the returned reference through the broker, installs the credential,
    and performs a signed Crier bus read under `CF2A-CRIER-1`. Only a verified read proves
    membership and permits M9 admission; installing a file or receiving HTTP 200 does not.
@@ -1806,7 +1810,8 @@ signed-read failure after the registration and credential are durably present pr
 readback/recovery; it is not a second enrollment opportunity. Loss or removal of a
 Bunker fences and revokes the identity and ends in `REMOVED` only after the revocation
 and negative resource probe are recorded. Recovery resumes the same
-`(registration_id,operation_id,expected_generation)` request and reads back its existing
+`(registration_id, operation_id, generation)` request, re-sending the observed
+`expected_generation`, and reads back its existing
 registration before retrying a missing step.
 
 The idempotency tuple is `(registration_id, operation_id, generation)`, where
@@ -1815,7 +1820,7 @@ canonical request digest. An exact repeat of the same tuple and digest returns
 the original `node_id`, `registration_id`, generation and credential reference and
 performs no allocation or installation. A changed tuple or request digest returns `REGISTRATION_CONFLICT`
 (compare-and-swap refusal), and the registrar does not mutate state. If the reply is lost, the authority or Crier reads
-back `GET /v1/registrations/{registration_id}` and resumes the missing CT-21/read-proof
+back `GET /v1/factory/registrations/{registration_id}` and resumes the missing CT-21/read-proof
 step; it never allocates a second identity.
 
 | Deterministic state | Durable fact | Next action |

@@ -1637,7 +1637,7 @@
           }
         }
       ],
-      "recovery": "If the response is lost, GET /v1/registrations/reg-bunker-a returns the durable node and generation; retrying does not allocate another identity.",
+      "recovery": "If the response is lost, GET /v1/factory/registrations/reg-bunker-a returns the durable node, registration_generation and state; retrying does not allocate another identity.",
       "static_controls": []
     }
   ],
