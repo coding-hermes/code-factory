@@ -1349,8 +1349,10 @@ change or failed readiness, not because a lexically earlier host reappeared.
 CT-05 is solely foreman → worker `worker-brief.v1` (Part IV §IV.1). Its `brief_ref`
 and `brief_digest` refer to the exact immutable `cf.brief-input.v1` JCS bytes defined in
 Part IV §IV.2 and M2 §15.1; they never refer to a reconstructed prompt or envelope.
-The Factory foreman/manager owns the snapshot, CAS resolution, digest verification and
-replay. Seeded lane prompt/skill digests are a CT-01 configuration extension
+The Factory foreman/manager owns the snapshot, CAS fetch and digest verification, and
+replay. The worker-brief carries immutable skill and attachment references; the receiver
+fetches those bytes from project CAS and verifies them before native start. Seeded lane
+prompt/skill digests are a CT-01 configuration extension
 `extensions.lane_seed: {prompt_digest, skills: [{name, digest}]}`; they are not
 CT-05. CT-02 uses only `round-admission.v1`, never `round-request.v1`.
 Its required fields are Part IV's `round_id, run_id, corr_id, task_scope,

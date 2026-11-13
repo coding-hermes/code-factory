@@ -296,34 +296,47 @@ storage and replay. It snapshots the accepted admission before any worker reserv
 `{schema_version:"cf.brief-input.v1",directive:Text,task:TaskRow,criteria:Criterion[1..100],skills:[{name:ID,ref:EvidenceRef,digest:SHA}],attachments:Artifact[]}`.
 The object carries the directive bytes, the exact admitted `TaskRow` image (not a later
 board read), criteria in their admitted order, skills in their declared order, and
-attachments in explicit order. Skill `ref` resolves immutable content in project CAS;
-attachment `ref` resolves the immutable attachment bytes and the bytes must hash to its
-reference. Attachment names are unique. No mutable prompt, skill path, board row,
-criterion list or attachment path is reread after this snapshot.
+attachments in explicit order. Skill entries are ordered `{name,ref,digest}` descriptors;
+the receiver fetches each skill's immutable CAS bytes by `ref` and verifies `digest` before
+start. Attachment entries are ordered `Artifact` descriptors; the receiver fetches each
+attachment's immutable CAS bytes by `ref` and verifies both `size_bytes` and the referenced
+digest before start. The `worker-brief.v1` delivery therefore carries the exact brief
+object and its ordered material references, while CAS supplies the skill and attachment
+bytes; it does not substitute mutable skill paths, board reads or attachment paths.
+Attachment names are unique. No mutable prompt, skill path, board row, criterion list or
+attachment path is reread after this snapshot.
 
 The foreman serializes the complete object using RFC 8785 JCS: UTF-8, sorted object
 keys, compact separators, no BOM and no trailing LF. String bytes preserve whitespace
 and Unicode; no normalization or pretty-printing occurs. `brief_digest` is the lowercase
 SHA-256 of exactly those canonical `cf.brief-input.v1` bytes, and `brief_ref` is the
 content-addressed `EvidenceRef` for the same bytes. It never covers a reconstructed
-summary, the `worker-brief.v1` envelope, transport framing, base64 text, or mutable
-source paths. If a legacy transport base64-encodes the object, the receiver decodes to
-exactly the UTF-8 bytes first, then verifies `brief_ref` and `brief_digest`; base64 text
-itself is never hashed. CV-01-B in `docs/handbook/contract-vectors.json` is the normative
-reproducible vector: hash its `related_objects.brief_input_canonical_json` bytes and
-compare with `related_objects.brief_input_sha256` and `brief_ref`.
+summary, the `worker-brief.v1` envelope, transport framing, base64 text, skill/attachment
+CAS bytes, or mutable source paths. If a legacy transport base64-encodes the object, the
+receiver decodes to exactly the UTF-8 bytes first, then verifies `brief_ref` and
+`brief_digest`; base64 text is never hashed. CV-01-B in `docs/handbook/contract-vectors.json`
+is the normative reproducible vector: hash its `related_objects.brief_input_canonical_json`
+bytes and compare with `related_objects.brief_input_sha256` and `brief_ref`.
 
 `worker-brief.v1` carries the launch-custody identity plus `brief_ref` and
 `brief_digest`; it does not redefine BriefInput or its digest. The receiver resolves the
 ref, verifies byte length/content and digest before reserving an execution key or
-starting a native process. Missing, changed, unavailable or mismatched content is
-refused as `BRIEF_UNAVAILABLE` or `DIGEST_MISMATCH`; no reservation, process start or
-side effect occurs. The worker receives the same immutable byte object through the M5
-supervisor stdin contract, not a reconstructed summary. An identical retry for the same
+starting a native process. A missing CAS object or unavailable skill/attachment fetch is
+`BRIEF_UNAVAILABLE`; a recovered byte object whose length, ref or digest does not match is
+`DIGEST_MISMATCH`. In either case no reservation, process start or other execution side
+effect occurs. The worker receives the same immutable byte object through the M5 supervisor
+stdin contract, not a reconstructed summary. An identical retry for the same
 `(project_id,round_id,task_id,attempt_id,brief_digest)` replays the original custody and
 launch receipt without a second reservation or native start. A changed digest, ref,
 TaskRow, criteria, skill or attachment set is `LAUNCH_CONFLICT`/`DIGEST_MISMATCH`, not a
 new execution under a new delivery id. [Part I §1.9.6; Part IV §IV.2; CV-01-B.]
+
+ch:trace row=P5G-08 spec=docs/handbook/OUTLINE.md#f1-dispatch-and-settlement wave=none:serial-worker test=none:handbook-contract-probes doc=docs/handbook/chapters/M2-dispatch.md evidence=docs/handbook/contract-vectors.json witness=none:specification-only verdict=none:foreman-closeout commit=none:worker-commit memory=none:foreman-closeout
+STATUS: complete
+TIER: T1
+EVIDENCE: docs/handbook/contract-vectors.json
+
+The contract is specification-only; runtime delivery and supervisor conformance remain unverified.
 
 The worker `launch_id` derives from the JCS array
 `[project_id,round_id,wave_id,worker_id,attempt_id]` as specified in §15.4;

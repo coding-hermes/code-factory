@@ -32,7 +32,7 @@ for. Read this first; everything else is detail hanging off it.
 
 | § | Flow | Class | Status |
 |---|---|---|---|
-| II.1 | DISPATCH — a lane tick reaches a node and work is logged | primary | **MISSING** |
+| II.1 | DISPATCH AND SETTLEMENT — F1 reaches a node, delivers immutable work and records the result | primary | rendered |
 | II.2 | PROVISIONING — a bare host becomes a working node | primary | **MISSING** |
 | II.3 | RUN CAPTURE AND SEARCH | primary | **MISSING** |
 | II.4 | DOCUMENTATION | primary | **MISSING** |
