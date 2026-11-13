@@ -402,6 +402,21 @@ Recovery distinguishes these cases, rather than calling all of them unstarted:
 | new boot after intent, absent child and no terminal/release proof | `START_UNKNOWN`; quarantine, fence, consume reserved budget conservatively; no same-attempt relaunch |
 | terminal journal/result present | replay result/outbox only; no native invocation |
 
+The resident supervisor is the authoritative actor for this recovery decision and
+the execution journal is its source of truth; neither the foreman, worker, PID
+listing nor a delivery acknowledgement may declare a start absent. Every lookup
+is keyed first by `execution_key`, then exact `native_name` and `input_digest`.
+When a process incarnation is relevant, the lookup additionally requires the
+recorded `boot_id`, `/proc` start ticks and `native_session_id`; those fields are
+identity evidence, not replacement keys. The ordering is deliberate: reserve and
+fsync the execution record, fsync `START_INTENT` before native creation, discover
+the exact native record, then persist `STARTED` before release. A missing journal,
+missing tombstone, or contradictory identity is not proof of never-started:
+return `START_UNKNOWN`, quarantine/fence the reserved attempt, and do not relaunch.
+Only the RESERVED/no-START_INTENT row with authoritative launcher proof of no
+intent may use its existing `execution_key` for the single create-or-discover
+operation. A terminal record is replayed and never invokes native execution.
+
 The gated child makes the fourth case a protocol violation on the reference launcher,
 but it remains a mandatory recovery case for native adapters. An adapter unable to
 prove absence/discover a prior run refuses with `START_UNKNOWN`; absence from a

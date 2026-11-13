@@ -281,11 +281,13 @@ There is no translation to a second supervisor implementation.
 
 M2 §15.4 owns identity. A cold CT-02 uses the deterministic foreman launch ID
 and creates no future worker IDs. CT-05 creates `attempt_id` immediately before
-the worker launch. `launch_id` addresses launch lookup and cancellation;
+the worker launch. `launch_id` addresses the control resource and cancellation;
 `execution_key = SHA256(JCS({launch_id,input_digest}))` addresses budget/result
-dedupe; `native_session_id` plus boot ID and `/proc` start ticks addresses one
-process incarnation. A duplicate launch with the same digest performs lookup
-only. Changed input under any existing identity is `LAUNCH_CONFLICT`.
+dedupe. Recovery lookup uses `execution_key`, exact `native_name` and
+`input_digest`, then `native_session_id` plus boot ID and `/proc` start ticks to
+identify one process incarnation. A duplicate launch with the same digest
+performs lookup only. Changed input under any existing identity is
+`LAUNCH_CONFLICT`.
 
 The `Launch` fields from the retired interface are projections of the supervisor
 journal: `accepted` is `RESERVED`, `starting` is `START_INTENT`, `running` is
