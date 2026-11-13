@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import datetime
 import http.server
 import json
 import os
@@ -15,10 +14,44 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 TOKEN_SCRIPT = ROOT / "scripts" / "github-app-token.py"
-AUDIT = ROOT / "docs" / "audits" / (
-    "code-factory-CF-319-fix-" + datetime.date.today().isoformat() + ".md"
-)
+AUDIT = ROOT / "docs" / "audits" / "code-factory-CF-319-fix-2026-11-13.md"
 REPO = "fixture-owner/fixture-repo"
+
+
+def transcript(outputs: list[tuple[str, int, str]]) -> str:
+    lines = [
+        "# CF-319 fixture transcript",
+        "",
+        "All arms used a local HTTP stub through `--api-base`; no network or real credentials were used.",
+        "",
+    ]
+    for label, code, output in outputs:
+        lines.extend(["## %s" % label, "", "```text", output.rstrip(), "EXIT=%d" % code, "```", ""])
+    return "\n".join(lines)
+
+
+def assert_transcript_matches_fixture(outputs: list[tuple[str, int, str]]) -> None:
+    expected = AUDIT
+    # The generated transcript may contain an unpredictable TemporaryDirectory path;
+    # normalize only the path portion of the private-key measurement before comparison.
+    normalized_lines = []
+    for line in transcript(outputs).splitlines():
+        if "PASS  private_key_file — " in line:
+            prefix, suffix = line.split(" — ", 1)
+            suffix = suffix[suffix.index(", mode 600"):]
+            line = prefix + " — <scratch>/cf-319/github-app.pem" + suffix
+        normalized_lines.append(line)
+    normalized = "\n".join(normalized_lines) + "\n"
+    committed = expected.read_text(encoding="utf-8")
+    if any(path in committed for path in ("/home/", "/var/tmp/")):
+        raise AssertionError("committed CF-319 fixture contains an absolute host path")
+    if normalized != committed:
+        raise AssertionError(
+            "generated CF-319 transcript differs from committed fixture:\n"
+            + "\n".join(
+                "- " + line for line in committed.splitlines() if line not in normalized.splitlines()
+            )
+        )
 
 
 class GitHubStub(http.server.BaseHTTPRequestHandler):
@@ -140,6 +173,7 @@ def assert_common(output: str) -> None:
 
 def main() -> int:
     outputs: list[tuple[str, int, str]] = []
+    audit_before = AUDIT.read_bytes()
     with tempfile.TemporaryDirectory(prefix="cf-319-") as temp:
         root = Path(temp)
         env_file = make_fixture(root)
@@ -198,15 +232,9 @@ def main() -> int:
         assert not any(path.startswith("GET /repos/") for path in GitHubStub.requests)
         outputs.append(("Arm C — no repo named", arm_c.returncode, arm_c.stdout))
 
-    lines = [
-        "# CF-319 fixture transcript",
-        "",
-        "All arms used a local HTTP stub through `--api-base`; no network or real credentials were used.",
-        "",
-    ]
-    for label, code, output in outputs:
-        lines.extend(["## %s" % label, "", "```text", output.rstrip(), "EXIT=%d" % code, "```", ""])
-    AUDIT.write_text("\n".join(lines), encoding="utf-8")
+    assert_transcript_matches_fixture(outputs)
+    if AUDIT.read_bytes() != audit_before:
+        raise AssertionError("CF-319 audit fixture changed while it was being checked")
     for label, code, _output in outputs:
         print("%s: exit %d" % (label, code))
     return 0
