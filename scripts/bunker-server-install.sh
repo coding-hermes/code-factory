@@ -89,9 +89,14 @@ if [ -n "$b" ] && [ "${rc:-1}" -eq 0 ]; then
   # directories named, the reaper measures them against the live agent list; without them
   # this stays the WARN it has always been (the layout is declared, never guessed).
   if [ -n "${BUNKER_HOMES_DIR:-}" ] || [ -n "${BUNKER_KEYS_DIR:-}" ]; then
+    # Reuse the successful list response above. A second list call could fail after the
+    # reachability check and produce an empty registry, which would make every old entry
+    # look orphaned. An empty or missing registry is never a safe deletion authority.
     reg_tmp=$(mktemp) || reg_tmp=""
-    if [ -n "$reg_tmp" ]; then
-      printf '%s\n' "$("$b" list --server "$SERVER" 2>/dev/null)" > "$reg_tmp"
+    if [ -z "$reg_tmp" ]; then
+      bad "residue" "cannot create a temporary registry snapshot — refusing cleanup"
+    else
+      printf '%s\n' "$out" > "$reg_tmp"
       reap_args=(reap --registry "$reg_tmp")
       [ -n "${BUNKER_HOMES_DIR:-}" ] && reap_args+=(--homes-dir "$BUNKER_HOMES_DIR")
       [ -n "${BUNKER_KEYS_DIR:-}" ] && reap_args+=(--keys-dir "$BUNKER_KEYS_DIR")
@@ -106,6 +111,8 @@ if [ -n "$b" ] && [ "${rc:-1}" -eq 0 ]; then
       fi
       rm -f "$reg_tmp"
     fi
+  elif [ "$REAP_ORPHANS" -eq 1 ]; then
+    bad "residue" "--reap-orphans requires BUNKER_HOMES_DIR or BUNKER_KEYS_DIR — refusing unmeasured cleanup"
   else
     say "$st" | grep -qi 'orphan' && warn "residue" "orphan homes/keys reported by the server — set BUNKER_HOMES_DIR/BUNKER_KEYS_DIR and re-run with --reap-orphans"
   fi

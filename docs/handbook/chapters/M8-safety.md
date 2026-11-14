@@ -79,13 +79,46 @@ is implementation coverage, not the safety requirement.
 
 | Submodule | Unit | Classification | Evidence (invoking line) |
 |---|---|---|---|
-| S1 disk | `reclaim_disk.py` | **active** | invoked by `project-node.sh:222` (`python3 "$HERE/reclaim_disk.py" run --root "$HOME" --dry-run --json`, the rehearsal) and `:230` (`… run --root "$HOME" --json`, the reap) during provisioning |
+| S1 disk | `reclaim_disk.py` and `node_hygiene.py reap` | **active** | `project-node.sh:222`/`:230` reclaim caches and job dirs; `bunker-server-install.sh:91-116` snapshots the successful `bunker list` registry and invokes the registry-gated residue reaper |
 | S2 scan scope | `check_scan_scope.py` | **operator-invoked (optional)** | no production caller (`grep -rn check_scan_scope scripts/` → no caller; run manually) |
 
-**Finding (carried):** `verify-patch.sh` is **not** an M8 unit — OUTLINE assigns it to M6.S8
+**Finding (carried):** `verify-patch.sh` is **not an M8 unit** — OUTLINE assigns it to M6.S8
 (`OUTLINE.md:170`). M8 has two submodules (S1, S2).
 
+### M8.S1 node residue gate (CF-007)
+
+A bunker host accumulates homes and key files whose agent no longer exists. The registry snapshot
+from a successful `bunker list --server "$BUNKER_SERVER"` is the only liveness authority; an absent
+or unreadable registry is `FAIL`, and a missing residue layout is `UNVERIFIED`/refused rather than
+safe. The exact operator commands are:
+
+```
+BUNKER_HOMES_DIR=<dir> BUNKER_KEYS_DIR=<dir> scripts/bunker-server-install.sh --check
+BUNKER_HOMES_DIR=<dir> BUNKER_KEYS_DIR=<dir> scripts/bunker-server-install.sh --reap-orphans
+```
+
+The direct hermetic seam is:
+
+```
+scripts/node_hygiene.py reap --homes-dir D --keys-dir D --registry <list> [--min-age-minutes 60] [--apply]
+```
+
+Check mode removes nothing and exits non-zero for every proven orphan, naming paths and the count.
+Apply mode removes only direct child agent homes and recognized key files whose ids are absent from
+the registry and older than the grace window. Live ids, young entries, unknown files, symlinks,
+out-of-root targets and non-directory roots are protected. Apply reports the exact removed set; a
+successful empty result is `PASS`, remaining residue is `FAIL`, and no live bunker run is claimed by
+these fixtures. Orphan OS users have no repository-owned registry or safe deletion path and therefore
+remain `UNVERIFIED`.
+
+The install ladder reuses the successful list response for its registry snapshot; it never performs a
+second best-effort query that could turn a transient empty result into an orphan list. `--check` never
+passes unmeasured residue, and `--reap-orphans` without a declared layout refuses before cleanup.
+
+ch:trace row=CF-007 spec=docs/handbook/chapters/M8-safety.md#m8s1-node-residue-gate-cf-007 wave=none:serial-test test=tests/test_node_provisioning.py::OrphanReap doc=docs/handbook/chapters/M8-safety.md prompt=none:ephemeral-brief evidence=tests/test_node_provisioning.py witness=none:live-bunker-not-available verdict=none:foreman-will-run commit=none:worker-commit memory=none:foreman-closeout
+
 ## 4. Dependencies
+
 
 **4a. Runtime dependencies**
 

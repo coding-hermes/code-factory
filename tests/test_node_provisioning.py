@@ -19,8 +19,12 @@ GitLab, a bunker server or a real credential:
 
 The live obligations this file does NOT prove (named so a green here is not read as more):
 cloning the real private GitLab with a real read-only deploy key from a fresh bunker node,
-the 11 node-dependent tests in the Go repo that needs `node` on PATH, and reaping a real
-bunker host's orphan directories.
+the 11 node-dependent tests in the Go repo that needs `node` on PATH, reaping a real
+bunker host's orphan directories, or deleting orphan bunker OS users. The repository owns
+no safe user-account registry or deletion path, so the last obligation remains UNVERIFIED.
+
+The residue fixtures are deliberately narrower than a live bunker: they prove registry-derived
+homes and key files only. They must not be read as live-node evidence.
 """
 
 from __future__ import annotations
@@ -613,8 +617,10 @@ class OrphanReap(unittest.TestCase):
         (self.keys / "live1.key").write_text("k")
         (self.keys / "orphan1.key").write_text("k")
         (self.keys / "orphan2.pub").write_text("k")
+        (self.keys / "orphan-note.txt").write_text("must not be treated as a key")
         os.utime(self.keys / "orphan1.key", (old, old))
         os.utime(self.keys / "orphan2.pub", (old, old))
+        os.utime(self.keys / "orphan-note.txt", (old, old))
         (self.homes / "bunker-link").symlink_to(self.outside)
 
     def tearDown(self) -> None:
@@ -642,6 +648,7 @@ class OrphanReap(unittest.TestCase):
         self.assertIn("bunker-orphan1", result.stdout)
         self.assertIn("orphan1.key", result.stdout)
         self.assertIn("orphan2.pub", result.stdout)
+        self.assertNotIn("orphan-note.txt", result.stdout)
         self.assertNotIn("bunker-live1", result.stdout)
         self.assertNotIn("bunker-recent", result.stdout)
         self.assertTrue(
@@ -686,6 +693,49 @@ class OrphanReap(unittest.TestCase):
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("FAIL  reap_root", result.stdout)
+
+    def test_bunker_ladder_reuses_live_registry_and_reports_apply(self) -> None:
+        bunker = self.root / "bunker-bin"
+        bunker.mkdir()
+        calls = self.root / "bunker-calls"
+        fake = bunker / "bunker"
+        fake.write_text(
+            "#!/usr/bin/env bash\n"
+            'printf \'%s\\n\' "$1" >> "$CF007_CALLS"\n'
+            'case "$1" in\n'
+            "  --version) printf 'bunker-fixture 1\\n' ;;\n"
+            "  list) printf '  live1 running\\n' ;;\n"
+            "  status) printf 'status clean\\n' ;;\n"
+            "esac\n"
+        )
+        fake.chmod(0o755)
+        config = self.root / "bunker-config.yaml"
+        config.write_text("server: fixture-server\\n")
+        (self.root / "home").mkdir()
+        env = {
+            "PATH": f"{bunker}:/usr/bin:/bin",
+            "HOME": str(self.root / "home"),
+            "BUNKER_SERVER": "fixture-server",
+            "BUNKER_CONFIG": str(config),
+            "BUNKER_HOMES_DIR": str(self.homes),
+            "BUNKER_KEYS_DIR": str(self.keys),
+            "CF007_CALLS": str(calls),
+        }
+        check = invoke(SCRIPTS / "bunker-server-install.sh", "--check", env=env)
+        self.assertNotEqual(check.returncode, 0)
+        self.assertIn("FAIL  orphans", check.stdout)
+        self.assertTrue((self.homes / "bunker-orphan1").is_dir())
+        self.assertEqual(calls.read_text().splitlines().count("list"), 1)
+        applied = invoke(
+            SCRIPTS / "bunker-server-install.sh", "--reap-orphans", env=env
+        )
+        self.assertEqual(applied.returncode, 0, applied.stdout + applied.stderr)
+        self.assertIn("reaped 3 orphan(s)", applied.stdout)
+        self.assertFalse((self.homes / "bunker-orphan1").exists())
+        self.assertFalse((self.keys / "orphan1.key").exists())
+        self.assertTrue((self.homes / "bunker-live1").is_dir())
+        self.assertTrue((self.keys / "live1.key").is_file())
+        self.assertEqual(calls.read_text().splitlines().count("list"), 2)
 
 
 if __name__ == "__main__":

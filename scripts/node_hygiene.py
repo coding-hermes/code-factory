@@ -201,13 +201,21 @@ def load_registry(path: Path | None) -> set[str] | None:
     if not path.is_file():
         return None
     ids: set[str] = set()
-    for line in path.read_text(errors="replace").splitlines():
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError):
+        return None
+    for line in lines:
         line = line.strip()
         if not line or line.startswith("#"):
             continue
         # Accept a bare id list or `bunker list` output (`  <id>  <state> …`).
         ids.add(entry_id(line.split()[0]))
     return ids
+
+
+def is_key_entry(name: str) -> bool:
+    return name.startswith("id_") or name.endswith((".key", ".pub", ".pem"))
 
 
 def scan(dir_path: Path, keys: bool) -> list[Path]:
@@ -217,7 +225,7 @@ def scan(dir_path: Path, keys: bool) -> list[Path]:
     for entry in sorted(dir_path.iterdir()):
         if entry.is_symlink():
             continue
-        if keys and entry.is_dir():
+        if keys and (entry.is_dir() or not is_key_entry(entry.name)):
             continue
         if not keys and not entry.is_dir():
             continue
