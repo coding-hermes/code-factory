@@ -248,6 +248,16 @@ state `live`, `deleting`, `deleted` or `quarantined`, and a set of typed holds
 transition only with zero holds, matching inode, expired TTL and safe containment.
 A concurrent holder either commits first (cleanup returns PROTECTED) or loses to
 the tombstone (holder returns RESOURCE_DELETING and cannot launch/use/cite the target).
+
+For F15, this typed `backup` hold is the M8 safety leg of the manager-owned coordinated
+cut. The ordered barrier, participant checkpoint acknowledgements, canonical
+`cf.backup.v1` manifest, capture failure relation and isolated restore are specified in
+Part VI §35.1; M8 does not create a second backup schema or release a hold merely because
+an upload command returned success. The hold remains until validated off-host readback or
+a fenced recovery decision records the loss interval. Restore activation must first use
+the independently retained authority's current Fence and revocations; an old backup
+watermark or credential cannot authorize the old owner. [F15; Part VI §35.1; M7 §17;
+M9 §17; M10 §16; M12 §16]
 Thus the safety guarantee is serialization, not a recheck followed by an unsafe unlink.
 
 Deletion is supervisor-owned: workloads cannot rename protected roots or edit

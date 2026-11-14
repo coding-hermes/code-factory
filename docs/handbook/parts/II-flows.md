@@ -1264,7 +1264,8 @@ an old revoked secret must recover with revocation preserved. Protect backup
 access, report incomplete coverage, and state recoverability limits and manual
 steps rather than claiming Git alone backs up every component.
 
-**Contracts:** `cf.backup.v1` manifest and `consistency_marker` (M8 §35.1),
+**Contracts:** `cf.backup.v1` manifest and `consistency_marker` (Part VI §35.1),
+with M8 §16 defining the typed backup hold and fail-closed cleanup boundary;
 `board_drift` row-level report (M4 §7), boot `--verify-board` (M9 §5),
 scratch-restore readback (M9 §5), F2 provisioning path for replacement,
 revocation persistence (V2-FLW-08, F12). `RESTORE_RESULT` is the common restore
@@ -1305,7 +1306,7 @@ failed off-host readback, the manager records `CAPTURE_FAILED`/`ABORTED` or
 publishes a complete manifest. Validation (`VALIDATED`) is distinct from creation
 (`CREATED`); publication and release occur only after digest/readback checks. The
 known-row procedure is a target acceptance vector, not a claim that live restore has
-run. [M8 §35.1; M9 §17; M10 §16; Part I §1.9.3a]
+run. [Part VI §35.1; M8 §16; M9 §17; M10 §16; Part I §1.9.3a]
 
 ### F15.1 — Coordinated capture and disaster authority (P5-A-06)
 
