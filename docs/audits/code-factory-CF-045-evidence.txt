@@ -1,0 +1,15 @@
+CF-045 evidence: rebind closure evidence without fabricating historical output
+
+Historical evidence status
+The historical scratch selftest output cited by the original CF-011 and CF-013 evidence entries is unavailable. Those original evidence entries remain unchanged in the board. This artifact records only the fresh verification below; it does not claim to reproduce the lost historical transcript.
+
+Fresh verification command
+bash tests/selftest.sh
+
+Fresh verification result
+The command exited 0 and ended with:
+
+SELFTEST: PASS
+
+Published evidence artifact
+This file is repository-relative and is committed with the CF-011 and CF-013 board amendments. Re-run from the repository root with the command above. The board amendments reference this artifact from new evidence entries; the earlier entries are retained for history.
