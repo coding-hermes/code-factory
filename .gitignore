@@ -23,6 +23,7 @@ key*
 # Python bytecode, kept out of every checkout including nodes
 __pycache__/
 *.pyc
+.vfs/
 .gitreins/rescued-*/
 
 # Foreman ownership claim — the panel loop holds the checkout while it writes.
