@@ -11,6 +11,11 @@ import pathlib
 import sqlite3
 from urllib.parse import quote
 
+import sys
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import cooldown_policy
+
 HERE = pathlib.Path(__file__).resolve().parents[1]
 ROOT = pathlib.Path(os.environ.get("CODE_FACTORY_ROOT", HERE))
 
@@ -105,7 +110,8 @@ def load_prompts(root):
 def read_rows(con):
     try:
         rows = con.execute(
-            "SELECT name, namespace_id, admission_mode, prompt, prompt_mode "
+            "SELECT name, namespace_id, admission_mode, prompt, prompt_mode, "
+            "cooldown_s, cooldown_floor_s, cooldown_ceiling_s, cooldown_pin_s "
             "FROM projects WHERE name LIKE 'code-factory%' ORDER BY name"
         ).fetchall()
     except sqlite3.OperationalError as exc:
@@ -117,6 +123,25 @@ def read_rows(con):
     if missing:
         raise LaneConfigError("project rows missing: " + ", ".join(missing))
     return by_name
+
+
+def validate_policy_rows(rows):
+    """Validate every code-factory row before any optional write."""
+    for name, row in rows.items():
+        try:
+            policy = cooldown_policy.policy_for_lane(name)
+            cooldown_policy.validate_pin(name, row[8])
+        except cooldown_policy.CooldownPolicyError as exc:
+            raise LaneConfigError(str(exc)) from exc
+        if row[5] != policy["cadence_s"] or row[6] != policy["floor_s"]:
+            raise LaneConfigError(
+                f"cadence policy mismatch for {name}: expected "
+                f"{policy['cadence_s']}/{policy['floor_s']}"
+            )
+        if row[7] != policy["ceiling_s"]:
+            raise LaneConfigError(
+                f"cooldown ceiling mismatch for {name}: expected {policy['ceiling_s']}"
+            )
 
 
 def display(value):
@@ -156,6 +181,7 @@ def main(argv=None):
         con = open_database(path, read_only)
         try:
             rows = read_rows(con)
+            validate_policy_rows(rows)
             report(rows, prompt_texts)
             if not read_only:
                 apply_updates(con, prompt_texts)

@@ -15,6 +15,7 @@ import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import lane_target  # noqa: E402  (same directory, keeps the target model in one place)
+import cooldown_policy  # noqa: E402
 
 DB = os.path.expanduser("~/.hermes/coding-hermes/scheduler.db")
 API = "http://127.0.0.1:9090"
@@ -125,18 +126,6 @@ LANE_PROMPT = {
     "sync": "sync",
     "duckbrain": "duckbrain",
 }
-PACE_CEILING = {
-    "docs": 604800 * 8,
-    "readme": 604800 * 8,
-    "perf": 604800 * 8,
-    "releng": 21600 * 8,
-    "qa": 21600 * 8,
-    "pm": 86400 * 8,
-    "dogfood": 259200 * 8,
-    "sync": 21600 * 8,
-    "duckbrain": 0,
-}
-
 created, configured, failed = [], [], []
 for suffix, (ns, mode, floor, wd_tmpl) in sorted(shape.items()):
     name = f"code-factory-{suffix}"
@@ -174,14 +163,15 @@ for suffix, (ns, mode, floor, wd_tmpl) in sorted(shape.items()):
         ROOT, "prompts", f"{LANE_PROMPT.get(base, 'foreman')}.md"
     )
     prompt = open(prompt_file).read() if os.path.exists(prompt_file) else ""
+    policy = cooldown_policy.policy_for_lane(name)
     con.execute(
         "UPDATE projects SET parent='code-factory', admission_mode=?, prompt=?, prompt_mode='append', "
         "cooldown_floor_s=?, cooldown_ceiling_s=? WHERE name=?",
         (
             mode or "cooldown",
             prompt,
-            floor,
-            PACE_CEILING.get(base, floor * 8 if floor else 0),
+            policy["floor_s"],
+            policy["ceiling_s"],
             name,
         ),
     )
