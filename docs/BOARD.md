@@ -145,8 +145,9 @@ bash tests/selftest.sh | grep -E 'rows parse|^SELFTEST'
   carried `acceptance`/`chapter`/`created`/`model` at the previous census). Status split: complete 153,
   in_progress 14, pending 344, blocked 2. All 151 complete rows carrying a `commit_hash` resolve to
   commits that are ancestors of `origin/main`; the 2 with no hash are CF-245 and P5G-34.
-  This tick then appends **3 rows** (CF-438, CF-439, CF-440), taking the board to **516 rows / 777
-  events**; the counts above are the state it measured, not the state it left.
+  This tick then appends **4 rows** (CF-438, CF-439, CF-440, CF-441) and closes CF-439 in the same
+  commit (`eb02981a`), leaving **517 rows / 779 events** (154 complete, 347 pending, 14 in_progress,
+  2 blocked). The counts above are the state it measured, not the state it left.
   Two findings came out of the measurement instead of a clean bill of health: 4 complete rows carry
   **zero** evidence while `board_evidence_check.py` reports them as resolved (CF-438), and the
   selftest was **red on the published tip** — section 67 died on `cannot read projects table: no such
