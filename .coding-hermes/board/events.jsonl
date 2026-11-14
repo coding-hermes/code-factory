@@ -759,3 +759,4 @@
 {"id":758,"timestamp":"2026-11-13T20:31:36Z","event_type":"task_created","task_id":"CF-430","actor":"foreman","detail":"Filed from direct observation during the P5G-11 and CF-428 gate runs: tests/selftest.sh section 68 runs tests/test_github_app_check.py, which rewrites docs/audits/code-factory-CF-319-fix-2026-11-13.md in the working tree and substitutes the live scratch path for the committed placeholder token. Gate runs must not mutate tracked files."}
 {"id":759,"timestamp":"2026-11-14T00:41:08Z","event_type":"task_created","task_id":"CF-431","actor":"foreman","detail":"{\"id\":\"CF-431\",\"status\":\"pending\"}"}
 {"id":760,"timestamp":"2026-11-14T03:19:47Z","event_type":"task_completed","task_id":"CF-431","actor":"foreman","detail":"{\"status\":\"complete\"}"}
+{"id":761,"timestamp":"2026-11-14T03:22:03Z","event_type":"task_created","task_id":"CF-432","actor":"foreman","detail":"{\"id\":\"CF-432\",\"status\":\"pending\"}"}
