@@ -1136,8 +1136,9 @@ if [ "$rc" -eq 0 ] && printf '%s\n' "$staged" | grep -Fxq 'node-bus-worker.py' \
     mkdir -p "$tmpd/scripts/$(dirname "$file")"
     cp "$HERE/scripts/$file" "$tmpd/scripts/$file" || fails=$((fails+1))
   done <<< "$staged"
-  mkdir -p "$tmpd/fakeroot"
+  mkdir -p "$tmpd/fakeroot/harness"
   cp "$tmpd/scripts/node-bus-worker.py" "$tmpd/fakeroot/node-bus-worker.py"
+  cp "$tmpd/scripts/harness/harness_memory.py" "$tmpd/fakeroot/harness/harness_memory.py"
   chmod +x "$tmpd/fakeroot/node-bus-worker.py"
   if [ -x "$tmpd/fakeroot/node-bus-worker.py" ] && python3 -B "$tmpd/fakeroot/node-bus-worker.py" --help >/dev/null 2>&1; then
     say "  PASS  staged node-bus-worker.py is executable at $HOME/node-bus-worker.py and accepts --help"
@@ -2513,9 +2514,9 @@ mkdir -p "$tmpd/scripts/harness" "$tmpd/bin"
 no_ref=$(bash "$HERE/scripts/node-create.sh" --staged-files 2>&1); no_rc=$?
 with_ref=$(bash "$HERE/scripts/node-create.sh" --staged-files --ref master 2>&1); ref_rc=$?
 if [ "$no_rc" -eq 0 ] && [ "$ref_rc" -eq 0 ] && [ "$with_ref" = "$no_ref" ] \
-  && [ "$(printf '%s\n' "$with_ref" | grep -c .)" -eq 13 ] \
+  && [ "$(printf '%s\n' "$with_ref" | grep -c .)" -eq 14 ] \
   && ! printf '%s\n' "$with_ref" | grep -Fq 'unknown arg:'; then
-  say "  PASS  --staged-files --ref master -> exit 0, same thirteen-file staged set"
+  say "  PASS  --staged-files --ref master -> exit 0, same fourteen-file staged set"
 else
   say "  FAIL  --ref rejected or changed the staged set (exit $no_rc/$ref_rc)"; fails=$((fails+1))
 fi
@@ -2600,6 +2601,7 @@ with tempfile.TemporaryDirectory(prefix="cf159-") as directory:
                  "reclaim_disk.py", "node_gateway_auth.py", "install-node.sh", "node_hygiene.py",
                  "gomodcache.py", "deploy_key.py", "node-bus-worker.py"):
         shutil.copyfile(root / "scripts" / name, scripts / name)
+    shutil.copyfile(root / "scripts/harness/harness_memory.py", scripts / "harness/harness_memory.py")
     shutil.copyfile(root / "scripts/harness/install-hermes.sh", scripts / "harness/install-hermes.sh")
     # The adapter sources this (CF-229); the fixture's staging tree must be a complete node.
     shutil.copyfile(root / "scripts/harness/harness-vars.sh", scripts / "harness/harness-vars.sh")

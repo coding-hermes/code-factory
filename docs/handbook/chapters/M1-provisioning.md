@@ -80,12 +80,15 @@ reference appended to `lib.sh` was never read at all. Each reference is resolved
 referring script resolves it — a reference inside `harness/<file>` is relative to `scripts/harness/`
 (`../lib.sh` → `lib.sh`), `$HARNESS` is the selected harness, a directory or a path that leaves
 `scripts/` is not a member candidate — and the staged set is **derived**: the transitive closure of
-those references from `project-node.sh` and `lib.sh`, plus the two members no reference reaches —
+those references from `project-node.sh` and `lib.sh`, plus Python sibling imports resolved from
+staged `.py` members at the runtime path. The worker's `from harness_memory import ...` therefore
+resolves `harness/harness_memory.py`, which is declared and staged at `~/harness/harness_memory.py`
+(the worker adds that directory to `sys.path`). The two explicit sidecars still remain:
 `deploy_key.py` (run by `--deploy-key`, which lives in `node-create.sh`) and
 `harness/harness-vars.sh` (the harness contract every adapter sources, so a foreign adapter that
-does not name it still gets it) — asserted equal to the declared manifest in both directions. A
-member the entry point needs therefore cannot be missing
-from the list, and a listed member nothing references cannot ride along. Verification:
+does not name it still gets it). The derived closure is asserted equal to the declared manifest in
+both directions. A member the entry point needs therefore cannot be missing from the list, and a
+listed member nothing references cannot ride along. Verification:
 `bash tests/node-create-staged-set.sh all` (arms `spellings`, `members`, `derive`; each mutates a
 private copy of `scripts/` in a temporary directory and reads the mutated copy's `--staged-files`),
 wired into `bash tests/selftest.sh` §16.

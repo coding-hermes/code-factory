@@ -56,17 +56,18 @@ staged_ref_path() {
 }
 
 staged_files() {
-  local file line ref target base rest member
+  local file line ref target base rest member import_name import_target
   # node_gateway_auth.py is staged because project-node.sh layer 20 runs it: the harness adapter
   # refuses a public bind without dashboard.basic_auth, and no other stage writes it (CF-150).
   # install-node.sh/node_hygiene.py/gomodcache.py are layer 10/00 dependencies of the runtime,
   # footprint and shared-cache rows; deploy_key.py is the injector --deploy-key runs here
   # (CF-003). node-bus-worker.py is the sidecar bunker-crier-connect.sh invokes from $HOME
-  # (CF-276). This list is not the authority: the closure derived below must equal it, in both
-  # directions, or the run stops with a named staged_set row (CF-087).
+  # (CF-276), and its local harness_memory import is staged beside it at the same runtime path.
+  # This list is not the authority: the closure derived below must equal it, in both directions,
+  # or the run stops with a named staged_set row (CF-087).
   local -a declared=(project-node.sh install-go.sh install-node.sh lib.sh disk_floor.py reclaim_disk.py
                      node_gateway_auth.py node_hygiene.py gomodcache.py deploy_key.py node-bus-worker.py
-                     harness/harness-vars.sh "harness/install-$HARNESS.sh")
+                     harness/harness-vars.sh harness/harness_memory.py "harness/install-$HARNESS.sh")
   # Files this script stages that the derived closure cannot reach: deploy_key.py is copied into
   # the node and run there by --deploy-key, harness/harness-vars.sh is part of the harness contract
   # every adapter sources (specs/HARNESS.md), and node-bus-worker.py is the sidecar consumed by
@@ -76,6 +77,7 @@ staged_files() {
   # Every spelling of a runtime reference: $HERE/x, ${HERE}/x, bare, and inside either quote
   # style. The capture stops at the quote/space, so "$HERE/x" and '$HERE/x' both yield x.
   local pattern='(\$HERE|\$\{HERE\})/([a-zA-Z0-9_./${}-]+)'
+  local import_pattern='^[[:space:]]*(from[[:space:]]+([a-zA-Z_][a-zA-Z0-9_.]*)[[:space:]]+import|import[[:space:]]+([a-zA-Z_][a-zA-Z0-9_.]*))'
   local -a staged=() queue=(project-node.sh lib.sh "${extra[@]}")
   # Derive the staged set: walk the references from the entry point and the shared helper
   # transitively, over EVERY staged member, and stage exactly the closure. A member the runtime
@@ -104,6 +106,32 @@ staged_files() {
         esac
       done
     done < "$HERE/$file"
+    # Python resolves a top-level import from the worker's sibling module directory. Treat an
+    # import whose corresponding .py file exists beside the staged member as a transitive staged
+    # reference; standard-library and third-party imports have no sibling file and are ignored.
+    if [[ "$file" == *.py ]]; then
+      while IFS= read -r line; do
+        if [[ "$line" =~ $import_pattern ]]; then
+          import_name="${BASH_REMATCH[2]:-${BASH_REMATCH[3]}}"
+          if [ "$base" = "." ]; then
+            import_target="${import_name##*.}.py"
+          else
+            import_target="$base/${import_name##*.}.py"
+          fi
+          # node-bus-worker.py adds scripts/harness to sys.path before importing its top-level
+          # harness_memory module, so resolve that runtime sibling as well as same-directory imports.
+          if [ ! -f "$HERE/$import_target" ] && [ "$base" = "." ]; then
+            import_target="harness/${import_name##*.}.py"
+          fi
+          if [ -f "$HERE/$import_target" ]; then
+            case " ${declared[*]} " in
+              *" $import_target "*) queue+=("$import_target") ;;
+              *) bad "staged_set" "$file imports unstaged $import_name ($import_target)" >&2; return 1 ;;
+            esac
+          fi
+        fi
+      done < "$HERE/$file"
+    fi
   done
   for member in "${extra[@]}"; do
     [ -f "$HERE/$member" ] || { bad "staged_set" "missing scripts/$member" >&2; return 1; }
@@ -259,11 +287,12 @@ fi
 
 # 2. stage the provisioner INTO the node (scripts run there, they do not reach back)
 say "  ..    staging scripts"
-"$b" exec --server "$SERVER" "$AGENT" -- bash -lc 'mkdir -p ~/node-scripts/harness' \
+"$b" exec --server "$SERVER" "$AGENT" -- bash -lc 'mkdir -p ~/node-scripts/harness ~/harness' \
   || { bad "staged" "cannot create node-scripts directory"; incomplete; }
 while IFS= read -r file; do
   case "$file" in
     node-bus-worker.py) destination="$AGENT:node-bus-worker.py" ;;
+    harness/harness_memory.py) destination="$AGENT:harness/harness_memory.py" ;;
     *) destination="$AGENT:node-scripts/$file" ;;
   esac
   "$b" cp "$HERE/$file" "$destination" --server "$SERVER" \

@@ -39,7 +39,7 @@ def load_worker():
 
 
 WORKER_MOD = load_worker()
-DIRECTIVE = 'Complete the admitted board tasks and return evidence.\n'
+DIRECTIVE = "Complete the admitted board tasks and return evidence.\n"
 STUB = """\
 import sys
 from pathlib import Path
@@ -63,6 +63,9 @@ class RecordingIdentity:
         self.repo_path = repo
         self.project = "code-factory"
         self.harness_name = "fixture-recorder"
+        self.harness_version = "unreported"
+        self.duckbrain_url = ""
+        self.duckbrain_token_path = os.path.join(self.home, "duckbrain.token")
         self.stub = stub
         self.got = got
         self.marker = marker
@@ -85,7 +88,9 @@ class BriefDigestBindingTest(unittest.TestCase):
         self.stub = os.path.join(self.home, "record_harness.py")
         with open(self.stub, "w", encoding="utf-8") as handle:
             handle.write(STUB)
-        self.ident = RecordingIdentity(self.home, self.repo, self.stub, self.got, self.marker)
+        self.ident = RecordingIdentity(
+            self.home, self.repo, self.stub, self.got, self.marker
+        )
         self.args = types.SimpleNamespace(dry_run=False, harness_wall=30)
         self.output = ""
 
@@ -166,32 +171,48 @@ class BriefDigestBindingTest(unittest.TestCase):
         self.assert_refused_without_effect(dispatch, "DIGEST_MISMATCH")
 
     def test_b5_missing_digest_is_refused_before_side_effects(self):
-        self.assert_refused_without_effect(self.dispatch(digest="none"), "BRIEF_UNAVAILABLE")
+        self.assert_refused_without_effect(
+            self.dispatch(digest="none"), "BRIEF_UNAVAILABLE"
+        )
 
     def test_b6_sender_node_agreement_and_effectful_members(self):
         base = self.dispatch()
         digest = WORKER_MOD.brief_digest(base, DIRECTIVE)
-        self.assertEqual(digest, WORKER_MOD.brief_digest(copy.deepcopy(base), DIRECTIVE))
+        self.assertEqual(
+            digest, WORKER_MOD.brief_digest(copy.deepcopy(base), DIRECTIVE)
+        )
         self.assertEqual(
             digest,
-            hashlib.sha256(WORKER_MOD.brief_canonical_bytes(base, DIRECTIVE)).hexdigest(),
+            hashlib.sha256(
+                WORKER_MOD.brief_canonical_bytes(base, DIRECTIVE)
+            ).hexdigest(),
         )
         for label, change in {
             "directive": {"text_b64": b64(DIRECTIVE + "changed\n")},
             "gate.cmd": {"gate": self.gate("other")},
-            "criteria.argv": {"criteria": [{"id": "AC-1", "argv": ["changed"], "cwd": "."}]},
+            "criteria.argv": {
+                "criteria": [{"id": "AC-1", "argv": ["changed"], "cwd": "."}]
+            },
             "repo": {"repo": "https://example.invalid/other.git"},
             "ref": {"ref": "node/p5g08"},
             "workdir": {"workdir": os.path.join(self.home, "other")},
             "vars": {"vars": {"CF_LANE": "other"}},
-            "skills": {"skills": [{"name": "new", "ref": "cas+sha256://x", "digest": "a" * 64}]},
-            "attachments": {"attachments": [{"name": "a", "ref": "cas+sha256://x", "size_bytes": 1}]},
+            "skills": {
+                "skills": [{"name": "new", "ref": "cas+sha256://x", "digest": "a" * 64}]
+            },
+            "attachments": {
+                "attachments": [{"name": "a", "ref": "cas+sha256://x", "size_bytes": 1}]
+            },
         }.items():
             with self.subTest(member=label):
                 altered = copy.deepcopy(base)
                 altered.update(change)
-                altered_text = DIRECTIVE + "changed\n" if label == "directive" else DIRECTIVE
-                self.assertNotEqual(digest, WORKER_MOD.brief_digest(altered, altered_text))
+                altered_text = (
+                    DIRECTIVE + "changed\n" if label == "directive" else DIRECTIVE
+                )
+                self.assertNotEqual(
+                    digest, WORKER_MOD.brief_digest(altered, altered_text)
+                )
 
         vector = json.load(open(VECTOR_PATH, encoding="utf-8"))
         cv01b = next(item for item in vector["vectors"] if item["id"] == "CV-01-B")
@@ -213,12 +234,18 @@ class BriefDigestBindingTest(unittest.TestCase):
             json.dump(vector_dispatch, handle)
         completed = subprocess.run(
             [sys.executable, "-B", WORKER, "--print-brief-digest", path],
-            capture_output=True, text=True, timeout=60, stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            stdin=subprocess.DEVNULL,
             env=dict(os.environ, PYTHONDONTWRITEBYTECODE="1"),
         )
         self.assertEqual(0, completed.returncode, completed.stderr)
         self.assertEqual(related["brief_input_sha256"], completed.stdout.strip())
-        self.assertEqual("aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a", digest if False else related["brief_input_sha256"])
+        self.assertEqual(
+            "aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a",
+            digest if False else related["brief_input_sha256"],
+        )
 
     @unittest.skipUnless(PREFIX_CONTROL, "prefix control requires CF_BUS_WORKER_SOURCE")
     def test_p0_prefix_control_runs_altered_gate(self):

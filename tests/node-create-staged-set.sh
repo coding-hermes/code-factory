@@ -124,6 +124,25 @@ derive_stray() {
   fi
 }
 
+# python_import_omit — a staged Python member's sibling import is a runtime dependency even though
+# it has no $HERE spelling. The private fixture adds a real sibling and import but omits it from the
+# declared manifest; the validator must name that omission rather than silently passing.
+python_import_omit() {
+  local d
+  d="$(new_copy python-import-omit)" || { fail_arm "python-import-omit — cannot copy scripts/"; return; }
+  printf '%s\n' 'import staged_probe' >> "$d/scripts/node-bus-worker.py"
+  printf '%s\n' '# fixture sibling imported by node-bus-worker.py' > "$d/scripts/staged_probe.py"
+  run_manifest "$d"
+  if [ "$rc" -ne 0 ] \
+    && printf '%s\n' "$out" | grep -Fq 'staged_set' \
+    && printf '%s\n' "$out" | grep -Fq 'imports unstaged staged_probe (staged_probe.py)'; then
+    pass_arm "python-import-omit — staged_set names the omitted sibling import (exit $rc)"
+  else
+    fail_arm "python-import-omit — exit $rc, omitted Python sibling import was not named"
+    printf '%s\n' "$out" | sed 's/^/    | /'
+  fi
+}
+
 # derive_closed — the printed set equals the set the validator derived: every HERE reference held
 # by a printed member must resolve, through the filesystem, into the printed set. This is an
 # independent oracle (cd/pwd, not the validator's own string walk), so a set that stops following
@@ -168,6 +187,7 @@ derive_closed() {
 arm_derive() {
   derive_omit
   derive_stray
+  python_import_omit
   derive_closed
 }
 

@@ -94,6 +94,9 @@ class RecordingIdentity:
         self.repo_path = repo
         self.project = "code-factory"
         self.harness_name = "fixture-recorder"
+        self.harness_version = "unreported"
+        self.duckbrain_url = ""
+        self.duckbrain_token_path = os.path.join(self.home, "duckbrain.token")
         self.stub = stub
         self.got = got
         self.marker = marker
