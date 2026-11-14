@@ -198,3 +198,48 @@ No tag or Release was created. The final report carrier is docs-only and its own
 ABSENT (no workflows exist), not green. The report artifact's final remote SHA-256 is recorded by the
 carrier readback; board row mutation and DuckBrain memory write/readback were not completed in this tick.
 
+
+## 12. Gate repair pass (same tick id, re-fired)
+
+Pass 1 published this file while recording `SELFTEST: FAIL (4)` at `054f6818`. One of those four was
+this artifact itself: section 34 (`scripts/check_scan_scope.py`, CF-163 AC3) failed with
+`RESULT: FAIL (3 violation(s))` naming the posture table at lines 125-127, because those rows quoted
+secret-scanner runs without the literal `--log-opts` scope the checker requires. The repair names the scope
+in the rows above; the checker's rule was not weakened, and no other conclusion changed. It landed as
+`70651a51` (`docs(releng): name the scan scope in the 2026-11-14 posture table`).
+
+| Probe | At `054f6818` (pass 1) | At `70651a51` (this pass) |
+| --- | --- | --- |
+| `bash tests/selftest.sh` from a clean worktree | `SELFTEST: FAIL (4)` | `SELFTEST: PASS`, 68 sections, 563 `PASS` lines, rc=0 |
+| `python3 -B scripts/check_scan_scope.py .` | `RESULT: FAIL (3 violation(s))` | `RESULT: OK` — 22 claims name their `--log-opts` |
+| `gitleaks dir . --no-banner --redact` (clean worktree; `--log-opts` n/a — not a history scan) | `no leaks found`, 4.14 MB | `no leaks found`, 4.14 MB (4,142,749 bytes, 1.27s) |
+| `gitleaks detect --source . --redact -c .gitleaks.toml --log-opts=origin/main` | clean, 1173 commits, 32.47 MB | clean, 1175 commits, 32.48 MB (32,478,690 bytes, 1.47s) |
+
+Structural build, re-derivable: this repo ships no compiled artefact (0 `.go`/`.rs`/`.c` files, no
+`Makefile`, no `go.mod`/`package.json`/`pyproject.toml`), so "builds" means the interpreters accept the
+tree. `bash -n` over all 45 tracked `*.sh` → 0 failures; `python3 -m py_compile` over all 79 tracked
+`*.py` → 0 failures, with one pre-existing cosmetic `SyntaxWarning` at `scripts/build_book.py:457`
+(`"\s"` inside an embedded JS string; not a gate).
+
+What closed the red between passes was the sibling CF-434 row, not this lane: `4d93aab4` ("CF-434:
+stage harness_memory with the node transport; mirror identity fields in fixtures") landed at
+13:30:45Z with its own green tier-1, repairing the staging leg (CF-276) and the two receiving-side
+suites that pass 1 reported. This pass re-verified that commit from a clean worktree rather than
+trusting the sibling's claim.
+
+Release decision — **NO CUT**, unchanged, with the mechanical blocker now retired. The red gate pass 1
+cited is gone, so the two load-bearing blockers are the only ones left:
+
+1. CF-161 (P3, open) — the release contract is an OWNER DECISION ("what a version means, which commits
+   are taggable, and whether the factory releases at all"). Zero tags exist; a first version number
+   cannot be invented by a lane.
+2. CF-435 (P1, open) — the repo has no hosted CI (0 workflows, 0 runs), so no exact-SHA hosted check
+   can certify a tag. The local tier-1 guard that produced the `PASS` above is not that check.
+
+The green precondition was recorded as a note on CF-161 so the owner's decision is the only thing
+between this tree and a first tag. Posture was re-measured and is unchanged from section 7: secret
+scanning and push protection enabled; non-provider patterns, validity checks and Dependabot security
+updates disabled (CF-436); `main` unprotected, 404 (CF-436); the published `master` lineage still
+carries 547 findings across 736 scanned commits (CF-163, P1). License MIT, public, no wiki.
+
+No tag, no GitHub Release, no board row flipped complete by this lane.
