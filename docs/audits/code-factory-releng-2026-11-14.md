@@ -122,9 +122,9 @@ dogfood run at the candidate; classified **STALE**, not PASS.
 | Item | Measured | Status |
 | --- | --- | --- |
 | LICENSE | MIT (`licenseInfo.key=mit`, `LICENSE` tracked) | OK |
-| gitleaks, `main` working tree (`--no-git`) | `no leaks found` | OK |
-| gitleaks, `main` history (1168 commits) | `no leaks found` | OK |
-| gitleaks, `master` history (736 commits) | `leaks found: 547` | **FAIL — CF-163 (P1, open)** |
+| gitleaks, working tree at the candidate (`gitleaks dir . --no-banner --redact`) | `no leaks found`, 4.14 MB scanned, rc=0 — a directory scan: `--log-opts` does not apply and no revision range is claimed | OK |
+| gitleaks, `main` history (`--log-opts=origin/main`, 1173 commits) | `no leaks found`, 32.47 MB scanned, rc=0 | OK |
+| gitleaks, `master` history (`--log-opts=gh/master`, 736 commits scanned) | `leaks found: 547` | **FAIL — CF-163 (P1, open)** |
 | `master` ref | 772 commits, **not** an ancestor of `main` (`gh/main...gh/master` = 1229 / 772) | **FAIL — internal lineage published** |
 | Secret scanning | `enabled` | OK |
 | Secret scanning push protection | `enabled` | OK |
