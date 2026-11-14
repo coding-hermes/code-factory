@@ -84,7 +84,29 @@ measured 177-test run, five skips, exit 0, and the test's own additional measure
 selftest evidence is retained separately because its result is red, not silently replaced by the
 smoke result.
 
-## 6. What a red suite does and does not prove
+## 6. CF-050 publication gate and repair path
+
+Section 61 of `tests/selftest.sh` grades the index as publication truth: the staged tree is what
+will be published. A host-home path still carried by the index is refused; a path present in HEAD
+but absent from the index is a staged repair and is reported as `REPAIR`. The falsifier arms cover a
+fresh staged leak, an untouched committed leak (including a clean unrelated staged file), a committed
+and removed fixture, and the repair direction where `git rm` is staged but not yet committed. The
+repair direction is therefore allowed without opening a publishing hole.
+
+Measured commands and output at this revision:
+
+| Command | Measured output |
+|---|---|
+| `bash -n tests/selftest.sh` | exit 0 |
+| `bash docs/audits/cf050-repair-path.sh` | `REPAIR: allowed`; `LEAK: refused` (fresh staged leak); `LEAK: refused` (untouched committed leak); `EXIT=0` |
+| `python3 scripts/handbook_spine.py` | `findings=0`; exit 0 |
+| targeted §61 extraction and arms 1–3 | committed leak: `FAIL ... paths: docs/fixture.md`; committed leak + clean staged file: `FAIL ... paths: docs/fixture.md`; removed and committed: `PASS ... baseline 0, current 0`; exit 0 |
+
+The implementation and probe are anchored by `tests/selftest.sh:6966-7050`; the chapter is the
+named documentation surface for `tests/selftest.sh::CF050_publish_gate` and
+`docs/audits/cf050-repair-path.sh`.
+
+## 7. What a red suite does and does not prove
 
 A red suite proves that at least one asserted arm did not meet its expected result in that run.
 It does not, by itself, prove that the current implementation introduced the failure. Before

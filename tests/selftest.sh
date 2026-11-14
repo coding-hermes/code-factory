@@ -6963,32 +6963,38 @@ for cf006_pair in aider:AIDER goose:GOOSE; do
   fi
 done
 rm -rf "$cf006"
-# ch:trace row=CF-050 spec=docs/ACCEPTANCE-PLAN.md#section-61 wave=none:serial-worker test=tests/selftest.sh::CF050_publish_gate doc=docs/ACCEPTANCE-PLAN.md evidence=none:no-frozen-transcript witness=none:not-published verdict=none:foreman-runs-gitreins commit=none:foreman-commit memory=none:foreman-closeout
+# ch:trace row=CF-050 spec=docs/ACCEPTANCE-PLAN.md#section-61 wave=none:serial-worker test=tests/selftest.sh::CF050_publish_gate doc=docs/handbook/chapters/VIII-5-tests.md,docs/audits/cf050-repair-path.sh evidence=none:no-frozen-transcript witness=none:not-published verdict=none:foreman-runs-gitreins commit=none:foreman-commit memory=none:foreman-closeout
 # CF-050: the published tree must not contain absolute host-home paths. The zero baseline
 # makes this a hard publication gate; .gitreins and the foreman-owned board are excluded.
 cf050_publish_gate() {
-  local root=$1 baseline=$2 hits count paths ref=HEAD
-  # Grade the union of the index and HEAD. The pre-commit gate must evaluate the tree it is about
-  # to publish AND the tree it already published: a lane that stages its repair but commits with it
-  # unstaged reds itself either way, and a staged clean file must not hide a leak that is already
-  # committed (CF-422 uncovered both directions). Fixture repositories have no staged changes and
-  # still resolve to their committed HEAD.
+  local root=$1 baseline=$2 H I repair_paths count paths repair_count
+  # Grade the index as publication truth. A committed leak that the index no longer carries is a
+  # staged repair, while a committed leak still carried by the index remains a refusal (CF-422).
   # A host-home leak is an absolute /home/<name>/ that is not part of a larger path expression, so
   # "$tmpd/fakeroot/repo" (a scratch-relative path) must not be read as a leak.
   local pat='(^|[^A-Za-z0-9])/home/[a-z][a-z0-9_-]*/'
   local excl=(':!.gitreins/**' ':!.coding-hermes/board/**')
   # Options must precede the pattern: `git grep <pattern> --cached` reads --cached as a pathspec.
-  hits=$({
-    git -C "$root" grep --cached -lIE "$pat" -- . "${excl[@]}" 2>/dev/null || true
-    git -C "$root" grep -lIE "$pat" HEAD -- . "${excl[@]}" 2>/dev/null || true
-  } | sed 's/^HEAD://' | sort -u)
-  count=$(printf '%s\n' "$hits" | grep -c . || true)
-  paths=$(printf '%s\n' "$hits" | sed 's/^HEAD://' | sort -u | sed -n '1,10p' | tr '\n' ' ')
+  H=$(git -C "$root" grep -lIE "$pat" HEAD -- . "${excl[@]}" 2>/dev/null \
+    | sed 's/^HEAD://' | sort -u || true)
+  I=$(git -C "$root" grep --cached -lIE "$pat" -- . "${excl[@]}" 2>/dev/null \
+    | sort -u || true)
+  count=$(printf '%s\n' "$I" | grep -c . || true)
+  paths=$(printf '%s\n' "$I" | sed -n '1,10p' | tr '\n' ' ')
   if [ "$count" -gt "$baseline" ]; then
     say "  FAIL  publish paths — baseline $baseline, current $count; paths: ${paths% }"
     return 1
   fi
-  say "  PASS  publish paths — baseline $baseline, current $count"
+  repair_paths=$(comm -23 <(printf '%s\n' "$H") <(printf '%s\n' "$I") | sed '/^$/d')
+  repair_count=$(printf '%s\n' "$repair_paths" | grep -c . || true)
+  if [ "$repair_count" -gt 0 ]; then
+    repair_paths=$(printf '%s\n' "$repair_paths" | sed -n '1,10p' | tr '\n' ' ')
+    repair_word=path
+    [ "$repair_count" -eq 1 ] || repair_word='paths'
+    say "  PASS  publish paths — baseline $baseline, current $count (REPAIR: $repair_count committed $repair_word staged for removal: ${repair_paths% })"
+  else
+    say "  PASS  publish paths — baseline $baseline, current $count"
+  fi
   return 0
 }
 say "61. the published tree does not add absolute host-home paths (CF-050)"
@@ -7028,6 +7034,22 @@ if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fq '  PASS  publish paths —
   say "  PASS  removed fixture -> clean control passes"
 else
   say "  FAIL  removed fixture did not restore PASS: $out"; fails=$((fails+1))
+fi
+# Repair arm: a committed leak that is removed in the index is safe to publish. The pre-fix union
+# gate refuses this exact staged repair because HEAD still carries the leak.
+cf050_repair="$cf050/repair"
+git init -q -b trunk "$cf050_repair"
+mkdir -p "$cf050_repair/docs"
+printf '/%s/%s/repair\n' home "${USER:-user}" > "$cf050_repair/docs/leak.md"
+git -C "$cf050_repair" add docs/leak.md
+git -C "$cf050_repair" -c user.name=fixture -c user.email=fixture@example.invalid commit -qm fixture
+git -C "$cf050_repair" rm -q docs/leak.md
+out=$(cf050_publish_gate "$cf050_repair" 0 2>&1); rc=$?
+if [ "$rc" -eq 0 ] \
+   && printf '%s\n' "$out" | grep -Fq 'REPAIR: 1 committed path staged for removal: docs/leak.md'; then
+  say "  PASS  staged removal -> committed leak is a named repair"
+else
+  say "  FAIL  staged removal did not open the repair path (exit $rc): $out"; fails=$((fails+1))
 fi
 rm -rf "$cf050"
 
