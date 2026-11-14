@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Hermetic I3 record and conformance checks (CF-231); no DuckBrain service is contacted."""
+"""I3 record, adapter export, and conformance checks for CF-330."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts" / "harness"))
@@ -74,6 +75,65 @@ class MemoryContract(unittest.TestCase):
         with self.assertRaises(memory.MemoryRecordError):
             self.writer.read("project-qa")
 
+    def test_memory_records_write_r1_then_r2_with_fail_outcome(self):
+        candidate = record()
+        candidate.update(
+            started_at="2026-11-14T00:00:00Z",
+            ended_at="2026-11-14T00:01:00Z",
+            board_row="CF-330",
+            node="node-fixture",
+        )
+        r1, r2 = memory.memory_records(candidate, "FAIL")
+        self.assertEqual("FAIL", r1["outcome"])
+        self.assertEqual("FAIL", r2["outcome"])
+        self.assertEqual("project-qa", r1["namespace"])
+        self.assertEqual("run-123", r2["run_id"])
+        self.assertNotIn("prompt", r2)
+        self.assertNotIn("credential", repr(r2).lower())
+        self.assertEqual("CF-330", r1["board_row"])
+        self.assertEqual("node-fixture", r2["node"])
+        self.assertEqual("2026-11-14T00:00:00Z", r1["started_at"])
+        self.assertEqual("2026-11-14T00:01:00Z", r2["ended_at"])
+        self.assertEqual([], r2["artifact_digests"])
+        self.assertNotIn("source_code", r2)
+        self.assertNotIn("diff", r2)
+        self.assertNotIn("secret", repr(r2).lower())
+
+    def test_duckbrain_client_requires_mode_600_token_and_exact_keys(self):
+        with self.assertRaises(memory.MemoryRecordError):
+            memory.DuckBrainClient("http://127.0.0.1:1", self.path)
+        self.path.write_text("fixture-token\n", encoding="utf-8")
+        os.chmod(self.path, 0o644)
+        with self.assertRaises(memory.MemoryRecordError):
+            memory.DuckBrainClient("http://127.0.0.1:1", self.path)
+
+    def test_export_records_orders_r1_before_r2_and_reads_both(self):
+        client = mock.Mock()
+        keys = memory.export_records(client, record(), "PASS")
+        self.assertEqual(
+            [
+                mock.call(
+                    "project-qa", "/runs/project-qa/unknown-week/run-123", mock.ANY
+                ),
+                mock.call(
+                    "factory",
+                    "/factory/project-qa/unknown-week/project-qa/run-123",
+                    mock.ANY,
+                ),
+            ],
+            client.remember.call_args_list,
+        )
+        self.assertEqual(
+            [
+                mock.call("project-qa", "/runs/project-qa/unknown-week/run-123"),
+                mock.call(
+                    "factory", "/factory/project-qa/unknown-week/project-qa/run-123"
+                ),
+            ],
+            client.read_exact.call_args_list,
+        )
+        self.assertEqual(2, len(keys))
+
     def test_battery_names_fixture_and_unsupported_runtime_for_every_adapter(self):
         harnesses = (
             "hermes",
@@ -95,11 +155,49 @@ class MemoryContract(unittest.TestCase):
             env=env,
             timeout=60,
         )
-        self.assertNotEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         for harness in harnesses:
             with self.subTest(harness=harness):
-                self.assertIn(f"PASS  {harness}:memory-fixture", proc.stdout)
-                self.assertIn(f"FAIL  {harness}:memory — UNSUPPORTED", proc.stdout)
+                self.assertIn(f"PASS  {harness}:memory-r1-write", proc.stdout)
+                self.assertIn(f"PASS  {harness}:memory-r2-read", proc.stdout)
+                self.assertIn(f"PASS  {harness}:memory-provenance", proc.stdout)
+                self.assertIn(
+                    f"SKIP  {harness}:memory — no live DuckBrain", proc.stdout
+                )
+                self.assertNotIn(f"FAIL  {harness}:memory", proc.stdout)
+        self.assertEqual(10, proc.stdout.count("SKIP  "))
+        self.assertEqual(40, proc.stdout.count("memory-r"))
+        self.assertEqual(10, proc.stdout.count("memory-provenance"))
+        self.assertEqual(10, proc.stdout.count("memory-negative"))
+        self.assertIn("HARNESS CONFORMANCE: PASS", proc.stdout)
+        self.assertNotIn("UNSUPPORTED", proc.stdout)
+        self.assertNotIn("credential", proc.stdout.lower())
+        self.assertNotIn("source code", proc.stdout.lower())
+        self.assertNotIn("R2 written before R1", proc.stdout)
+        self.assertNotIn("outcome PASS", proc.stdout)
+        self.assertIn("FAIL outcome", proc.stdout)
+        self.assertIn("factory namespace", proc.stdout)
+        self.assertIn("missing namespace refused", proc.stdout)
+        self.assertIn("exact-key readback verified", proc.stdout)
+        self.assertIn("required non-empty provenance", proc.stdout)
+        self.assertIn("live DuckBrain", proc.stdout)
+        self.assertIn("fixture is not live support evidence", proc.stdout)
+        self.assertNotIn("CF-330", proc.stdout)
+        self.assertIn("cf330-hermes-run", proc.stdout)
+        self.assertIn("code-factory-qa", proc.stdout)
+        self.assertIn("target factory namespace", proc.stdout)
+        self.assertNotIn("default namespace accepted", proc.stdout)
+        self.assertNotIn("wrong namespace accepted", proc.stdout)
+        self.assertNotIn("recorded a credential", proc.stdout)
+        self.assertNotIn("prompt text", proc.stdout)
+        self.assertNotIn("absolute path", proc.stdout)
+        self.assertNotIn("PASS  hermes:memory —", proc.stdout)
+        self.assertNotIn("FAIL  hermes:memory —", proc.stdout)
+        self.assertNotIn("PASS  codex:memory —", proc.stdout)
+        self.assertNotIn("FAIL  codex:memory —", proc.stdout)
+        self.assertTrue(
+            proc.stdout.endswith("HARNESS CONFORMANCE: PASS\n"), proc.stdout[-100:]
+        )
 
 
 if __name__ == "__main__":

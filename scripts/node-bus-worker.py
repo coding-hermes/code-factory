@@ -94,6 +94,9 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "harness"))
+from harness_memory import DuckBrainClient, MemoryRecordError, export_records  # noqa: E402
+
 DEFAULT_INBOX_LIMIT = 10
 DEFAULT_LEASE_SECONDS = 30
 DEFAULT_TIMEOUT = 10
@@ -439,6 +442,14 @@ class Identity:
         harness = self.node_doc.get("harness") or {}
         self.harness_cmd = args.harness_cmd or harness.get("cmd") or ""
         self.harness_name = harness.get("name") or "hermes"
+        self.harness_version = str(harness.get("version") or "unreported")
+        duckbrain = self.node_doc.get("duckbrain") or {}
+        self.duckbrain_url = args.duckbrain_url or duckbrain.get("url") or ""
+        self.duckbrain_token_path = (
+            args.duckbrain_token_file
+            or duckbrain.get("token_file")
+            or os.path.join(home, ".node", "auth", "duckbrain.token")
+        )
         self.port = args.gateway_port
 
     def _read(self, path, required):
@@ -1086,7 +1097,9 @@ def _task_image(dispatch):
         "ref": dispatch.get("ref"),
         "workdir": dispatch.get("workdir"),
         "gate": copy.deepcopy(dispatch.get("gate")),
-        "vars": copy.deepcopy(dispatch.get("vars")) if isinstance(dispatch.get("vars"), dict) else {},
+        "vars": copy.deepcopy(dispatch.get("vars"))
+        if isinstance(dispatch.get("vars"), dict)
+        else {},
     }
 
 
@@ -1117,7 +1130,9 @@ def _jcs_number(value):
     if isinstance(value, float):
         if not math.isfinite(value):
             raise ValueError("non-finite number is not valid JCS")
-        return json.dumps(value, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+        return json.dumps(
+            value, ensure_ascii=False, separators=(",", ":"), allow_nan=False
+        )
     raise TypeError(value)
 
 
@@ -1129,10 +1144,16 @@ def _jcs(value):
     if isinstance(value, list):
         return "[" + ",".join(_jcs(item) for item in value) + "]"
     if isinstance(value, dict):
-        return "{" + ",".join(
-            json.dumps(key, ensure_ascii=False, separators=(",", ":")) + ":" + _jcs(value[key])
-            for key in sorted(value)
-        ) + "}"
+        return (
+            "{"
+            + ",".join(
+                json.dumps(key, ensure_ascii=False, separators=(",", ":"))
+                + ":"
+                + _jcs(value[key])
+                for key in sorted(value)
+            )
+            + "}"
+        )
     raise TypeError(type(value))
 
 
@@ -1149,12 +1170,19 @@ def brief_digest(dispatch, text):
 def brief_digest_verdict(dispatch, text):
     """Refuse missing or mismatched cf.brief-input.v1 input before executable side effects."""
     brief = dispatch.get("brief")
-    expected = str(brief.get("digest") or "").strip().lower() if isinstance(brief, dict) else ""
+    expected = (
+        str(brief.get("digest") or "").strip().lower()
+        if isinstance(brief, dict)
+        else ""
+    )
     if not expected:
         return "refuse", "BRIEF_UNAVAILABLE: no digestable cf.brief-input.v1 input"
     bound = brief_digest(dispatch, text)
     if expected != bound:
-        return "refuse", f"DIGEST_MISMATCH: declared brief.digest {expected} != recomputed {bound}"
+        return (
+            "refuse",
+            f"DIGEST_MISMATCH: declared brief.digest {expected} != recomputed {bound}",
+        )
     brief_ref = dispatch.get("brief_ref")
     if brief_ref and not str(brief_ref).endswith(bound):
         return "refuse", f"DIGEST_MISMATCH: brief_ref suffix does not match {bound}"
@@ -1192,8 +1220,49 @@ def print_brief_digest(path):
     return 0
 
 
+def memory_record(ident, dispatch, values, result, outcome):
+    """Export R1 then R2 when DuckBrain is configured; never hide transport failure."""
+    namespace = str(values.get("CF_NAMESPACE") or ident.project or "")
+    run_id = str(
+        values.get("CF_RUN_ID")
+        or dispatch.get("run_id")
+        or dispatch.get("corr_id")
+        or ""
+    )
+    if not namespace or not run_id:
+        return "UNVERIFIED: CF_NAMESPACE and CF_RUN_ID are required for memory export"
+    record = {
+        "namespace": namespace,
+        "run_id": run_id,
+        "lane": str(values.get("CF_LANE") or ident.project or ""),
+        "harness": ident.harness_name,
+        "harness_version": ident.harness_version,
+        "model_requested": str(values.get("CF_MODEL") or "unreported"),
+        "model_served": str(
+            result.get("model_served") or values.get("CF_MODEL") or "unreported"
+        ),
+        "provider_binding": str(values.get("CF_PROVIDER") or "unreported"),
+        "commit": str(result.get("commit") or "unreported"),
+        "tick": str(dispatch.get("tick") or "-"),
+        "board_row": str(dispatch.get("board_row") or "-"),
+        "node": str(result.get("host_identity") or socket.gethostname()),
+        "artifact_digests": result.get("artifacts") or [],
+    }
+    if not ident.duckbrain_url:
+        return "UNVERIFIED: DuckBrain URL is not configured; no memory write claimed"
+    try:
+        client = DuckBrainClient(ident.duckbrain_url, ident.duckbrain_token_path)
+        r1_key, r2_key = export_records(client, record, outcome)
+        ok("memory", f"R1/R2 wrote and read back by exact key ({r1_key}, {r2_key})")
+        return ""
+    except MemoryRecordError as exc:
+        return (
+            f"UNVERIFIED: DuckBrain export/readback failed — {one_line(str(exc), 240)}"
+        )
+
+
 def process(dispatch, ident, signer, args, seen, in_reply_to=""):
-    """Handle ONE dispatch. Returns (rows_ok, result_dict or None, message_ids_to_ack).
+    """Handle ONE dispatch. Returns (rows_ok, result_dict or None, message_ids_to_ack)."
 
     `in_reply_to` is the relay message id the dispatch arrived under. It is echoed on the result
     so the scheduler can correlate on its PRIMARY key (`payload["in_reply_to"] == receipt
@@ -1363,8 +1432,15 @@ def process(dispatch, ident, signer, args, seen, in_reply_to=""):
         )
         result["wall_s"] = round(seconds, 1)
         result["vars"] = section5_receipt(values)
+        memory_error = memory_record(ident, dispatch, values, result, "FAIL")
+        if memory_error:
+            result["memory"] = memory_error
         return False, result, True
     ok("harness", f"{label} exit {code} in {seconds:.1f}s (wall limit {wall}s)")
+
+    # Memory export is deliberately after the harness and gate have a terminal outcome. A
+    # transport failure remains visible in the result and never turns a run into an advertised
+    # successful write.
 
     gate_exit = None
     gate_note = ""
@@ -1441,6 +1517,12 @@ def process(dispatch, ident, signer, args, seen, in_reply_to=""):
         # Read by the scheduler's verdict BEFORE `reply_b64`, so the reason is the short one
         # rather than the whole transcript.
         result["error"] = reason_text
+    memory_error = memory_record(
+        ident, dispatch, values, result, "FAIL" if failed_status else "PASS"
+    )
+    if memory_error:
+        result["memory"] = memory_error
+        warn("memory", memory_error)
     tail = one_line(stderr or stdout, 300)
     if tail:
         say(f"  NOTE  harness output — {tail}")
@@ -1781,6 +1863,10 @@ def main(argv):
         "--token-file",
         default="",
         help="bearer file (default $HOME/.node/auth/crier.token)",
+    )
+    parser.add_argument("--duckbrain-url", default="", help="DuckBrain HTTP base URL")
+    parser.add_argument(
+        "--duckbrain-token-file", default="", help="mode-600 DuckBrain token file"
     )
     parser.add_argument("--agent", default="", help="override the agent id")
     parser.add_argument("--project", default="", help="override the project")

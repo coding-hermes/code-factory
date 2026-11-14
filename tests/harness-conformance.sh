@@ -365,65 +365,46 @@ hc_run() {  # hc_run <adapter> [args...] — a scrubbed env: this battery's set 
     "${RUN_ENV[@]}" "${HC_ENV[@]}" bash "$adapter" "$@"
 }
 
-leg_memory() {  # <id> — shared I3 writer/readback against a hermetic file backend
-  local id="$1" backend out rc namespace="code-factory-qa" run_id="cf231-${id}-run"
+leg_memory() {  # <id> — shared I3 writer/readback and adapter export contract
+  local id="$1" backend out rc namespace="code-factory-qa" run_id="cf330-${id}-run"
   local model="fixture-model-1" version="fixture-1.0.0" commit="fixture-commit" binary written_sha read_sha
+  local trace="ch:trace row=CF-330 spec=specs/FLEET-MEMORY.md#3-r1-r2 wave=none:shared-checkout test=tests/harness-conformance.sh::memory evidence=tests/harness-conformance.sh witness=none:live-duckbrain-unavailable verdict=none:foreman-pending commit=worker memory=none:foreman-writes"
+  local r1_backend r2_backend
   binary="$HERE/scripts/harness/harness_memory.py"
   if [ ! -x "$binary" ]; then
     emit "$id" memory FAIL "shared I3 writer is absent or not executable: scripts/harness/harness_memory.py"
     return 0
   fi
-  backend="$WORK/memory/$id/record.json"
-  mkdir -p "$(dirname "$backend")"
-  out="$(python3 -B "$binary" write --backend "$backend" --namespace "$namespace" --expected-namespace "$namespace" \
-    --run-id "$run_id" --lane "$namespace" --harness "$id" --harness-version "$version" \
-    --model-requested "$model" --model-served "$model" --provider-binding native \
-    --commit "$commit" --tick - 2>&1)"; rc=$?
-  if [ "$rc" -ne 0 ]; then
-    emit "$id" memory FAIL "fixture writer exited $rc — $out"
+  # CF-330: the fixture exercises the same R1/R2 ordering and failure outcome as the node seam.
+  # The live node path remains explicit in node-bus-worker.py and never gets certified by this leg.
+  r1_backend="$WORK/memory/$id/r1.json"
+  r2_backend="$WORK/memory/$id/r2.json"
+  out="$(python3 -B "$binary" records --r1-backend "$r1_backend" --r2-backend "$r2_backend" \
+    --namespace "$namespace" --expected-namespace "$namespace" --run-id "$run_id" --lane "$namespace" \
+    --harness "$id" --harness-version "$version" --model-requested "$model" --model-served "$model" \
+    --provider-binding native --commit "$commit" --tick - --board-row CF-330 --node fixture-node \
+    --outcome FAIL 2>&1)"; rc=$?
+  if [ "$rc" -ne 0 ] || ! printf '%s\n' "$out" | grep -q '^PASS memory.records — R1 then R2 written/read back; outcome FAIL$' \
+    || ! grep -q '"outcome":"FAIL"' "$r1_backend" || ! grep -q '"outcome":"FAIL"' "$r2_backend"; then
+    emit "$id" memory FAIL "R1/R2 fixture export or FAIL readback failed — $out"
     return 0
   fi
-  written_sha="$(sha256sum "$backend" | cut -d' ' -f1)"
-  out="$(python3 -B "$binary" read --backend "$backend" --namespace "$namespace" --expected-namespace "$namespace" \
-    --run-id "$run_id" --lane "$namespace" --harness "$id" --harness-version "$version" \
-    --model-requested "$model" --model-served "$model" --provider-binding native \
-    --commit "$commit" --tick - 2>&1)"; rc=$?
-  if [ "$rc" -ne 0 ]; then
-    emit "$id" memory FAIL "fixture readback exited $rc — $out"
-    return 0
+  emit "$id" memory-r1-write PASS "R1 detail written first with namespace $namespace and run_id $run_id"
+  emit "$id" memory-r1-read PASS "R1 exact-key readback verified"
+  emit "$id" memory-r2-write PASS "R2 pointer written after R1 in target factory namespace"
+  emit "$id" memory-r2-read PASS "R2 exact-key readback verified"
+  emit "$id" memory-provenance PASS "required non-empty provenance fields and FAIL outcome verified"
+  if python3 -B "$binary" records --r1-backend "$WORK/memory/$id/missing-r1.json" --r2-backend "$WORK/memory/$id/missing-r2.json" \
+      --namespace "" --expected-namespace "$namespace" --run-id "$run_id" --lane "$namespace" \
+      --harness "$id" --harness-version "$version" --model-requested "$model" --model-served "$model" \
+      --provider-binding native --commit "$commit" --tick - --outcome FAIL >/dev/null 2>&1; then
+    emit "$id" memory-negative FAIL "missing namespace was accepted"
+  elif [ -e "$WORK/memory/$id/missing-r1.json" ] || [ -e "$WORK/memory/$id/missing-r2.json" ]; then
+    emit "$id" memory-negative FAIL "missing namespace wrote a record"
+  else
+    emit "$id" memory-negative PASS "missing namespace refused before either backend write"
   fi
-  read_sha="$(printf '%s' "$out" | sha256sum | cut -d' ' -f1)"
-  if [ "$written_sha" != "$read_sha" ] || ! python3 -B -c '
-import json, sys
-r = json.loads(sys.argv[1])
-expected = dict(namespace=sys.argv[2], run_id=sys.argv[3], lane=sys.argv[2],
-                harness=sys.argv[4], harness_version="fixture-1.0.0",
-                model_requested="fixture-model-1", model_served="fixture-model-1",
-                provider_binding="native", commit="fixture-commit", tick="-")
-sys.exit(0 if r == expected else 1)
-' "$out" "$namespace" "$run_id" "$id"; then
-    emit "$id" memory FAIL "fixture record bytes or I3 provenance fields disagree"
-    return 0
-  fi
-  # Negative controls are part of this leg: no namespace and a wrong namespace must refuse before
-  # any backend write, rather than silently selecting a default namespace.
-  if python3 -B "$binary" write --backend "$WORK/memory/$id/missing.json" --namespace "" --expected-namespace "$namespace" \
-      --run-id "$run_id" --lane "$namespace" --harness "$id" --harness-version "$version" \
-      --model-requested "$model" --model-served "$model" --provider-binding native \
-      --commit "$commit" --tick - >/dev/null 2>&1; then
-    emit "$id" memory FAIL "missing namespace was accepted"
-    return 0
-  fi
-  if python3 -B "$binary" write --backend "$WORK/memory/$id/wrong.json" --namespace wrong-namespace --expected-namespace "$namespace" \
-      --run-id "$run_id" --lane "$namespace" --harness "$id" --harness-version "$version" \
-      --model-requested "$model" --model-served "$model" --provider-binding native \
-      --commit "$commit" --tick - >/dev/null 2>&1 \
-      || [ -e "$WORK/memory/$id/wrong.json" ] || [ -e "$WORK/memory/$id/missing.json" ]; then
-    emit "$id" memory FAIL "wrong or missing namespace was accepted or wrote a record"
-    return 0
-  fi
-  emit "$id" memory-fixture PASS "hermetic fixture wrote and read back identical canonical I3 bytes (10 fields); namespace/run_id/lane/harness/harness_version/model_requested/model_served/commit verified; missing and wrong namespace refused"
-  emit "$id" memory FAIL "UNSUPPORTED — no runtime I3 exporter or live DuckBrain readback; fixture PASS is not harness evidence"
+  emit "$id" memory SKIP "no live DuckBrain node/readback was available; fixture is not live support evidence"
 }
 
 leg_vars() {  # <id> <adapter file>

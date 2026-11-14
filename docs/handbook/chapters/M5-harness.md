@@ -99,10 +99,12 @@ inventory in §3 and the pin/verdict history are implementation coverage, not th
 ### III.M5.S6 — harness measurement
 
 The node's harness measurement surface records what the adapter actually reports; it does not turn
-an installer or fixture into a live run. The shared I3 memory seam is the same distinction: the
-fixture proves writer validation and exact-byte readback for every in-repo conformance adapter, while
-the unsupported rows preserve the missing runtime-exporter obligation. A future live adapter must
-keep the explicit namespace and all-field validation and replace only the hermetic backend.
+an installer or fixture into a live run. The shared I3 memory seam now writes R1 to the temporary
+per-project `CF_NAMESPACE`, then R2 to the target shared `factory` namespace, and reads both back by
+exact key. The node requires a mode-600 DuckBrain token file and reports `UNVERIFIED` when the URL,
+credential or transport is unavailable; the conformance fixture remains hermetic evidence. This
+keeps the target `factory` namespace distinct until CF-208 token scoping is fixed. A future live
+qualification must preserve the explicit namespace and all-field validation.
 
 
 **Finding F5-2.** `harness_resolve.py` is **not** the runtime resolver. A repo-wide search finds it

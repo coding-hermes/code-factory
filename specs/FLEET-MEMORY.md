@@ -1,9 +1,10 @@
 # FLEET-MEMORY — how a run becomes searchable, across every node and every week
 
-Status: **DESIGN — nothing in this document is implemented.** The node does not write DuckBrain today
-(`scripts/node-bus-worker.py` contains zero DuckBrain calls; the requirement exists only in
-`specs/HARNESS-MATRIX.md` I3 and in `prompts/foreman.md:36`). This page fixes the shape before anyone
-writes it, so the first implementation is not also the first design decision.
+Status: **PARTIAL — the node has a real DuckBrain adapter seam, but live transport is UNVERIFIED.**
+`scripts/node-bus-worker.py` exports R1 then R2 when `DUCKBRAIN_URL` and a mode-600 token are configured,
+reads each record back by exact key, and records a named `UNVERIFIED` result when transport or
+configuration is unavailable. The conformance battery remains hermetic fixture evidence unless a real
+node and readback are measured. This page fixes the shape before the remaining deployment work.
 
 ## 1. The question this answers
 

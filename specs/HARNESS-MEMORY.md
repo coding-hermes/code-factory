@@ -1,12 +1,15 @@
 # HARNESS-MEMORY — how each harness hands its run to DuckBrain
 
-Status: **PARTIAL — repository-local I3 fixture implemented; live runtime capture and DuckBrain transport UNVERIFIED.**
+Status: **PARTIAL — the repository-local fixture and node exporter are implemented; live runtime capture and DuckBrain transport remain UNVERIFIED.**
 `scripts/harness/harness_memory.py` is the shared writer/reader used by every row in
-`tests/harness-conformance.sh`'s memory leg. The fixture writes canonical UTF-8 JSON and verifies
-exact byte-identical readback, while refusing missing, default or mismatched namespaces. It does not
-contact DuckBrain, and no in-repo harness adapter currently exports complete runtime provenance; each
-adapter is therefore reported as explicitly `UNSUPPORTED` rather than silently skipped. The
-per-harness sections below remain source-read design notes, not live evidence.
+`tests/harness-conformance.sh`'s memory leg and also provides the HTTP adapter seam. The node writes
+R1 then R2, reads each back by exact key, requires an explicit namespace and mode-600 token file, and
+returns a named `UNVERIFIED` result rather than claiming success when transport is unavailable. The
+conformance fixture remains repository-local evidence, not live support evidence.
+
+The target shared `factory` namespace remains distinct from the temporary per-project `CF_NAMESPACE`
+used before CF-208 token scoping is fixed; R1 is written to `CF_NAMESPACE`, while R2 is written to
+`factory`.
 
 
 This page is the per-harness half of `specs/FLEET-MEMORY.md`: that page defines the records (R1/R2/R3),
