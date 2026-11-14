@@ -7,11 +7,13 @@ Fresh verification command
 bash tests/selftest.sh
 
 Fresh verification result
-A clean detached run at the earlier published base used for this evidence exited 0 and ended with:
+A fresh detached run at published base bff21266 exited 1 with SELFTEST: FAIL (1), so no historical or clean-base PASS is claimed. The current published tip reproduces the same pre-existing CF-304 fixture failure. The exact failing output is recorded below.
 
-SELFTEST: PASS
 
 A re-run at the current published tip exits 1 and ends with SELFTEST: FAIL (1), caused by the pre-existing CF-304 fixture error `cannot read projects table: no such column: cooldown_s`. The CF-045 board and evidence changes do not modify tests/selftest.sh or the CF-304 fixture. The current result is recorded honestly; the historical scratch output remains unavailable.
 
 Published evidence artifact
 This file is repository-relative and is committed with the CF-011 and CF-013 board amendments. Re-run from the repository root with the command above. The board amendments reference this artifact from new evidence entries; the earlier entries are retained for history.
+
+Reproducible current/base result
+bash tests/selftest.sh at bff21266 and at the current published tip exits 1 with SELFTEST: FAIL (1). The only counted failure is CF-304 / LANE-CONFIG-READONLY: the fixture reports `cannot read projects table: no such column: cooldown_s`. The CF-045 changes do not modify tests/ or scripts/. The historical scratch output is unavailable, and this artifact makes no PASS claim.
