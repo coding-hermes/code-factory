@@ -324,7 +324,7 @@ distinction in both directions, so the `PASS` is not reachable by deleting the w
 | occupied-port auth gate | `bash tests/selftest.sh` (section 55, arm E) | occupied `:10800` + no `dashboard.basic_auth` -> exit nonzero with the named `FAIL  port` row and no `PASS port`/`PASS status_probe`/`HERMES: PASS`; occupied + valid block keeps both PASS rows | 2026-11-07 | **PASS** (red pre-fix run in `docs/audits/code-factory-CF-192.probe.txt`) |
 | python compile | `python3 -m py_compile scripts/harness_resolve.py` | exit 0 | 2026-11-06 | PASS |
 | harness resolve unit | `python3 tests/test_harness_resolve.py` | pass | 2026-11-06 | **PASS** (28 tests, rc 0) |
-| conformance legs | `bash tests/harness-conformance.sh --only codex` | codex `check`, vars, node fixture, smoke and explicit live-node status rows; node fixture must prove `project-node.sh --apply --harness codex` created a measured manifest and must keep tampered/absent/unmeasured red controls | 2026-11-10 | **PASS** (fixture: codex node created; live node **UNVERIFIED/SKIP**) |
+| conformance legs | `bash tests/harness-conformance.sh --only codex` | codex `check`, vars, node fixture, smoke and explicit live-node status rows; node fixture must prove `node-create.sh --harness codex` staged `harness-vars.sh`, created a measured manifest and must keep tampered/absent/unmeasured red controls | 2026-11-14 | **PASS** (repository fixture: codex node created; live node **UNVERIFIED/SKIP**) |
 | node pin fixture | `python3 tests/test_node_provisioning.py` (`InstallNode`) | `--check` red before install; `--apply` installs, `node --version` reads back `v22.22.3`; second `--apply` changes nothing; a wrong digest installs nothing; a binary printing `v22.22.2` fails the readback | 2026-11-07 | **PASS** (fixture archive; the real download is the digest-pinned `https://nodejs.org/dist/v22.22.3/…`, hashed after download when the pin was written) |
 | owned-runtime precedence | `bash tests/selftest.sh` §58 | `PASS tool:node — $HOME/node-toolchain/current/bin/node (v22.22.3)` with the fixture home's own runtime, not the host's PATH node | 2026-11-07 | **PASS** (fixture) |
 | sealed shared cache | `python3 tests/test_node_provisioning.py` (`GoModCache`) | sealed cache builds with `GOPROXY=off` and adds **0 bytes**; a cold cache cannot; an unseeded module is refused with `permission denied` | 2026-11-07 | **PASS** (`MEASURED shared GOMODCACHE 2097910 bytes; sealed rebuild added 0 bytes`) |
@@ -361,6 +361,13 @@ and conformance pass rate are answerable only by reading the leg rows.
 | Worker seat not in registry | `deepseek-v4-flash@deepseek-foreman` absent | a valid seat | **OPEN** — CF-376 |
 
 ## 11. Limits and margins
+
+CF-006 / III.M5.S2 / F2 repository-owned conformance is exercised through `node-create.sh --harness codex`, not only by invoking `project-node.sh` directly: the fixture stages the adapter contract, creates `node.json` with the measured name and version, and runs the verifier's green and red identity arms. This is repository fixture evidence, not live-node evidence; the live bunker leg remains UNVERIFIED until an external node is reachable.
+
+STATUS: PARTIAL
+TIER: T2
+EVIDENCE: tests/harness-node-e2e.sh
+<!-- ch:trace row=CF-006 spec=specs/HARNESS.md#a-node-records-the-harness-it-measured wave=none:serial-worker test=tests/harness-node-e2e.sh doc=docs/handbook/chapters/M5-harness.md evidence=tests/harness-node-e2e.sh witness=none:live-node-conformance-unavailable verdict=none:foreman-will-run-gitreins commit=none:worker-commit memory=none:foreman-closeout -->
 
 - The resolver is fail-closed: an unknown harness, an uninstalled selection, or a non-hermes
   foreman all refuse with a named reason and exit 2 (`:46-56`, `:387-389`) — but it is only

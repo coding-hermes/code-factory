@@ -699,11 +699,11 @@ leg_node() {  # <id> — prove node creation separately from the adapter install
   fi
   out="$(bash "$script" 2>&1)"; rc=$?
   printf '%s\n' "$out" > "$WORK/$id.node.txt"
-  # The positive arm must prove the real provisioning entry created a codex node and that the
+  # The positive arm must prove the real node-create entry created a codex node and that the
   # manifest came from the adapter's measured rows. The red arms keep a summary-only stub from
   # turning an installer presence check into node evidence.
   for row in \
-    'NODE: PASS' 'PASS  node:apply' 'PASS  node:manifest' 'PASS  verify:green' \
+    'NODE CREATED: cf-fixture' 'PASS  node:create' 'PASS  node:manifest' 'PASS  verify:green' \
     'PASS  verify:red-version' 'PASS  verify:red-binary' 'PASS  verify:null-version' \
     'PASS  turn:directive'; do
     grep -Fq "$row" <<< "$out" || missing="$missing $row"

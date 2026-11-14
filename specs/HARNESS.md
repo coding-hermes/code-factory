@@ -325,8 +325,9 @@ The last row is why the leg can be added without lying about fixtures: absence i
 absence, and `VERIFY: PASS` is unreachable for a node whose manifest disagrees with its binary.
 
 **The measured / unverified boundary.** `tests/harness-node-e2e.sh` drives this slice offline
-end to end: the real adapters, the real `project-node.sh --apply` (unscoped, so it writes
-`node.json`), the real `verify-node.sh`, one stub transport and one stub HTTP probe. Its arms are
+end to end: the real adapters, the real `node-create.sh --harness codex` entry (including its
+staged `harness/harness-vars.sh` dependency), the real `project-node.sh --apply`, the real
+`verify-node.sh`, one stub transport and one stub HTTP probe. Its arms are
 the adapter `--check`/`--help` surface, the three unmeasured ladders refusing `--apply` by name and
 creating no new repo install artifact (host-probe caches are excluded), a codex node whose manifest records name+version+binary measured by the
 adapter and whose `--apply` placed the exec sidecar from a digest-checked local mirror, `VERIFY:

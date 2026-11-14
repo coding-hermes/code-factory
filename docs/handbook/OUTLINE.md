@@ -69,6 +69,8 @@ runtime conformance remains unverified. The immutable `cf.brief-input.v1` /
 and Part IV §IV.2, with deterministic vector CV-01-B.
 - **F2 PROVISIONING AND CERTIFICATION** — exit is certification legs passing, or the
   exact failed or unmeasurable legs named. Must distinguish **CREATED** from **VERIFIED**.
+  Foreign-harness provisioning/certification is owned jointly by **III.M5.S2** and
+  the node verifier surface in M1.S5; the live-node leg remains explicitly unverified.
   *(MISSING)*
 - **F3 RUN CAPTURE AND SEARCH** *(MISSING)*
 - **F4 DOCUMENTATION** *(MISSING)*

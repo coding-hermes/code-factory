@@ -8,9 +8,13 @@
 # OFFLINE FIXTURE that drives the REAL scripts:
 #
 #   * the real adapters (scripts/harness/install-*.sh),
-#   * the real provisioning entry (scripts/project-node.sh --apply), which writes node.json,
+#   * the real node-create entry (scripts/node-create.sh), which stages the complete runtime set,
+#     invokes project-node.sh --apply, and writes node.json,
 #   * the real verifier (scripts/verify-node.sh) over a fixture node home, with exactly one stub
 #     transport (`bunker`) and one stub HTTP probe (`curl`).
+#
+# The node-create leg is deliberately causal: the fixture fails if harness-vars.sh is not staged,
+# if the staged adapter cannot provision codex, or if the resulting manifest cannot be verified.
 #
 # WHAT IS FIXTURE, STATED PLAINLY. The `codex` binary at $HOME/.local/codex/<pin>/bin/codex is a
 # script, not the pinned musl artefact, and no model is called. What that proves is the NODE SLICE:
@@ -230,8 +234,24 @@ CURL_STUB
   # home cannot rewrite PATH through its own profile scripts.
   cat > "$BIN/bunker" <<'BUNKER_STUB'
 #!/usr/bin/env bash
-printf 'exec\n' >> "${FIXTURE_LOG:?}"
+set -u
 args=("$@")
+case "${args[0]:-}" in
+  info)
+    # node-create --agent must prove reuse before it stages or provisions.
+    exit 0
+    ;;
+  cp)
+    src="${args[1]:-}"
+    dest="${args[2]:-}"
+    path="${dest#*:}"
+    [ "$dest" != "$path" ] || { printf 'stub bunker: malformed cp destination\n' >&2; exit 2; }
+    mkdir -p "$FIXTURE_NODE/$(dirname "$path")"
+    cp "$src" "$FIXTURE_NODE/$path"
+    exit 0
+    ;;
+esac
+printf 'exec\n' >> "${FIXTURE_LOG:?}"
 i=0
 while [ "$i" -lt "${#args[@]}" ]; do
   case "${args[$i]}" in bash|sh) break ;; esac
@@ -241,28 +261,29 @@ done
 shell="${args[$i]}"
 body="${args[$((i + 2))]:-}"
 rest=("${args[@]:$((i + 3))}")
-exec "$shell" -c "$body" "${rest[@]}"
+exec env HOME="$FIXTURE_NODE" USER=fixture "$shell" -c "$body" "${rest[@]}"
 BUNKER_STUB
   chmod +x "$BIN/curl" "$BIN/bunker"
 
-  node_apply() {  # the real provisioning entry, unscoped, against the fixture node home
-    env -i PATH="$BIN:$PATH" HOME="$NODE" NODE_PROJECT=demo NODE_DISK_FLOOR=1 \
-      FIXTURE_CODEX_VERSION="$pin" CRIER_URL=http://fixture.invalid:8767 \
-      CF_CODEX_CMH_URL="file://$W/cmh.tar.gz" CF_CODEX_CMH_SHA256="$CMH_SHA" \
-      /bin/bash "$TREE/scripts/project-node.sh" --apply --project demo --harness codex --kinds generic 2>&1
+  node_create() {  # the real control-host create entry, with the bunker transport stubbed
+    env -i PATH="$BIN:$PATH" HOME="$W/control-home" BUNKER_SERVER=fixture FIXTURE_LOG="$W/bunker.log" \
+      FIXTURE_NODE="$NODE" NODE_DISK_FLOOR=1 CRIER_URL=http://fixture.invalid:8767 \
+      FIXTURE_CODEX_VERSION="$pin" CF_CODEX_CMH_URL="file://$W/cmh.tar.gz" \
+      CF_CODEX_CMH_SHA256="$CMH_SHA" /bin/bash "$TREE/scripts/node-create.sh" \
+      --project demo --repo "$W/origin.git" --harness codex --agent cf-fixture 2>&1
   }
   node_verify() {  # the real verifier, same home, stubbed transport
-    env -i PATH="$BIN:$PATH" HOME="$NODE" FIXTURE_LOG="$W/bunker.log" FIXTURE_CODEX_VERSION="$pin" \
+    env -i PATH="$BIN:$PATH" HOME="$NODE" FIXTURE_NODE="$NODE" FIXTURE_LOG="$W/bunker.log" FIXTURE_CODEX_VERSION="$pin" \
       /bin/bash "$TREE/scripts/verify-node.sh" --agent cf-fixture --server fixture "$@" 2>&1
   }
 
-  out=$(node_apply); rc=$?
-  if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'NODE: PASS' \
+  out=$(node_create); rc=$?
+  if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fq 'NODE CREATED: cf-fixture' \
      && printf '%s\n' "$out" | grep -Fxq "  PASS  version — $pin (pin $pin)" \
      && printf '%s\n' "$out" | grep -Fq "  PASS  code_mode — $NODE/.local/codex/$pin/bin/codex-code-mode-host"; then
-    ok "node:apply" "project-node.sh --apply --harness codex -> NODE: PASS; version $pin and the exec sidecar placed by the adapter"
+    ok "node:create" "node-create.sh --harness codex -> NODE CREATED: cf-fixture; version $pin and the exec sidecar placed by the adapter"
   else
-    bad "node:apply" "the fixture node did not provision cleanly (exit $rc)"
+    bad "node:create" "the fixture node did not provision cleanly (exit $rc)"
     # Attribution, not a tail: the row that failed may be anywhere in a long adapter log, and a
     # `tail -8` of the run can hide it behind PASS rows (this arm was red once and printed only the
     # last layers). Print every FAIL row and the summary line.
