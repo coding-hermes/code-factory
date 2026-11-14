@@ -14,7 +14,7 @@ needs an owner decision on the version scheme before anything is tagged (CF-161)
 | Forge / client | GitHub / `gh` |
 | Forge repo | `coding-hermes/code-factory` — `private=false`, `visibility=public`, MIT |
 | Forge default branch | `main` (`gh repo view --json defaultBranchRef`) |
-| Certified candidate | `99ea07d7d232ee181c0b01f0be262a01cd7d5557` — `origin/main` at `2026-11-14T07:08:26-05:00` |
+| Certified candidate | `771802962c4f76e836e6149c918b32d5888ff5b0` — `origin/main` at the final re-anchor of this pass |
 | Verification tree | detached worktree at `origin/main`, shared checkout not used |
 | Prior release baseline | **none** — `git ls-remote --tags origin` returns 0 refs; `gh release list` is empty |
 
