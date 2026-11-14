@@ -2024,10 +2024,12 @@
         "process_instance_id": "process-1",
         "native_session_id": "session-1"
       },
+      "request_fields": ["request_id", "expected_state_version", "reason", "launch_id", "execution_key", "boot_id", "process_instance_id", "native_session_id"],
+      "response_fields": ["request_id", "accepted", "state", "state_version", "signal", "error"],
       "cases": [
-        {"name": "matching state and native identity cancels exact run", "request": {"state_version": 7, "launch_id": "launch-1", "execution_key": "execution-1", "boot_id": "boot-1", "process_instance_id": "process-1", "native_session_id": "session-1"}, "accepted": true, "signal": "process-1"},
-        {"name": "stale state version refuses without signal", "request": {"state_version": 6, "launch_id": "launch-1", "execution_key": "execution-1", "boot_id": "boot-1", "process_instance_id": "process-1", "native_session_id": "session-1"}, "accepted": false, "error": "STATE_CONFLICT", "signal": null},
-        {"name": "pid reuse identity refuses without signal", "request": {"state_version": 7, "launch_id": "launch-1", "execution_key": "execution-1", "boot_id": "boot-2", "process_instance_id": "process-2", "native_session_id": "session-2"}, "accepted": false, "error": "IDENTITY_CONFLICT", "signal": null}
+        {"name": "matching state and native identity cancels exact run", "request": {"request_id": "cancel-1", "expected_state_version": 7, "reason": "operator requested stop", "launch_id": "launch-1", "execution_key": "execution-1", "boot_id": "boot-1", "process_instance_id": "process-1", "native_session_id": "session-1"}, "response": {"request_id": "cancel-1", "accepted": true, "state": "cancelled", "state_version": 8, "signal": "process-1"}},
+        {"name": "stale state version refuses without signal", "request": {"request_id": "cancel-2", "expected_state_version": 6, "reason": "operator requested stop", "launch_id": "launch-1", "execution_key": "execution-1", "boot_id": "boot-1", "process_instance_id": "process-1", "native_session_id": "session-1"}, "response": {"request_id": "cancel-2", "accepted": false, "state": "running", "state_version": 7, "error": "STATE_CONFLICT", "signal": null}},
+        {"name": "pid reuse identity refuses without signal", "request": {"request_id": "cancel-3", "expected_state_version": 7, "reason": "operator requested stop", "launch_id": "launch-1", "execution_key": "execution-1", "boot_id": "boot-2", "process_instance_id": "process-2", "native_session_id": "session-2"}, "response": {"request_id": "cancel-3", "accepted": false, "state": "running", "state_version": 7, "error": "IDENTITY_CONFLICT", "signal": null}}
       ]
     },
     "reboot_recovery": {

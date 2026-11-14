@@ -284,6 +284,8 @@ design.
 
 ## 15. Normative launch and return contract (P3-12, P3-10)
 
+The resident foreman cancellation/reboot vectors are the `resident_foreman_contract` object in `docs/handbook/contract-vectors.json`; this is the single offline vector source also referenced by Part IV and M5 §16.1. Runtime supervisor conformance remains unverified.
+
 The MVP execution owner is the project foreman inside the project Bunker. Crier is
 the sole launch/return boundary. The canonical wire is the `cf2a.v1` outer envelope
 specified in Part I §1.9.1 and Part IV §§IV.1–IV.2. `schema_version` is `cf2a.v1`;
@@ -405,7 +407,8 @@ Recovery distinguishes these cases, rather than calling all of them unstarted:
 The resident supervisor is the authoritative actor for this recovery decision and
 the execution journal is its source of truth; neither the foreman, worker, PID
 listing nor a delivery acknowledgement may declare a start absent. Every lookup
-is keyed first by `execution_key`, then exact `native_name` and `input_digest`.
+is keyed first by `execution_key`, then exact `input_digest`. The durable native
+execution name is an internal launcher key, not a second cancellation identity.
 When a process incarnation is relevant, the lookup additionally requires the
 recorded `boot_id`, `/proc` start ticks and `native_session_id`; those fields are
 identity evidence, not replacement keys. The ordering is deliberate: reserve and

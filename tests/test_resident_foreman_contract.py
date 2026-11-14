@@ -34,20 +34,52 @@ def load_vectors() -> dict:
         return json.load(handle)
 
 
+CANCELLATION_REQUEST_FIELDS = {
+    "request_id",
+    "expected_state_version",
+    "reason",
+    "launch_id",
+    "execution_key",
+    "boot_id",
+    "process_instance_id",
+    "native_session_id",
+}
+CANCELLATION_IDENTITY_FIELDS = (
+    "launch_id",
+    "execution_key",
+    "boot_id",
+    "process_instance_id",
+    "native_session_id",
+)
+
+
 def cancel_run(expected: dict, request: dict) -> dict:
     """Model exact-run cancellation; no process signalling occurs on mismatch."""
-    if request.get("state_version") != expected["state_version"]:
-        return {"accepted": False, "error": "STATE_CONFLICT", "signal": None}
-    identity = (
-        "launch_id",
-        "execution_key",
-        "boot_id",
-        "process_instance_id",
-        "native_session_id",
+    response = {
+        "request_id": request.get("request_id"),
+        "accepted": False,
+        "state": expected["state"],
+        "state_version": expected["state_version"],
+        "signal": None,
+    }
+    if set(request) != CANCELLATION_REQUEST_FIELDS:
+        response["error"] = "INVALID_FIELD"
+        return response
+    if request["expected_state_version"] != expected["state_version"]:
+        response["error"] = "STATE_CONFLICT"
+        return response
+    if any(request[field] != expected[field] for field in CANCELLATION_IDENTITY_FIELDS):
+        response["error"] = "IDENTITY_CONFLICT"
+        return response
+    response.update(
+        {
+            "accepted": True,
+            "state": "cancelled",
+            "state_version": expected["state_version"] + 1,
+            "signal": expected["process_instance_id"],
+        }
     )
-    if any(request.get(field) != expected[field] for field in identity):
-        return {"accepted": False, "error": "IDENTITY_CONFLICT", "signal": None}
-    return {"accepted": True, "signal": expected["process_instance_id"]}
+    return response
 
 
 def recover_after_reboot(case: dict) -> dict:
@@ -68,12 +100,18 @@ def validate_contract(document: dict) -> None:
 
     cancellation = contract["cancellation"]
     expected = cancellation["expected"]
+    if set(expected) != {
+        "state",
+        "state_version",
+        *CANCELLATION_IDENTITY_FIELDS,
+    }:
+        raise AssertionError("cancellation expected record has the wrong shape")
     for case in cancellation["cases"]:
-        observed = cancel_run(expected, case["request"])
-        wanted = {key: case[key] for key in ("accepted", "signal") if key in case}
-        if "error" in case:
-            wanted["error"] = case["error"]
-        if observed != wanted:
+        request = case["request"]
+        if set(request) != CANCELLATION_REQUEST_FIELDS:
+            raise AssertionError(f"cancellation request shape mismatch: {case['name']}")
+        observed = cancel_run(expected, request)
+        if observed != case["response"]:
             raise AssertionError(f"cancellation case mismatch: {case['name']}")
 
     recovery = contract["reboot_recovery"]
@@ -101,10 +139,26 @@ class ResidentForemanContractTest(unittest.TestCase):
     def test_matching_identity_signals_only_expected_process(self) -> None:
         expected = self.contract["cancellation"]["expected"]
         case = self.contract["cancellation"]["cases"][0]
+        self.assertEqual(cancel_run(expected, case["request"]), case["response"])
+
+    def test_cancellation_request_and_response_fields_are_registered(self) -> None:
+        cancellation = self.contract["cancellation"]
         self.assertEqual(
-            cancel_run(expected, case["request"]),
-            {"accepted": True, "signal": "process-1"},
+            set(cancellation["request_fields"]), CANCELLATION_REQUEST_FIELDS
         )
+        self.assertEqual(
+            set(cancellation["response_fields"]),
+            {"request_id", "accepted", "state", "state_version", "signal", "error"},
+        )
+
+    def test_missing_native_session_id_or_version_is_rejected(self) -> None:
+        expected = self.contract["cancellation"]["expected"]
+        request = copy.deepcopy(self.contract["cancellation"]["cases"][0]["request"])
+        request.pop("native_session_id")
+        self.assertEqual(cancel_run(expected, request)["error"], "INVALID_FIELD")
+        request = copy.deepcopy(self.contract["cancellation"]["cases"][0]["request"])
+        request.pop("expected_state_version")
+        self.assertEqual(cancel_run(expected, request)["error"], "INVALID_FIELD")
 
     def test_stale_version_and_reused_pid_never_signal(self) -> None:
         expected = self.contract["cancellation"]["expected"]
@@ -149,11 +203,26 @@ class ResidentForemanContractTest(unittest.TestCase):
             self.assertIn(term, combined, term)
         self.assertIn("admission=false", m5)
         self.assertIn("Journal replay/discovery", m5)
+        self.assertIn("resident_foreman_contract", m2)
+        self.assertIn("resident_foreman_contract", m5)
+        self.assertIn("single offline vector source", m2)
         self.assertNotIn("native_id:ID|null", m5)
+        self.assertNotIn("exact `native_name`", m2 + m5)
+        self.assertNotIn("native_name`,", m2 + m5)
+        for field in (
+            "request_id",
+            "expected_state_version",
+            "reason",
+            "native_session_id",
+        ):
+            self.assertIn(field, m5)
+        self.assertIn("offline", m5)
+        self.assertIn("unverified", m5)
+        self.assertIn("native_session_id", m2)
 
 
-# ch:trace row=P5G-13 spec=docs/handbook/OUTLINE.md#f1-dispatch-and-settlement wave=none:serial-worker test=tests/test_resident_foreman_contract.py::ResidentForemanContractTest doc=docs/handbook/chapters/M5-harness.md evidence=docs/handbook/contract-vectors.json witness=none:specification-and-offline-deterministic-fixture verdict=none:foreman-gitreins-pending commit=none:foreman-closeout memory=none:foreman-writes
-# STATUS: complete
+# ch:trace row=P5G-13 spec=docs/handbook/OUTLINE.md#f1-dispatch-and-settlement wave=none:serial-worker test=tests/test_resident_foreman_contract.py::ResidentForemanContractTest doc=docs/handbook/chapters/M5-harness.md evidence=docs/handbook/contract-vectors.json witness=none:offline-specification-and-deterministic-fixture verdict=none:foreman-gitreins-pending commit=none:foreman-closeout memory=none:foreman-writes
+# STATUS: partial
 # TIER: T1
 # EVIDENCE: docs/handbook/contract-vectors.json
 

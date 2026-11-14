@@ -378,12 +378,15 @@ artifact/receipt review, not invented encode/decode functions in a person.
 
 The following JSON block is the normative identity registry `cf.contract-registry.v1`.
 Generators/checkers consume it from this section and reject duplicate/unknown ids;
-the card/type tables expand each ID. Aliases are accepted only while importing old
+the card/type tables expand each ID. The resident foreman cancellation/reboot
+object is registered in the same machine-readable vector source as
+`resident_foreman_contract` in `docs/handbook/contract-vectors.json`, referenced by
+M2 §15.2 and M5 §16.1; it is not a competing registry. Aliases are accepted only while importing old
 coverage and never in target wires or new chapters. Legacy CT-05 lane-seed coverage
 is classified under CT-01; the ID CT-05 always means per-worker brief in this edition.
 
 ```json
-{"schema_version":"cf.contract-registry.v1","contracts":["CT-01","CT-02","CT-03","CT-04","CT-05","CT-06","CT-06R","CT-07","CT-08","CT-09","CT-10","CT-11","CT-12","CT-13","CT-14","CT-15","CT-16","CT-17","CT-18","CT-19","CT-20","CT-21","CT-22","CT-23","CT-24","CT-25","CT-26","CT-27","CT-28","CT-29","CT-30"],"coverage_aliases":{"M1-C1":"CT-22","M1-C2":"CT-23","M0-C1":"CT-23","M5-C1":"CT-23","M5-C2":"CT-19"},"legacy_reclassification":{"CT-05:lane-seed":"CT-01"}}
+{"schema_version":"cf.contract-registry.v1","contracts":["CT-01","CT-02","CT-03","CT-04","CT-05","CT-06","CT-06R","CT-07","CT-08","CT-09","CT-10","CT-11","CT-12","CT-13","CT-14","CT-15","CT-16","CT-17","CT-18","CT-19","CT-20","CT-21","CT-22","CT-23","CT-24","CT-25","CT-26","CT-27","CT-28","CT-29","CT-30"],"vector_objects":["resident_foreman_contract"],"coverage_aliases":{"M1-C1":"CT-22","M1-C2":"CT-23","M0-C1":"CT-23","M5-C1":"CT-23","M5-C2":"CT-19"},"legacy_reclassification":{"CT-05:lane-seed":"CT-01"}}
 ```
 
 Its count is derived from contracts (31), never hardcoded 18. It owns identity;

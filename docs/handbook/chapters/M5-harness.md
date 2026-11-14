@@ -515,9 +515,9 @@ changed bytes return `LAUNCH_CONFLICT` without exec.
 `GET /v1/launches/{launch_id}` reads the durable launch journal.
 `GET /v1/launches/{launch_id}/result` reads only committed result evidence.
 `POST /v1/launches/{launch_id}/cancellation` accepts
-`{request_id:ID,expected_state_version:PosInt,reason:Text}` and uses the M2
-state CAS plus the exact `{launch_id,execution_key,boot_id,process_instance_id,
-native_session_id}` identity before TERM/KILL. The expected state version and
+`{request_id:ID,expected_state_version:PosInt,reason:Text,launch_id:ID,
+execution_key:SHA,boot_id:ID,process_instance_id:ID,native_session_id:ID}`
+and uses the M2 state CAS plus the exact run identity before TERM/KILL. The expected state version and
 every identity member must match the durable STARTED/RUNNING record; a stale
 version or a PID-reused process is refused without signalling. PID reuse
 never authorizes signaling. These are the complete target operations; retired
@@ -559,9 +559,10 @@ result. Native session discovery and gated startup follow M2 §15.2.
 
 After a supervisor reboot, recovery is deterministic and does not mean relaunch:
 replay a terminal journal/result and its outbox without invoking native execution;
-discover a STARTED/RUNNING record by `execution_key`, exact `native_name`,
-`input_digest`, `boot_id`, process start identity and `native_session_id`, then
-reattach/status the same run; or quarantine an intent whose native start cannot be
+discover a STARTED/RUNNING record by `execution_key`, exact `input_digest`,
+`boot_id`, process start identity and `native_session_id`, then reattach/status the
+same run; the durable native execution name is an internal launcher key, not a
+second cancellation identity; or quarantine an intent whose native start cannot be
 proved as `START_UNKNOWN`. The last case keeps `admission=false`, consumes the
 reserved budget conservatively and refuses replacement. Journal replay/discovery
 is therefore distinct from relaunch. The `resident_foreman_contract` object in

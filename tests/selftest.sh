@@ -7516,6 +7516,39 @@ else
   fails=$((fails+1))
 fi
 
+# P5G-13 resident foreman contract: execute the checker, then prove its
+# fail-closed identity/version controls catch weakened scratch copies.
+say "resident foreman cancellation and reboot contract is wired and fail-closed (P5G-13)"
+cfp513=$(mktemp -d)
+mkdir -p "$cfp513/tests" "$cfp513/docs/handbook/chapters"
+cp "$HERE/tests/test_resident_foreman_contract.py" "$cfp513/tests/test_resident_foreman_contract.py"
+cp "$HERE/docs/handbook/contract-vectors.json" "$cfp513/docs/handbook/contract-vectors.json"
+cp "$HERE/docs/handbook/chapters/M2-dispatch.md" "$cfp513/docs/handbook/chapters/M2-dispatch.md"
+cp "$HERE/docs/handbook/chapters/M5-harness.md" "$cfp513/docs/handbook/chapters/M5-harness.md"
+if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_resident_foreman_contract.py" >"$cfp513/clean" 2>&1; then
+  say "  PASS  resident foreman checker executes 8 tests"
+else
+  say "  FAIL  resident foreman checker did not pass"
+  fails=$((fails+1))
+  sed 's/^/    | /' "$cfp513/clean"
+fi
+sed -i 's/"native_session_id", //' "$cfp513/docs/handbook/contract-vectors.json"
+if PYTHONDONTWRITEBYTECODE=1 python3 -B "$cfp513/tests/test_resident_foreman_contract.py" >"$cfp513/native-session-control" 2>&1; then
+  say "  FAIL  dropping native_session_id passed the checker"
+  fails=$((fails+1))
+else
+  say "  PASS  dropping native_session_id is rejected without touching the tree"
+fi
+cp "$HERE/docs/handbook/contract-vectors.json" "$cfp513/docs/handbook/contract-vectors.json"
+sed -i 's/"expected_state_version"/"state_version"/g' "$cfp513/tests/test_resident_foreman_contract.py"
+if PYTHONDONTWRITEBYTECODE=1 python3 -B "$cfp513/tests/test_resident_foreman_contract.py" >"$cfp513/version-control" 2>&1; then
+  say "  FAIL  weakening expected_state_version handling passed the checker"
+  fails=$((fails+1))
+else
+  say "  PASS  weakening expected_state_version handling is rejected without touching the tree"
+fi
+rm -rf "$cfp513"
+
 # CF-238: GitHub App mode is exercised in a hermetic fixture. It must refuse absent keys,
 # insecure key modes, and tokens that cannot read the repository; the control must pass.
 say "66. GitHub App mode refuses incomplete credentials and proves repository access"

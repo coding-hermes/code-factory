@@ -1658,8 +1658,13 @@ execution_contracts:
       owns: [signed custody, delivery identity, retrieve replay, lease renewal, acknowledgement]
       does_not_own: [worker verdict, board status, scheduler settlement]
     supervisor:
-      owns: [launch_id, execution_key, start permit, native result, reconciliation]
+      owns: [launch_id, execution_key, start permit, native result, reconciliation, resident foreman cancellation and reboot recovery]
       does_not_own: [round allowance, model judgment, publication qualification]
+    resident_foreman_contract:
+      vector_source: docs/handbook/contract-vectors.json
+      identity_fields: [launch_id, execution_key, boot_id, process_instance_id, native_session_id, state_version]
+      cancellation_request_fields: [request_id, expected_state_version, reason, launch_id, execution_key, boot_id, process_instance_id, native_session_id]
+      runtime_conformance: unverified; offline vectors only
     board_writer:
       owns: [row and event reduction, operation marker, protected-ref CAS, remote readback]
       does_not_own: [harness execution, inference usage, backup release]
