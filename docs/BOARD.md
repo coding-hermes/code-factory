@@ -149,10 +149,13 @@ bash tests/selftest.sh | grep -E 'rows parse|^SELFTEST'
   CF-440 together with the CF-304 fixture repair, taking the task file to **516 rows / 777 events**;
   `ad9ad220` then appended CF-441 and closed CF-439, leaving **517 rows / 779 events** (154 complete,
   347 pending, 14 in_progress, 2 blocked). Those last numbers are the state `ad9ad220` left, not
-  `eb02981a`'s — measured with `git show eb02981a:.coding-hermes/board/tasks.jsonl | wc -l` → 516 and
-  `git show ad9ad220:.coding-hermes/board/{tasks,events}.jsonl | wc -l` → 517 / 779 (**CF-442** fixed
-  this attribution; the earlier revision named `eb02981a` for the 517-row state). The counts above
-  are the state the first commit measured, not the state the pair left.
+  `eb02981a`'s — measured with `git show eb02981a:.coding-hermes/board/tasks.jsonl | wc -l` → 516,
+  `git show eb02981a:.coding-hermes/board/events.jsonl | wc -l` → 777,
+  `git show ad9ad220:.coding-hermes/board/tasks.jsonl | wc -l` → 517 and
+  `git show ad9ad220:.coding-hermes/board/events.jsonl | wc -l` → 779 (**CF-442** fixed this
+  attribution; the earlier revision named `eb02981a` for the 517-row state, and this revision also
+  replaced a one-line brace shorthand that summed both files instead of printing the pair). The counts
+  above are the state the first commit measured, not the state the pair left.
   Two findings came out of the measurement instead of a clean bill of health: 4 complete rows carry
   **zero** evidence while `board_evidence_check.py` reports them as resolved (CF-438), and the
   selftest was **red on the published tip** — section 67 died on `cannot read projects table: no such
