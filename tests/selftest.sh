@@ -2864,6 +2864,19 @@ fi
 # the read-only check and can print RESULT: PASS. The fixture supplies a server, config,
 # and an isolated HOME so the arm remains detached from the live host.
 say "32a. bunker-server-install --apply refuses instead of false-green checking (CF-057)"
+# The usage banner and parser must advertise and accept exactly the same option set. This
+# source-level parity arm catches a future header-only promise or a parser-only flag.
+cf057_header_flags=$(sed -n '4,9p' "$HERE/scripts/bunker-server-install.sh" \
+  | grep -oE -- '--[a-z-]+' | sort -u | tr '\n' ' ')
+cf057_parser_flags=$(sed -n '/^while \[ "\$#" -gt 0 \]/,/^done/p' "$HERE/scripts/bunker-server-install.sh" \
+  | grep -oE -- '--[a-z-]+' | sort -u | tr '\n' ' ')
+if [ "$cf057_header_flags" = "--apply --check --json --reap-orphans " ] \
+  && [ "$cf057_parser_flags" = "$cf057_header_flags" ]; then
+  say "  PASS  CF-057 usage lists exactly parser flags: ${cf057_header_flags% }"
+else
+  say "  FAIL  CF-057 usage/parser flag mismatch (usage='$cf057_header_flags' parser='$cf057_parser_flags')"
+  fails=$((fails+1))
+fi
 cf057_tmp=$(mktemp -d)
 mkdir -p "$cf057_tmp/bin" "$cf057_tmp/home"
 printf '%s\n' 'server: fixture-server' > "$cf057_tmp/config.yaml"
@@ -2916,10 +2929,10 @@ else
 fi
 rm -rf "$cf057_tmp"
 
-# ch:trace row=CF-057 spec=docs/handbook/chapters/M1-provisioning.md#M1.S1 wave=code-factory-2026-11-13-16-29-30#CF-057 test=tests/selftest.sh::cf057-apply-refusal doc=docs/handbook/chapters/M1-provisioning.md prompt=CF-057-brief evidence=tests/selftest.sh::cf057-apply-refusal witness=none:offline-fixture verdict=none:foreman-gitreins commit=none:worker memory=none:foreman
+# ch:trace row=CF-057 spec=docs/handbook/chapters/M1-provisioning.md#3-submodule-inventory wave=none:serial-test-gap test=tests/selftest.sh::cf057-apply-refusal doc=docs/handbook/chapters/M1-provisioning.md evidence=tests/selftest.sh::cf057-apply-refusal witness=none:local-test-only verdict=none:foreman-judges-after-push commit=none:foreman-fills-after-commit memory=none:foreman-resolves
 # STATUS: partial
 # TIER: T1
-# EVIDENCE: tests/selftest.sh::cf057-apply-refusal
+# EVIDENCE: CF-057 fixture passes; bash -n scripts/bunker-server-install.sh passes; full bash tests/selftest.sh reaches SELFTEST: FAIL (3) on pre-existing unrelated fixtures
 
 # a flag handler may only assign CLI_* variables: anything else is overwritten by load_config and the
 # documented flag silently does nothing (four of them did, including --github-token-file)
