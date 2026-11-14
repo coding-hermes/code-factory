@@ -175,7 +175,26 @@ gh api repos/coding-hermes/code-factory/actions/workflows --jq .total_count   # 
 gh release list --repo coding-hermes/code-factory --limit 5                   # empty
 gh api repos/coding-hermes/code-factory/branches/main/protection              # 404
 git rev-list --count gh/master                            # 772
-gitleaks detect --source . --redact -c .gitleaks.toml --log-opts=gh/master    # leaks found: 547
-bash tests/selftest.sh                                    # SELFTEST: FAIL (3)
+gitleaks detect --source . --redact -c .gitleaks.toml --log-opts=gh/master    # prior-pass receipt: 547
+bash tests/selftest.sh                                    # final clean-tree probe: SELFTEST: FAIL (4)
 python3 -m pytest tests/test_bus_dispatch_encoding.py tests/test_brief_digest_binding.py -q
 ```
+
+## 11. Final re-anchor correction
+
+The published tip advanced from `99ea07d7` to `77180296` with bookkeeping/docs commits during this
+pass, then this report carrier advanced it to `3a3872cb`. The report header and final decision are bound
+to `771802962c4f76e836e6149c918b32d5888ff5b0`; `3a3872cb6989bcefd616d678c0d56e04b9108772` is the
+report-only carrier. The clean detached selftest at `77180296` was re-run and returned exit 1 with
+`SELFTEST: FAIL (4)`: the two receiving-side suites fail through `AttributeError: RecordingIdentity`
+missing `harness_version` in `scripts/node-bus-worker.py:1239`, and the CF-150 occupied-port arm also
+fails when auth is absent. This final result supersedes the earlier three-failure summary above.
+
+The final commit census is 1232 commits total (1175 non-merge), with 38 feat, 125 fix, 5 perf, 247
+docs, 13 test, 183 chore, 439 board, 29 handbook, 153 other/non-conventional; no bang-marked breaking
+subjects or `BREAKING CHANGE:` footers were found. The repository still has 0 published tags, 0 GitHub
+Releases, no release tooling or version manifest, no `.github/workflows`, and no exact-SHA hosted CI.
+No tag or Release was created. The final report carrier is docs-only and its own exact-SHA hosted CI is
+ABSENT (no workflows exist), not green. The report artifact's final remote SHA-256 is recorded by the
+carrier readback; board row mutation and DuckBrain memory write/readback were not completed in this tick.
+
