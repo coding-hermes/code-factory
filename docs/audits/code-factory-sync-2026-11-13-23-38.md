@@ -1,7 +1,8 @@
 # code-factory sync lane — 2026-11-13 (tick `code-factory-sync-2026-11-13-23-38-27`)
 
 Lane: sync (board ⇄ repo consistency, plus the memory duty absorbed from the retired
-`code-factory-duckbrain` row). Workdir `/home/kara/code-factory`.
+`code-factory-duckbrain` row). Workdir: the repo checkout — every path in this document is
+relative to it.
 
 Board source: **`origin/main`** (`git show origin/main:.coding-hermes/board/tasks.jsonl`), not the
 worktree copy. Published tip at read time: `6c9cd553`.
