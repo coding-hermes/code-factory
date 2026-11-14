@@ -138,6 +138,21 @@ scripts/boardctl validate
 bash tests/selftest.sh | grep -E 'rows parse|^SELFTEST'
 ```
 
+- **Re-measured 2026-11-14T19:00Z at tip `70519fcc`:** **513 task rows, 774 events** at census time
+  (max event id 773). `board_drift.py check --ref origin/main` returns `RESULT: OK` — byte parity,
+  `513 vs 513 rows; 0 divergent ids`, HEAD == origin/main. `boardctl validate` returns
+  `RESULT: OK (89 warning(s))`, key uniformity `511/513` (the 2 drift rows are the same pair that
+  carried `acceptance`/`chapter`/`created`/`model` at the previous census). Status split: complete 153,
+  in_progress 14, pending 344, blocked 2. All 151 complete rows carrying a `commit_hash` resolve to
+  commits that are ancestors of `origin/main`; the 2 with no hash are CF-245 and P5G-34.
+  This tick then appends **3 rows** (CF-438, CF-439, CF-440), taking the board to **516 rows / 777
+  events**; the counts above are the state it measured, not the state it left.
+  Two findings came out of the measurement instead of a clean bill of health: 4 complete rows carry
+  **zero** evidence while `board_evidence_check.py` reports them as resolved (CF-438), and the
+  selftest was **red on the published tip** — section 67 died on `cannot read projects table: no such
+  column: cooldown_s` because `8d6b303b` extended `read_rows()` without updating the CF-304 fixture
+  (CF-439, repaired in the same tick: `SELFTEST: PASS`, rc 0). Nothing reported that red because the
+  repo has no CI at all — no `.github` directory at `origin/main`, `gh run list` returns `[]` (CF-440).
 - **Re-measured 2026-11-12T21:18Z at tip `fdc74207`:** 498 task rows, 730 events at census time
   (max event id 729; the one legacy event row at line 670 carries no `id` field, which is the
   `boardctl` warning that names it, and the benign duplicate event id 336 at line 337 is **CF-196**).

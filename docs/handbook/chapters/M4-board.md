@@ -133,12 +133,29 @@ ch:trace row=CF-048 spec=docs/handbook/chapters/M4-board.md#board-integrity wave
 
 | Check | Command | Expected | Last run | Result |
 |---|---|---|---|---|
-| store census | `jq -r '.id' .coding-hermes/board/tasks.jsonl | wc -l` | 357 rows | 2026-11-07 | PASS (357) |
-| events count | `wc -l .coding-hermes/board/events.jsonl` | 520 lines | 2026-11-07 | PASS (520) |
-| drift | `python3 scripts/board_drift.py check --workdir ~/code-factory --ref origin/main` | byte parity, RESULT OK | 2026-11-07 | **DRIFT (4 failed)** — byte parity `tasks.jsonl`/`events.jsonl` **differ** (workdir sha256 `57203cb9…`/`f3d8802e…` vs published `5aa15431…`/`783d556c…`); 357 vs 357 rows, **1 divergent id: CF-150** (workdir `in_progress` vs published `pending`); HEAD=origin/main=`fbc19cb` |
-| semantic validate | `scripts/boardctl validate` | RESULT OK with named warnings | 2026-11-07 | **PASS** — `357 tasks, 520 events, 0 fixtures`, `key uniformity 357/357 (0 drift)`, `RESULT: OK (7 warning(s))` |
-| lock adjudication | `scripts/board_lock.py` on an absent / unheld / unreadable / held lock | ABSENT / HELD / RESIDUE / ERROR named (`board_lock.py:166-185`) | 2026-11-07 | **PASS** — 0-byte lock → `RESIDUE consumers=0 commits_after_mtime=unknown` exit 0; chmod-000 lock → `ERROR lock=… probe=open-failed …` exit 3 (CF-259); absent path → `ABSENT` exit 0; HELD arm is `tests/selftest.sh` §33 |
-| duplicate id refusal | `boardctl create --id CF-357 --title x` | refused | 2026-11-06 | **PASS** — `task id "CF-357" already exists … create aborted` |
+| store census | `jq -r '.id' .coding-hermes/board/tasks.jsonl | wc -l` | 513 rows | 2026-11-14 | PASS (513) |
+| events count | `wc -l .coding-hermes/board/events.jsonl` | 774 lines | 2026-11-14 | PASS (774) |
+| drift | `python3 scripts/board_drift.py check --workdir ~/code-factory --ref origin/main` | byte parity, RESULT OK | 2026-11-14 | **PASS** — `RESULT: OK`, byte parity clean, `513 vs 513 rows; 0 divergent ids`, HEAD=origin/main=`70519fcc` |
+| semantic validate | `scripts/boardctl validate` | RESULT OK with named warnings | 2026-11-14 | **PASS** — `513 tasks, 774 events, 0 fixtures`, `key uniformity 511/513 (2 drift: acceptance/chapter/created/model)`, `RESULT: OK (89 warning(s))` |
+| lock adjudication | `scripts/board_lock.py` on an absent / unheld / unreadable / held lock | ABSENT / HELD / RESIDUE / ERROR named (`board_lock.py:166-185`) | 2026-11-14 | **PASS** — absent → `ABSENT` exit 0; 0-byte → `RESIDUE consumers=0 commits_after_mtime=unknown` exit 0; chmod-000 → `ERROR … probe=open-failed … UNKNOWN` exit 3 (CF-259); HELD arm is `tests/selftest.sh` §33 |
+| duplicate id refusal | `boardctl create --id CF-289 --title x` (scratch board root) | refused, board unchanged | 2026-11-14 | **PASS** — `task id "CF-289" already exists … create aborted` exit 1, 513 rows before and after |
+| evidence census | `python3 scripts/board_evidence_check.py` | every complete row names re-runnable evidence | 2026-11-14 | **PARTIAL** — `checked 153 complete rows, 57 unresolved` (equal to `expected_unresolved=57`), but **4 complete rows carry zero evidence** (CF-289, CF-305, P5G-34, CF-422); the instrument reports neither them nor their absence — see CF-438 |
+| selftest arms | `bash tests/selftest.sh` | `SELFTEST: PASS` | 2026-11-14 | **RED before this tick, green after** — §67 `tests/test_lane_config_readonly.py` failed `cannot read projects table: no such column: cooldown_s` at `70519fcc`; fixture repaired in this tick (see CF-439) |
+
+**Re-measured 2026-11-14 (sync lane, tip `70519fcc`).** The 2026-11-07 values this table used to
+carry are superseded: the store has grown from 357 rows / 520 events to **513 rows / 774 events**, and the
+`DRIFT (4 failed)` verdict no longer reproduces — `board_drift.py` returns `RESULT: OK` with byte
+parity and 0 divergent ids, because the CF-150 working-copy transition it described was committed.
+`boardctl validate` moved from 7 to **89 warnings**; the warning classes are the same
+(free-form `guard_result`/`ci_result` values, priority/title disagreements, duplicate event ids
+from historical ticks, headerless board), and warnings are still distinct from failures.
+
+Two findings from the same measurement, both filed rather than silently repaired: the evidence census
+cannot see a complete row whose evidence is empty (CF-438), and the CF-304 fixture had been stale
+since `8d6b303b` (2026-11-14 11:19) added cooldown columns to `read_rows()`, leaving the selftest red
+on the published tip with no gate that noticed (CF-439). The fixture is repaired here so the arm's
+evidence runs again.
+
 
 **Drift re-measured.** The CF-270
 divergence is reconciled (commit `4dc0ef0` closed CF-270 and is in `origin/main`), but a

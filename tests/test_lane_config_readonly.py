@@ -14,6 +14,10 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "load_lane_config.py"
+sys.path.insert(0, str(ROOT / "scripts"))
+
+import cooldown_policy  # noqa: E402  (fixture derives its policy from the module under test)
+
 BASE = "fe63289e58b554d46afce69ea25bbced35d329e1"
 LANES = {
     "code-factory": ("coding-hermes", "tasks", "foreman"),
@@ -53,16 +57,43 @@ def make_fixture(parent: Path) -> tuple[Path, Path]:
     con = sqlite3.connect(db)
     con.execute(
         "CREATE TABLE projects (name TEXT PRIMARY KEY, namespace_id TEXT, "
-        "admission_mode TEXT, prompt TEXT, prompt_mode TEXT)"
+        "admission_mode TEXT, prompt TEXT, prompt_mode TEXT, "
+        "cooldown_s INTEGER NOT NULL DEFAULT 1800, "
+        "cooldown_floor_s INTEGER NOT NULL DEFAULT 1800, "
+        "cooldown_ceiling_s INTEGER NOT NULL DEFAULT 1800, "
+        "cooldown_pin_s INTEGER)"
     )
     for name in LANES:
+        # Derive the policy columns from the same module the script validates
+        # against, so the fixture cannot drift when the policy table changes.
+        policy = cooldown_policy.policy_for_lane(name)
         con.execute(
-            "INSERT INTO projects VALUES (?, ?, ?, ?, ?)",
-            (name, "old-namespace", "old-mode", "old prompt", "replace"),
+            "INSERT INTO projects VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                name,
+                "old-namespace",
+                "old-mode",
+                "old prompt",
+                "replace",
+                policy["cadence_s"],
+                policy["floor_s"],
+                policy["ceiling_s"],
+                None,
+            ),
         )
     con.execute(
-        "INSERT INTO projects VALUES (?, ?, ?, ?, ?)",
-        (OUTSIDER, "outside-namespace", "outside-mode", "outside prompt", "replace"),
+        "INSERT INTO projects VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            OUTSIDER,
+            "outside-namespace",
+            "outside-mode",
+            "outside prompt",
+            "replace",
+            1800,
+            1800,
+            1800,
+            None,
+        ),
     )
     con.commit()
     con.close()
