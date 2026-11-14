@@ -64,9 +64,28 @@ and every section body are untouched.
 
 ## 4. Local gate (the change is docs-only, but the suite is the arbiter)
 
-`bash tests/selftest.sh` → `SELFTEST: PASS`, `EXIT=0` (552 `PASS` lines; the 61 `FAIL` lines are
-expected-rejection arms driving fixture boards that must not parse — the suite's own fail counter
-stayed 0, which is why it printed PASS).
+`bash tests/selftest.sh` → `SELFTEST: PASS`, `EXIT=0`, 552 `PASS` lines and 61 `FAIL` lines. The
+`FAIL` lines are expected-rejection arms driving fixture boards that must not parse; the suite's own
+failure counter is what decides PASS/FAIL, and it stayed 0.
+
+That sentence was **false of the tree it shipped on** and the tick's own history is the correction:
+
+1. The suite was run on the tree *before* this document existed: `SELFTEST: PASS`, `EXIT=0`.
+2. The document was then committed at `3300e4b5` **with `core.hooksPath=/dev/null`**, so the guard
+   never graded the staged doc. On that shipped tree section 61 failed:
+   `FAIL  publish paths — baseline 0, current 1; paths: docs/audits/...-23-38.md` →
+   `SELFTEST: FAIL (1)`, `EXIT=1`. The document's opening line named the absolute checkout path,
+   which is precisely what CF-050 forbids.
+3. The GitReins tier-2 judge caught it, quoting section 61 and the FAIL(1) summary back. A reader
+   could not re-run this document's gate claim and get PASS, so the claim was withdrawn.
+4. The path was replaced with "the repo checkout", the repair landed as `f94a276b`, and the suite was
+   re-run on the clean published tree: `SELFTEST: PASS`, `EXIT=0`, 552 `PASS`, 61 `FAIL`-arms,
+   section 61 `PASS  publish paths — baseline 0, current 0`.
+
+The repair could not be committed through the guard: `cf050_publish_gate` unions the index with
+`HEAD`, so while `HEAD` still carried the leak the gate refused the commit that removes it. The
+repair therefore landed with the same disclosed bypass, and the missing repair direction is filed as
+board row **CF-431** (chapter III.M3.S3) rather than left as prose.
 
 ## 5. CI health
 
