@@ -516,11 +516,14 @@ changed bytes return `LAUNCH_CONFLICT` without exec.
 `GET /v1/launches/{launch_id}/result` reads only committed result evidence.
 `POST /v1/launches/{launch_id}/cancellation` accepts
 `{request_id:ID,expected_state_version:PosInt,reason:Text}` and uses the M2
-state CAS plus exact boot/start/session identity before TERM/KILL. PID reuse
+state CAS plus the exact `{launch_id,execution_key,boot_id,process_instance_id,
+native_session_id}` identity before TERM/KILL. The expected state version and
+every identity member must match the durable STARTED/RUNNING record; a stale
+version or a PID-reused process is refused without signalling. PID reuse
 never authorizes signaling. These are the complete target operations; retired
 submit/status/output/cancel/drain/resume verbs and fd-3/fd-4 channels return
 `UNSUPPORTED_VERSION`. Responses use Part IV ResponseBody. LaunchResponse is
-`{execution_key:SHA,launch_id:ID,input_digest:SHA,native_id:ID|null,
+`{execution_key:SHA,launch_id:ID,input_digest:SHA,native_session_id:ID|null,
 state:accepted|running|succeeded|failed|cancelled,state_version:PosInt,
 accepted_at:Time,started_at:Time|null,heartbeat_at:Time|null,finished_at:Time|null,
 result_digest:SHA|null,error:Error|null}`; a new launch returns HTTP 201.
@@ -553,6 +556,18 @@ rotated at 10485760 bytes with SHA references. Missing/duplicate/conflicting res
 invalid framing or exit-before-result is UNKNOWN_RESULT. Exit 0 alone never passes.
 The supervisor fsyncs streams and journal evidence before acknowledging a terminal
 result. Native session discovery and gated startup follow M2 §15.2.
+
+After a supervisor reboot, recovery is deterministic and does not mean relaunch:
+replay a terminal journal/result and its outbox without invoking native execution;
+discover a STARTED/RUNNING record by `execution_key`, exact `native_name`,
+`input_digest`, `boot_id`, process start identity and `native_session_id`, then
+reattach/status the same run; or quarantine an intent whose native start cannot be
+proved as `START_UNKNOWN`. The last case keeps `admission=false`, consumes the
+reserved budget conservatively and refuses replacement. Journal replay/discovery
+is therefore distinct from relaunch. The `resident_foreman_contract` object in
+`docs/handbook/contract-vectors.json` is the offline positive, stale/PID-reuse
+negative and reboot table for this contract; it does not claim live supervisor
+conformance.
 
 ### 16.2 Effective settings and enforcement
 

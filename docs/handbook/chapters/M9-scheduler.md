@@ -463,7 +463,7 @@ debit worker allowance. The round report names the count `consumed`; ledger stat
 | round / round_id | run_id, corr_id, project_id, lane_id, config_generation, board OID, owner_fence, allowance integer, deadline, request_digest, state, state_version, created_at, updated_at |
 | capacity / reservation_id | round_id, host_id, resource vector, weight, state held/released, release_reason nullable |
 | worker / round_id,worker_id | state reserved/charged/refunded, launch_id, first_attempt_id, transition_seq integer |
-| attempt / attempt_id | round_id,worker_id, wave_id,dispatch_id,launch_id,input_digest,deadline,state intent/start_unknown/running/terminal/quarantined, native_id nullable, result_digest nullable |
+| attempt / attempt_id | round_id,worker_id, wave_id,dispatch_id,launch_id,input_digest,deadline,state intent/start_unknown/running/terminal/quarantined, native_session_id nullable, result_digest nullable |
 | result / attempt_id or round_id | canonical body, digest, received_at, terminal outcome, fence, late boolean |
 | projection / round_id,sink | sink board/memory/publication/verifier, expected_digest, state pending/applied/conflict, receipt nullable |
 | outbox / destination,message_id | canonical body, digest, state pending/claimed/acked/dead, attempts, available_at, claim_owner nullable, claim_until nullable, receipt nullable |

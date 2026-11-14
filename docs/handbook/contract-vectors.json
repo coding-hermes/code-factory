@@ -225,7 +225,7 @@
       "name": "resident supervisor PUT launch",
       "canonical_json": "{\"body\":{\"attempt_id\":\"a-1\",\"deadline\":\"2026-11-11T21:00:00Z\",\"dispatch_id\":\"d-822015bf1408f7af9fd74d147b7fe6765aa4003730bd514d7264c01ea210055f\",\"input_digest\":\"aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a\",\"input_ref\":\"cas+sha256://code-factory/aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a\",\"kind\":\"worker\",\"limits\":{\"cpu_millis\":1000,\"memory_bytes\":4294967296,\"pids\":256},\"round_id\":\"r-17\",\"runtime_digest\":\"be4bd8d671d581f1a49eb9e6ca8fb764ecb6d6ce288f84b16f93f83abb0c8410\",\"task_id\":\"CF-1\",\"wave_id\":\"w-1\",\"worker_id\":\"worker-1\",\"workspace_ref\":\"cas+sha256://code-factory/85edc4b2f340931dd4b873f4d06edb8252fee8ade465c7e2f95ac49995742c11\"},\"idempotency_key\":\"launch-a1-key\",\"method\":\"PUT\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"path\":\"/v1/launches/l-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048\",\"project_id\":\"code-factory\",\"request_id\":\"supervise-a1\",\"schema_version\":\"supervisor.v1\"}",
       "canonical_sha256": "4efbb63d7754b45a4e5168d747919a707a32770d162cd516724f31a3b4921612",
-      "response_canonical_json": "{\"accepted_at\":\"2026-11-11T19:02:00Z\",\"error\":null,\"execution_key\":\"822015bf1408f7af9fd74d147b7fe6765aa4003730bd514d7264c01ea210055f\",\"finished_at\":null,\"heartbeat_at\":null,\"input_digest\":\"aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a\",\"launch_id\":\"l-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048\",\"native_id\":null,\"result_digest\":null,\"started_at\":null,\"state\":\"accepted\",\"state_version\":1}",
+      "response_canonical_json": "{\"accepted_at\":\"2026-11-11T19:02:00Z\",\"error\":null,\"execution_key\":\"822015bf1408f7af9fd74d147b7fe6765aa4003730bd514d7264c01ea210055f\",\"finished_at\":null,\"heartbeat_at\":null,\"input_digest\":\"aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a\",\"launch_id\":\"l-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048\",\"native_session_id\":null,\"result_digest\":null,\"started_at\":null,\"state\":\"accepted\",\"state_version\":1}",
       "expected": {
         "http": 201,
         "execution_key": "822015bf1408f7af9fd74d147b7fe6765aa4003730bd514d7264c01ea210055f",
@@ -2008,6 +2008,36 @@
     ],
     "source": "docs/handbook/chapters/M1-provisioning.md#18-normative-release-manifest-and-f13-upgraderollback-contract",
     "runtime_qualified": false
+  },
+  "resident_foreman_contract": {
+    "schema_version": "cf.resident-foreman-contract.v1",
+    "protocols": ["supervisor.v1", "cf.native.v1", "cf.native-event.v1"],
+    "identity_fields": ["launch_id", "execution_key", "boot_id", "process_instance_id", "native_session_id", "state_version"],
+    "cancellation": {
+      "operation": "POST /v1/launches/{launch_id}/cancellation",
+      "expected": {
+        "state": "running",
+        "state_version": 7,
+        "launch_id": "launch-1",
+        "execution_key": "execution-1",
+        "boot_id": "boot-1",
+        "process_instance_id": "process-1",
+        "native_session_id": "session-1"
+      },
+      "cases": [
+        {"name": "matching state and native identity cancels exact run", "request": {"state_version": 7, "launch_id": "launch-1", "execution_key": "execution-1", "boot_id": "boot-1", "process_instance_id": "process-1", "native_session_id": "session-1"}, "accepted": true, "signal": "process-1"},
+        {"name": "stale state version refuses without signal", "request": {"state_version": 6, "launch_id": "launch-1", "execution_key": "execution-1", "boot_id": "boot-1", "process_instance_id": "process-1", "native_session_id": "session-1"}, "accepted": false, "error": "STATE_CONFLICT", "signal": null},
+        {"name": "pid reuse identity refuses without signal", "request": {"state_version": 7, "launch_id": "launch-1", "execution_key": "execution-1", "boot_id": "boot-2", "process_instance_id": "process-2", "native_session_id": "session-2"}, "accepted": false, "error": "IDENTITY_CONFLICT", "signal": null}
+      ]
+    },
+    "reboot_recovery": {
+      "admission_when_unproven": false,
+      "cases": [
+        {"name": "terminal journal replay", "journal_state": "terminal", "native_proof": "result", "action": "replay", "relaunch": false, "admission": true},
+        {"name": "running native discovery", "journal_state": "running", "native_proof": "exact-identity", "action": "reattach", "relaunch": false, "admission": true},
+        {"name": "unknown start quarantines", "journal_state": "start_intent", "native_proof": "unproven", "action": "quarantine", "relaunch": false, "admission": false}
+      ]
+    }
   },
   "static_controls": {
     "SC-01": {
