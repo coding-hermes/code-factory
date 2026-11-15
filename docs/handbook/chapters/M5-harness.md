@@ -142,6 +142,15 @@ v2 check passes that request to the adapter. The Claude budget and Codex help pr
 both streams. `tests/harness/opencode-install-test.sh` and `tests/harness/capability-stream-test.py`
 are offline fixture evidence, not proof of an upstream installation or a live node.
 
+**CF-329 — Codex evidence retention.** The credential-bearing Codex turn creates one
+isolated home under the guarded turn cache. Its `EXIT` trap at
+`scripts/harness/install-codex.sh:640-645` removes only `auth.json` and `config.toml`;
+it preserves the run directory, rollout JSONL and SQLite index. The turn reports the
+preserved rollout and its run id at `:715-720`, while the isolated-home PASS row records
+the directory and run id at `:681`. The fixture
+`tests/test_harness_memory_codex_retention.py` proves both halves without a live
+provider; this is the foreign-harness provisioning evidence owned by III.M5.S2.
+
 **S2 no longer has a silent member.** `aider` and `goose` were named in `specs/HARNESS.md` with **no
 adapter file**, which is the one state this module forbids: a harness the spec names and the
 conformance battery cannot see produces no row at all, so nothing can go red (the S4-style silence,

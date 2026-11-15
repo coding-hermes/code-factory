@@ -4095,6 +4095,12 @@ if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_harness_memory.py"; th
 else
   say "  FAIL  shared memory fixture or namespace refusal (CF-231)"; fails=$((fails+1))
 fi
+# ch:trace row=CF-329 spec=specs/HARNESS-MEMORY.md#32-codex--stamped-through-a-free-form-field test=tests/test_harness_memory_codex_retention.py doc=docs/handbook/appendices/units/16-scripts-harness-install-codex-sh.md evidence=tests/test_harness_memory_codex_retention.py::test_rollout_and_index_survive_while_turn_credentials_are_removed witness=none:local-fixture verdict=none:foreman-will-run-gitreins commit=none:worker-commit memory=none:foreman-close
+if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_harness_memory_codex_retention.py"; then
+  say "  PASS  Codex evidence retention fixture preserves rollout/index and removes credentials (CF-329)"
+else
+  say "  FAIL  Codex evidence retention fixture (CF-329)"; fails=$((fails+1))
+fi
 # The battery is a checker; a checker that cannot print FAIL is decoration (AGENTS.md rule 2).
 # Every leg below runs it against a fixture adapter dir and a fixture HOME: no credential, no
 # network, no install. A green matrix is only worth the fixtures that can turn it red.

@@ -66,8 +66,8 @@ run that never happened (`specs/FLEET-MEMORY.md:87`).
 | identity | **cannot set**; `codex exec --thread-source "<run_id>"` lands verbatim in `session_meta.thread_source` (verified on both the success and failure paths) |
 | capture | post-process the rollout at run end — it carries `model_served` (`thread_settings_applied`), usage (`token_usage_record`), git (`session_meta.git`), and the artifact surface (`item_completed` → `FileChange.changes`) |
 | gap | no USD cost anywhere in a rollout (only `rate_limits` percentages) |
-| trap | **`scripts/harness/install-codex.sh:439-444` deletes the evidence**: its `trap cleanup EXIT` does `rm -rf "$turn_home"`, removing `sessions/` and both SQLite files before an exporter could read them |
-| status | no exporter; the rollout is thrown away on every turn today |
+| trap | **`scripts/harness/install-codex.sh:640-645` preserves the evidence and removes credentials**: its guarded `trap cleanup EXIT` deletes only the turn's `auth.json` and `config.toml`; the run directory, `sessions/` rollout and SQLite index remain for an exporter, and `:681` records the preserved directory with its run id |
+| status | no exporter yet; each credential-bearing turn now names a preserved rollout directory and run id for a future exporter |
 
 ### 3.3 Claude Code — computed id, result object for cost
 
@@ -145,7 +145,7 @@ silent skip.
 
 | harness | trap | consequence if missed |
 |---|---|---|
-| codex | `install-codex.sh:439-444` removes `$turn_home` on EXIT | the exporter runs against a deleted directory |
+| codex | `install-codex.sh:640-645` removes only `auth.json` and `config.toml`; the turn home and native evidence survive | an exporter can read the preserved rollout and SQLite index |
 | claude-code | `--bare` disables hooks | a hook-based exporter never fires |
 | pi | session is memory-only until the first assistant message | an early failure exports nothing at all |
 | dsh | `--json` truncates at 8 KiB/string | the record is silently incomplete |

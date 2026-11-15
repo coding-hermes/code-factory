@@ -54,7 +54,7 @@ adapter. Today:
 | harness | `memory` leg | why |
 |---|---|---|
 | all six | **RED — no leg exists** | `tests/harness-conformance.sh` implements `check`, `apply`, `smoke` only; `vars` and `memory` have no executor (CF-328) |
-| codex | **RED — and the evidence is deleted** | `scripts/harness/install-codex.sh:439-444` removes `$turn_home`, including `sessions/`, on exit |
+| codex | **RED — the evidence now survives** | `scripts/harness/install-codex.sh:640-645` removes only `auth.json` and `config.toml`; the turn home, `sessions/` rollout and SQLite index are preserved and named in the turn's `rollout` row (CF-329) |
 | claude-code | **RED — hooks cannot fire** | the adapter runs `--bare`, which skips hooks unconditionally |
 | hermes | **RED — no exporter** | `scripts/node-bus-worker.py` has no DuckBrain call; `daily_telemetry_extract.py` is day-aggregate and its cron is disabled |
 
@@ -110,7 +110,8 @@ cannot be proven. The failure is printing it as a PASS with the requested model 
 - `specs/FLEET-MEMORY.md:28`, `:38` — the record shapes this page fills.
 - `specs/HARNESS-MATRIX.md:167` — the `memory` leg that has never had an executor.
 - `tests/harness-conformance.sh` — three legs measured (5 pass / 7 fail / 9 skip on 2026-11-05).
-- `scripts/harness/install-codex.sh:439-444` — the cleanup trap that deletes the rollout.
+- `scripts/harness/install-codex.sh:640-645` — the cleanup trap that removes the turn's credentials
+  and preserves the rollout (CF-329).
 - Research reports (outside the repo, read-only): `~/code-factory-reports/pi-session-export-duckbrain-2026-11-05.md`
   and `dsh-memory-export-2026-11-05.md`.
 - Board: CF-328 (five legs vs three), CF-208 (namespace scoping), CF-276 (worker not staged).

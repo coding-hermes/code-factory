@@ -632,14 +632,15 @@ case "$MODE" in
     # credential that exists, and it is used — named, not assumed.
     #
     # CF-277: the turn home is a fresh mktemp directory under the turn cache root — never a path
-    # built from CF_RUN_ID — and the EXIT trap removes it only when inside_turn_cache agrees the
-    # path is one leaf under that root. There is no delete before the directory is created.
+    # built from CF_RUN_ID. The EXIT trap preserves the Codex rollout and SQLite index for a later
+    # exporter, but removes the credential-bearing files it created. There is no delete before the
+    # directory is created.
     turn_home=""
     cache_root="$(turn_cache_root)"
     cleanup() {
       [ -n "$turn_home" ] || return 0
       inside_turn_cache "$turn_home" || return 0    # outside the cache root: never removed
-      rm -rf -- "$turn_home"
+      rm -f -- "$turn_home/auth.json" "$turn_home/config.toml"
     }
     trap cleanup EXIT INT TERM
     if [ -n "${VAR[CF_API_KEY_FILE]:-}" ]; then
@@ -677,7 +678,7 @@ case "$MODE" in
       { printf '{"OPENAI_API_KEY":"%s"}\n' "$key_token"; } >"$turn_home/auth.json" \
         || turn_home_fail $? "turn_home" "cannot write the isolated auth.json under $turn_home"
       chmod 600 "$turn_home/auth.json"
-      ok "turn_home" "$turn_home (isolated config + key, mode 600, deleted on exit)"
+      ok "turn_home" "$turn_home (isolated config + key, mode 600, preserved on exit for run ${VAR[CF_RUN_ID]})"
     else
       ok "turn_home" "\$HOME/.codex (host login; the model and provider are still pinned on argv)"
     fi
@@ -705,10 +706,18 @@ case "$MODE" in
 
     # model_served is read from codex's own rollout record, not inferred from the request.
     served=""
+    rollout=""
     if [ -n "$tid" ]; then
       root="${turn_home:-$HOME/.codex}"
       rollout=$(find "$root/sessions" -name "*$tid.jsonl" -print 2>/dev/null | head -1)
       [ -n "$rollout" ] && served=$(sed -n 's/.*"thread_settings":{[^}]*"model": *"\([^"]*\)".*/\1/p' "$rollout" 2>/dev/null | head -1)
+    fi
+    if [ -n "$rollout" ]; then
+      ok "rollout" "$rollout (preserved for run ${VAR[CF_RUN_ID]})"
+    else
+      # A note, not a WARN: the turn already ran, so a missing rollout costs a future exporter a
+      # record — it does not block the surface crier uses (specs/HARNESS.md, CF-384).
+      note "rollout — no rollout record found for run ${VAR[CF_RUN_ID]}; nothing was preserved"
     fi
     if [ -n "$served" ]; then
       ok "model_served" "requested $model → served $served"
