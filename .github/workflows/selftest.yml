@@ -1,0 +1,78 @@
+name: selftest
+
+# A push to main is graded by the same gate a pull request is: the repo's own
+# tests/selftest.sh (68 numbered sections plus the four lettered sub-arms) and a
+# gitleaks scan under the repo .gitleaks.toml. Until this file existed the only
+# gate was a human running the selftest on the host, so a red selftest could sit
+# on main undetected (CF-435, CF-440).
+#
+# Two arms grade against the HOST rather than a fixture and fail closed when the
+# host cannot answer: section 50 (scripts/install-go.sh --check must read back the
+# pinned go1.26.5 it finds on PATH) and section 51 (the python lint lane needs
+# ruff). The job therefore installs the same two pins the control host carries
+# instead of skipping those arms.
+#
+# Boundary: this workflow proves the suite is green on a clean GitHub-hosted
+# runner. It does not provision a node, reach a bunker server, or call a model -
+# the arms that need those print their own named SKIP.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: selftest-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secrets:
+    name: secrets (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install gitleaks 8.30.1 and scan the tree
+        run: |
+          set -euo pipefail
+          ver=8.30.1
+          mkdir -p "$RUNNER_TEMP/bin"
+          curl -sSfL -o "$RUNNER_TEMP/gitleaks.tar.gz" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${ver}/gitleaks_${ver}_linux_x64.tar.gz"
+          tar -xzf "$RUNNER_TEMP/gitleaks.tar.gz" -C "$RUNNER_TEMP/bin" gitleaks
+          chmod 0755 "$RUNNER_TEMP/bin/gitleaks"
+          "$RUNNER_TEMP/bin/gitleaks" version
+          "$RUNNER_TEMP/bin/gitleaks" dir --no-banner --redact --config .gitleaks.toml .
+
+  selftest:
+    name: selftest
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Several arms read git history and ancestry (deafbc3 controls, branch
+          # landings), so the checkout must not be a depth-1 shallow clone.
+          fetch-depth: 0
+      - name: Install the pinned Go toolchain (section 50)
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Install ruff (section 51)
+        run: |
+          set -euo pipefail
+          pipx install 'ruff==0.15.22'
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Repo self-test gate
+        run: |
+          set -euo pipefail
+          go version
+          ruff --version
+          bash tests/selftest.sh
