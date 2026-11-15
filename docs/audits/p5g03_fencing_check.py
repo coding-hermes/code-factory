@@ -12,6 +12,13 @@ ROWS = {
     "Crier": ("crier-A", "crier-B", "crier-C"),
     "Scheduler": ("scheduler-A", "scheduler-B", "scheduler-C"),
 }
+BOUNDARIES = {
+    "Git publication": "broker ref CAS and remote ref readback",
+    "Board": "row/event/marker tree ref CAS and remote readback",
+    "Memory": "namespace ref CAS and record readback",
+    "Crier": "grant consumption, binding/custody and receipt in one transaction",
+    "Scheduler": "grant consumption, admission/binding and receipt in one transaction",
+}
 
 
 class Model:
@@ -59,9 +66,13 @@ def check():
             cells = [cell.strip() for cell in line.strip("|").split("|")]
             if cells[0] in ROWS:
                 assert cells[0] not in table, cells[0]
-                table[cells[0]] = tuple(cells[1:4])
-    assert table == ROWS, (table, ROWS)
-    for name, (before, old, new) in table.items():
+                table[cells[0]] = tuple(cells[1:5])
+            elif cells[0] not in {"Resource", "---"}:
+                raise AssertionError(f"unexpected resource row: {cells[0]}")
+    assert table.keys() == ROWS.keys(), (table, ROWS)
+    for name, (before, old, new, boundary) in table.items():
+        assert (before, old, new) == ROWS[name]
+        assert boundary == BOUNDARIES[name]
         m = Model(before)
         assert m.begin(7, "old-1", old) == "pending"
         assert m.advance() == "EFFECT_UNRESOLVED"

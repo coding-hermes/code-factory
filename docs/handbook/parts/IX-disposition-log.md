@@ -320,7 +320,7 @@ integration is wave B. The next review rechecks all residuals before accepted re
 | P5-C-14 | ADOPTED | C: M9.17; V.9; VII.12 | Reserved-to-charged atomic accounting, uncertain-start hold and bounded attempts |
 | P5-C-15 | ADOPTED | C: VII.18 | Failure branch permits null commit/empty artifacts with typed error, never invented output |
 | P5-C-16 | UNRESOLVED | C: VII.15.1; VI.13; A: I.1.9.6 | Canonical CT-10 names and errors are selected; the M4 legacy-alias reconciliation still awaits B |
-| P5-C-17 | ADOPTED | C: M7.17; VI.35.2; A: I.1.9.3 | Broker-only credentials and effect intents serialize all four resources with epoch advance |
+| P5-C-17 | ADOPTED | C: M7.17; VI.35.2; A: I.1.9.3 | Broker-only credentials and effect intents serialize all five protected resources with epoch advance (Git, Board, Memory, Crier and Scheduler) |
 | P5-C-18 | ADOPTED | C: M8.16 | Shared hold/tombstone transaction, private trash, immutable inventory and resumable per-target cursor |
 | P5-C-19 | ADOPTED | C: V measured M8 inventory | Cache TTL 24 h, aged=True and newest subtree mtime agree with M8/CF-290 |
 | P5-C-20 | ADOPTED | C: M7.16 | Supported GitHub/GitLab modes, endpoints, permissions, provider/local fields and errors; external conformance NOT RUN |

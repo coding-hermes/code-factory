@@ -1288,9 +1288,11 @@ broker executor can finish it, and its completed effect ID is deduplicated forev
 within the retained resource history. Authority recovery never drops an unresolved
 intent. API ACLs, read-only Bunker credentials and protected resource refs prevent
 bypass; direct human writes are UNMANAGED_WRITER and invalidate readiness. Tests must
-partition an old owner, advance only after effect resolution, then attempt all four
-writes with old credentials/Fence; every canonical OID/row digest remains unchanged.
-These are required target tests, not executed conformance claims.
+partition an old owner, advance only after effect resolution, then attempt all five
+protected-resource writes with old credentials/Fence; every canonical OID/row digest
+remains unchanged. The protected set is Git, Board, Memory, Crier and Scheduler, as
+specified by M7 §§17–17.1; these are required target tests, not executed conformance
+claims.
 
 ## 36. Risk summary — prioritized, with the review's mapping
 
