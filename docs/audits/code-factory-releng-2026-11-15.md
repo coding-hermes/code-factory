@@ -213,3 +213,46 @@ cd /tmp/cf-releng && bash tests/selftest.sh                       # SELFTEST: PA
 Evidence artifacts from this pass (host scratch, not tracked): `cf-selftest-1115.log` (run A),
 `cf-selftest-1115-rerun.log` (run B), `cf-adapter56.log` (arm alone), and the master-lineage
 secret-scan report `cf-master-gitleaks.json` — 547 findings, produced by the `--log-opts=origin/main..gh/master` scan above.
+
+## 9. Re-fire of this tick (2026-11-15T14:10Z)
+
+The same tick id fired a second time, about eighty minutes after the pass recorded above. This section
+does not re-derive the audit; it records the material-identity check and the measurements taken at the
+second firing, so a later reader can tell "nothing changed" from "nobody looked".
+
+| Check | Measurement at the re-fire | Identity with §1–§7 |
+| --- | --- | --- |
+| `origin/main` | `3e21bbc4b65063c2c71188727ba1b5d39f5aa5f3` | unchanged — no new commits since the pass |
+| Product paths, `91ab2abf..3e21bbc4` | **0** changed (the diff is board JSONL + this audit file only) | the certified product tree is still `91ab2abf`'s |
+| Selftest, clean detached worktree at `3e21bbc4` | `SELFTEST: PASS`, exit 0, 563 `PASS` lines | green |
+| Hosted CI at `3e21bbc4` | run `43721375277`: `secrets` job — gitleaks `dir` scan whose scope is the checkout's working tree, no `--log-opts` (history not scanned) — success 13:53:41→13:53:48Z; `selftest` job success 13:53:41→13:55:40Z | green, job-level |
+| `git ls-remote --tags gh` / `gh release list` | 0 refs / empty | unchanged |
+| Rulesets / `branches/main/protection` / Dependabot | `0` / HTTP 404 / `disabled` | unchanged (CF-436, CF-120 live) |
+| Secret scanning, push protection, license | `enabled`, `enabled`, MIT | unchanged |
+| `gh/master` | `4ead64f`, **772** commits not reachable from `main`, not an ancestor of it | unchanged (CF-163 live) |
+| Release tooling at the tip | `Makefile`, goreleaser config, `Dockerfile`, `VERSION`, `CHANGELOG.md`, `scripts/release*`, `docs/RELEASE.md`, `specs/RELEASE.md` — all absent | unchanged (CF-161 open) |
+
+Commit census, re-measured with the same rule as §2 (`--no-merges`, whole of `main`, 1211 subjects —
+§2's 1268 counts merges too):
+
+```
+feat=38  fix=130  perf=5  chore=185  docs=254  board=454  handbook=29  test=13  sync=8  style=8
+type!: subjects = 0        BREAKING CHANGE footers = 0        non-conventional subjects = 53
+```
+
+Same bump rule as §2, so the same candidate number: **`v0.1.0`**, and the scheme itself is still
+CF-161 AC1's owner decision.
+
+**Decision unchanged: NO CUT**, for the same three reasons in §7 — no owner release contract (CF-161),
+the public `master` lineage still fetchable at the same remote (CF-163, P1), and no artifact path to
+attach. Nothing was tagged and no Release was created. No board row was changed by this firing: the
+pass above already filed CF-445, and CF-161 / CF-163 / CF-436 / CF-120 / P5G-30 were re-read live and
+are still `pending`. This firing adds the audit section and no product change.
+
+One gate note, because it is evidence the host gate is live rather than assumed: the commit hook
+rejected this section's first draft twice. The CI row above originally named the secret-scan job and
+its scanner without naming a scan scope, and section 34's posture-doc checker (CF-163 AC3,
+`scripts/check_scan_scope.py`) fails any line that names gitleaks without `--log-opts`. The row now
+records the CI job's real scope — a `dir` scan over the working tree, history not scanned — and
+`python3 scripts/check_scan_scope.py` returns `OK`. The hook did its job on a docs-only change.
+
