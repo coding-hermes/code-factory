@@ -7717,5 +7717,57 @@ else
   fails=$((fails+1))
 fi
 
+say "69. node_env --check measures both target file modes and --apply repairs them (CF-268)"
+cf268=$(mktemp -d)
+mkdir -p "$cf268/home/.hermes"
+printf 'ENV_MODEL_NAME=selftest-model\n' > "$cf268/profile"
+printf 'MODEL_NAME=selftest-model\n' > "$cf268/home/.hermes/.env"
+chmod 644 "$cf268/home/.hermes/.env"
+envrun268() { env -i HOME="$cf268/home" PATH="$PATH" python3 "$HERE/scripts/node_env.py" "$@"; }
+
+out=$(envrun268 --env-file "$cf268/profile" --check 2>&1); rc=$?
+if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q "FAIL  mode:$cf268/home/.hermes/.env — expected 600, found 644"; then
+  say "  PASS  a. --check fails a 644 .env, names the path and mode 644 (exit $rc)"
+else
+  say "  FAIL  a. --check did not fail the 644 .env fixture (exit $rc): $(printf '%s' "$out" | tail -1)"; fails=$((fails+1))
+fi
+
+chmod 600 "$cf268/home/.hermes/.env"
+out=$(envrun268 --env-file "$cf268/profile" --check 2>&1); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -q "PASS  mode:$cf268/home/.hermes/.env — 600"; then
+  say "  PASS  b. --check passes the 600 .env control (exit $rc)"
+else
+  say "  FAIL  b. --check did not pass the 600 .env control (exit $rc): $(printf '%s' "$out" | tail -1)"; fails=$((fails+1))
+fi
+
+chmod 644 "$cf268/home/.hermes/.env"
+out=$(envrun268 --env-file "$cf268/profile" --apply 2>&1); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -q "corrected $cf268/home/.hermes/.env to mode 600" \
+  && printf '%s\n' "$out" | grep -q 'ENV: APPLIED' \
+  && ! printf '%s\n' "$out" | grep -q 'already matches (no change)' \
+  && [ "$(stat -c %a "$cf268/home/.hermes/.env")" = 600 ]; then
+  say "  PASS  c. --apply reports the .env correction and leaves mode 600 (exit $rc)"
+else
+  say "  FAIL  c. --apply did not report and make the .env mode correction (exit $rc): $(printf '%s' "$out" | tail -1)"; fails=$((fails+1))
+fi
+
+out=$(envrun268 --env-file "$cf268/profile" --apply 2>&1); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -q 'ENV: PASS — already matches (no change)' \
+  && [ "$(stat -c %a "$cf268/home/.hermes/.env")" = 600 ]; then
+  say "  PASS  d. second --apply is an idempotent no-op (exit $rc)"
+else
+  say "  FAIL  d. second --apply was not a no-op (exit $rc): $(printf '%s' "$out" | tail -1)"; fails=$((fails+1))
+fi
+
+printf 'model:\n  provider: cf-proxy\n' > "$cf268/home/.hermes/config.yaml"
+chmod 644 "$cf268/home/.hermes/config.yaml"
+out=$(envrun268 --env-file "$cf268/profile" --config-set model.provider=cf-proxy --check 2>&1); rc=$?
+if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q "FAIL  mode:$cf268/home/.hermes/config.yaml — expected 600, found 644"; then
+  say "  PASS  e. --check fails a 644 config.yaml, names the path and mode 644 (exit $rc)"
+else
+  say "  FAIL  e. --check did not fail the 644 config.yaml fixture (exit $rc): $(printf '%s' "$out" | tail -1)"; fails=$((fails+1))
+fi
+rm -rf "$cf268"
+
 say ""
 [ "$fails" -eq 0 ] && finish 0 || finish 1

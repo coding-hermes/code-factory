@@ -212,7 +212,15 @@ ch:trace row=CF-298 spec=docs/handbook/chapters/M1-provisioning.md test=tests/te
 | mode | **required** — `--check` or `--apply` (`:482-483`) | one of two | whether the run mutates | no mode → `Refusal` "one of --check or --apply is required" |
 | `HOME` | required (`:491-494`) | env | where the paths resolve | unset → `Refusal` "HOME is unset" |
 | target paths | `$HOME/.hermes/.env` + `$HOME/.hermes/config.yaml` (`:495-496`) | fixed | what is rewritten | a wrong HOME rewrites the wrong tree |
+| mode of the target files | `600` (`node_env.py:516-517`, `:569-578`) | octal file mode | whether each seeded target is owner-only | an existing target at another mode is `FAIL` in `--check` and corrected by `--apply`; an absent target is noted until seeded |
 | unmanaged variables | carried forward (`:548-556`) | per-variable | variables present in the node's `.env` but not declared | each unmanaged var emits `WARN unmanaged:<name>` and `note "{n} unmanaged var(s) would carry forward on a re-provision"` — preserved, not dropped |
+
+<a id="III.M1.S4"></a>
+### III.M1.S4 — node environment file and its file mode
+
+`--check` reads the mode of `$HOME/.hermes/.env` and `$HOME/.hermes/config.yaml` and FAILs (non-zero), naming the octal mode, when either existing target is not 600 (`node_env.py:516-517`, `:569-584`). A target that does not exist yet is noted rather than failed (`node_env.py:569-574`). `--apply` corrects an existing target to mode 600 and says so in its summary; a second `--apply` is a no-op (`node_env.py:588-608`).
+
+ch:trace row=CF-268 spec=docs/handbook/chapters/M1-provisioning.md#III.M1.S4 wave=none:serial test=tests/selftest.sh evidence=tests/selftest.sh witness=none:worker-local verdict=none:judge-pending commit=none:foreman-writes memory=none:foreman-writes
 
 **`node_freshness.py` (S5, settings surface — B07).**
 

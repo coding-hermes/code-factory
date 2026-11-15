@@ -441,6 +441,16 @@ def write_atomic(path, lines):
     os.chmod(path, 0o600)
 
 
+def read_mode(path):
+    """Return the target's permission bits, or None when it is not seeded yet."""
+    try:
+        return os.stat(path).st_mode & 0o777
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        raise Refusal("mode", f"cannot stat {path} ({exc.strerror})") from None
+
+
 def ensure_mode(path):
     """-> True when the mode had to be corrected."""
     try:
@@ -503,6 +513,8 @@ def main(argv):
         config_lines = read_config(config_path)
         env_out, env_changes, current_env = plan_env(env_lines, declared)
         config_out, config_changes = plan_config(config_lines, assigns)
+        env_mode = read_mode(env_path)
+        config_mode = read_mode(config_path)
     except Refusal as exc:
         fail(exc.subject, exc.detail)
         return 2
@@ -554,7 +566,18 @@ def main(argv):
     if unmanaged:
         note(f"{len(unmanaged)} unmanaged var(s) would carry forward on a re-provision")
 
-    drift = len(env_changes) + len(config_changes)
+    mode_states = ((env_path, env_mode), (config_path, config_mode))
+    mode_drift = 0
+    for path, current in mode_states:
+        if current is None:
+            row("PASS", f"mode:{path}", "not present (not seeded yet)")
+        elif current == 0o600:
+            row("PASS", f"mode:{path}", "600")
+        else:
+            mode_drift += 1
+            row("FAIL", f"mode:{path}", f"expected 600, found {current:03o}")
+
+    drift = len(env_changes) + len(config_changes) + mode_drift
     if mode == "check":
         if drift:
             print(f"ENV: DRIFT ({drift})")
@@ -562,23 +585,25 @@ def main(argv):
         print("ENV: PASS — declared environment matches")
         return 0
 
+    mode_changes = 0
     try:
         if declared and (env_changes or not os.path.lexists(env_path)):
             write_atomic(env_path, env_out)
             note(f"wrote {env_path} ({len(env_changes)} change(s), mode 600)")
-        elif declared and ensure_mode(env_path):
-            note(f"corrected {env_path} to mode 600")
         if assigns and (config_changes or not os.path.lexists(config_path)):
             write_atomic(config_path, config_out)
             note(f"wrote {config_path} ({len(config_changes)} change(s), mode 600)")
-        elif assigns and ensure_mode(config_path):
-            note(f"corrected {config_path} to mode 600")
+        for path, current in mode_states:
+            if current is not None and current != 0o600 and ensure_mode(path):
+                mode_changes += 1
+                note(f"corrected {path} to mode 600")
     except OSError as exc:
         fail("env", f"cannot write the node's environment ({exc.strerror})")
         return 2
 
-    if drift:
-        print(f"ENV: APPLIED ({drift} change(s))")
+    applied = len(env_changes) + len(config_changes) + mode_changes
+    if applied:
+        print(f"ENV: APPLIED ({applied} change(s))")
     else:
         print("ENV: PASS — already matches (no change)")
     return 0
