@@ -724,7 +724,7 @@ remain unknown rather than zero/pass. Shared vectors exercise grant loss, one-si
 binding recovery, 20,000 allowance/two slots, same-worker correction, failed-start refund,
 postcheck exhaustion and late evidence against these exact transitions.
 
-## 20. Cadence source of truth and bounded failure backoff (CF-134)
+## 20. Cadence source of truth and bounded failure backoff (CF-134) — III.M9.S1
 
 `scripts/cooldown_policy.py` is the single source of code-factory lane cadence and failure backoff. Scheduler project rows and the fleet TOML are projections of that module, not independent policy sources. The scheduler fleet configuration loader uses `~/.hermes/fleet.toml` (the loader path is `os.path.expanduser('~/.hermes/fleet.toml')` in `~/.hermes/scripts/fleet-sync.py` and `~/.hermes/scripts/fleet-cooldown-policy.py`). That file is not tracked in this repository; this chapter records the external boundary rather than fabricating a tracked copy.
 
@@ -753,6 +753,20 @@ The role policy is:
 `validate_pin` refuses a negative or non-integer pin and refuses a pin above the role ceiling unless a non-empty reason is recorded. `bounded_failure_delay` grows from 300 seconds and is capped at 1800 seconds. `FailureBackoff.clear_cause` resets the failure state and makes the lane eligible at the clear timestamp, so a cleared cause cannot leave a stale failure block in place.
 
 AC4 record (2026-11-03): the board row CF-134 states that 19 code-factory lanes were moved from 12h / 24h / 7d cooldowns to 1800 seconds, but that historical before/after change is not independently evidenced by the tracked git history or board event data inspected for this chapter. The tracked evidence does establish a 19-row code-factory census (`.coding-hermes/board/events.jsonl`, event 72, 2026-11-03: `inventory_total=866`, `cf_rows_page0=19`, `new_recipe_rows=19`) and the committed policy after value for the primary role (`PRIMARY_CADENCE_S=1800`, commit `8d6b303b70b90f48580dae3c49cf2c70816e39bd`). The external `~/.hermes/fleet.toml` snapshot inspected on 2026-11-15 still contains, for example, `code-factory` at 7200, `code-factory-pm` at 86400 and `code-factory-docs` at 604800, rather than a complete 19-lane 1800-second projection. Therefore the exact 19-lane BEFORE set and the corresponding 2026-11-03 AFTER set remain an explicit evidence gap, not a restated fact.
+
+Before and after values that *are* evidenced (before = the values the external projection `~/.hermes/fleet.toml` carried when inspected on 2026-11-15; after = the committed policy in `scripts/cooldown_policy.py`):
+
+| lane | before (external `cooldown_s`) | after (role policy cadence) | ceiling |
+|---|---:|---:|---:|
+| `code-factory` (primary) | 7200 | 1800 | 1800 |
+| `code-factory-ops` | 86400 | 1800 | 1800 |
+| `code-factory-pm` | 86400 | 86400 | 691200 |
+| `code-factory-docs` | 604800 | 604800 | 4838400 |
+| `code-factory-readme` | 604800 | 604800 | 4838400 |
+| `code-factory-perf` | 604800 | 604800 | 4838400 |
+| `code-factory-dogfood` | 259200 | 259200 | 2073600 |
+
+The table is the falsifiable part of the change: it is what a test can compare (`tests/test_cooldown_policy.py` asserts the projection equals `policy_for_lane` for six lanes), and the rows are quoted from the external file rather than reconstructed. What remains an evidence gap is narrower than "no before/after": the historical 19-lane set as it stood on 2026-11-03, and the subsequent per-lane write-back of the projection, are not recorded in tracked history. The primary and ops lanes are the ones whose cadence actually narrowed (7200/86400 → 1800); the documentation and PM-family lanes were already at or inside their role cadence, and the policy now bounds them rather than changing them.
 
 ## RED field count: 5 (§9 log inventory 2 of 382 sites — the remaining 380 are the named RED, not a "sample"; §3 S1 grep-level (`tick_process`/`packer_select`/`namespace_alloc` not line-by-line — `noop_pacing.go`/`packer_select.go:385-400`/`spawn.go` ARE read); §5 the auxiliary-flag reader/precedence not re-verified per flag (the consequence column is now filled); S4 per-route contract not written — B18; S3 write authorities/recovery queries not written — B17)
 
