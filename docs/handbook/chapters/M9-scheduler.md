@@ -759,14 +759,14 @@ Before and after values that *are* evidenced (before = the values the external p
 | lane | before (external `cooldown_s`) | after (role policy cadence) | ceiling |
 |---|---:|---:|---:|
 | `code-factory` (primary) | 7200 | 1800 | 1800 |
-| `code-factory-ops` | 86400 | 1800 | 1800 |
+| `code-factory-ops` | 86400 | refused — no `ops` role in `ROLE_POLICY`, so the lane sits outside the policy's scope and its external value stands | — |
 | `code-factory-pm` | 86400 | 86400 | 691200 |
 | `code-factory-docs` | 604800 | 604800 | 4838400 |
 | `code-factory-readme` | 604800 | 604800 | 4838400 |
 | `code-factory-perf` | 604800 | 604800 | 4838400 |
 | `code-factory-dogfood` | 259200 | 259200 | 2073600 |
 
-The table is the falsifiable part of the change: it is what a test can compare (`tests/test_cooldown_policy.py` asserts the projection equals `policy_for_lane` for six lanes), and the rows are quoted from the external file rather than reconstructed. What remains an evidence gap is narrower than "no before/after": the historical 19-lane set as it stood on 2026-11-03, and the subsequent per-lane write-back of the projection, are not recorded in tracked history. The primary and ops lanes are the ones whose cadence actually narrowed (7200/86400 → 1800); the documentation and PM-family lanes were already at or inside their role cadence, and the policy now bounds them rather than changing them.
+The table is the falsifiable part of the change: it is what a test can compare (`tests/test_cooldown_policy.py` asserts the projection equals `policy_for_lane` for six lanes), and the rows are quoted from the external file rather than reconstructed. The `code-factory-ops` row is deliberately not a cadence: `role_for_lane` refuses a suffix with no entry in `ROLE_POLICY`, so the policy does not own that lane and the handbook says so rather than inventing a number for it. What remains an evidence gap is narrower than "no before/after": the historical 19-lane set as it stood on 2026-11-03, and the subsequent per-lane write-back of the projection, are not recorded in tracked history. The primary lane is the one whose cadence actually narrowed (7200 → 1800); the documentation, PM-family and dogfood lanes were already at or inside their role cadence, and the policy now bounds them rather than changing them.
 
 ## RED field count: 5 (§9 log inventory 2 of 382 sites — the remaining 380 are the named RED, not a "sample"; §3 S1 grep-level (`tick_process`/`packer_select`/`namespace_alloc` not line-by-line — `noop_pacing.go`/`packer_select.go:385-400`/`spawn.go` ARE read); §5 the auxiliary-flag reader/precedence not re-verified per flag (the consequence column is now filled); S4 per-route contract not written — B18; S3 write authorities/recovery queries not written — B17)
 
