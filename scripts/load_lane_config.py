@@ -36,9 +36,19 @@ class LaneConfigError(Exception):
 def apply_updates(con, prompt_texts):
     for name, (ns, mode, prompt_name) in CFG.items():
         text = prompt_texts[name]
+        policy = cooldown_policy.policy_for_lane(name)
         con.execute(
-            "UPDATE projects SET namespace_id=?, admission_mode=?, prompt=?, prompt_mode='append' WHERE name=?",
-            (ns, mode, text, name),
+            "UPDATE projects SET namespace_id=?, admission_mode=?, prompt=?, prompt_mode='append', "
+            "cooldown_s=?, cooldown_floor_s=?, cooldown_ceiling_s=? WHERE name=?",
+            (
+                ns,
+                mode,
+                text,
+                policy["cadence_s"],
+                policy["floor_s"],
+                policy["ceiling_s"],
+                name,
+            ),
         )
     con.commit()
 

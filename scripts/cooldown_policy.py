@@ -95,9 +95,8 @@ def bounded_failure_delay(failures: int) -> int:
 class FailureBackoff:
     """Small state machine used by admission callers to pace repeated failures.
 
-    Clearing the cause does not erase an already scheduled retry, but it does
-    cap recovery at ``FAILURE_BACKOFF_MAX_S`` after the clear.  Thus a lane
-    cannot remain blocked forever because of stale failure state.
+    Clearing the cause resets the failure state and makes the lane eligible at
+    the clear timestamp. Thus a stale failure state cannot keep a lane blocked.
     """
 
     consecutive_failures: int = 0
@@ -116,16 +115,13 @@ class FailureBackoff:
         if type(now_s) is not int or now_s < 0:
             raise CooldownPolicyError(f"invalid clear timestamp: {now_s!r}")
         self.cause_cleared_at_s = now_s
+        self.consecutive_failures = 0
+        self.blocked_until_s = now_s
         return self.eligible_at_s
 
     @property
     def eligible_at_s(self) -> int:
-        if self.cause_cleared_at_s is None:
-            return self.blocked_until_s
-        return min(
-            self.blocked_until_s,
-            self.cause_cleared_at_s + FAILURE_BACKOFF_MAX_S,
-        )
+        return self.blocked_until_s
 
     def eligible(self, now_s: int) -> bool:
         if type(now_s) is not int or now_s < 0:
