@@ -17,7 +17,7 @@ references, not executable target definitions. §§15–17 specify the current t
 | Revision | `fbc19cbc807de729e25c358fa7e94207b912f010` (code-factory HEAD; `scripts/verify-node.sh` changed in `47d68b4..08a2c8a` — commit `f1d5cfb`, CF-270 — so every §9/§10/§11 ladder locator is re-pinned against the 241-line file; `scripts/node-create.sh` changed in `08a2c8a..fbc19cb` — commit `85a7271`, CF-150 — staging `node_gateway_auth.py` as the eighth staged file, already reflected in §3 S3 and §11) |
 | Language / runtime | bash 5.3.9 + Python 3.14.9 (measured) |
 | Owner lane | code-factory (node-side) |
-| Status | **UNVERIFIED (bodies)** — `bunker-provision.sh` `--check` probe, config loader (`:95-123`), CLI (`:561-609`), `destroy` (`:550-558`), `disk_floor.py` `resolve()` (`:115-141`), `verify-node.sh` (`:20-241`, 241 lines at HEAD — re-pinned after the CF-270 port fix), `node_identity.py` (111 lines, full), `node_seed.py` (405 lines, apply/build/check state machine) read; `node_env.py` (589), `node_seed_drift.py` (558), `node_freshness.py` (732), `bunker_config_gen.py` (724) read at their **settings surface** (argparse + constants), bodies not line-by-line; `node_gateway_auth.py` docstring read (B03 — it writes dashboard basic-auth, not a registration); body not line-by-line |
+| Status | **UNVERIFIED (bodies)** — `bunker-provision.sh` `--check` probe, config loader (`:95-123`), CLI (`:561-609`), `destroy` (`:550-558`), `disk_floor.py` `resolve()` (`:115-141`), `verify-node.sh` (`:22-510`, current 510-line ladder), `node_identity.py` (111 lines, full), `node_seed.py` (405 lines, apply/build/check state machine) read; `node_env.py` (589), `node_seed_drift.py` (558), `node_freshness.py` (732), `bunker_config_gen.py` (724) read at their **settings surface** (argparse + constants), bodies not line-by-line; `node_gateway_auth.py` docstring read (B03 — it writes dashboard basic-auth, not a registration); body not line-by-line |
 
 ## 2. Purpose, authority and position
 
@@ -66,7 +66,7 @@ classification. The fleet skill copy is outside this repository and is expected 
 | S2 create the container + config | `bunker-provision.sh`, `bunker_config_gen.py`, `node-create.sh`, `bunker-crier-connect.sh`, `deploy_key.py` | **operator-invoked** | `bunker-provision.sh` is the orchestrator (probe `:175-249`) but has **no in-repo invoker** — `grep -rn 'bunker-provision' scripts/` matches `bunker-provision.sh` itself (`:2,5,6,7,178,336,522`) and `bunker_config_gen.py` (`:2,4,337,492`, docstring/description text naming the config it generates); an operator runs it (finding 2). `deploy_key.py install` is invoked by `node-create.sh --deploy-key` inside the new agent (CF-003) |
 | S3 identity and bus membership | `node_identity.py`, `node_gateway_auth.py` | **active** | `node_gateway_auth.py` staged and run inside `bunker-provision.sh:516-528`; `node_identity.py` at `:551-566` — step 7, **after** the `node-create.sh` → `project-node.sh` ladder in step 6, so its keys land last; `project-node.sh` layer 20 runs `node_gateway_auth.py` only, and an earlier reading that attributed the `node_identity.py` call to that layer is corrected here (CF-289 — the source carries no such call). Both writers of `$HOME/.node/node.json` now merge instead of replace; see the S3 merge contract below |
 | S4 seed prompts/skills/env | `node_seed.py`, `node_seed_drift.py`, `node_env.py` | **active** | `node_seed.py build` at `bunker-provision.sh:454`; `node_env.py --check` at `:147` / `--apply` at `:426` |
-| S5 prove the node works | `verify-node.sh`, `node_freshness.py` | **active** | `verify-node.sh` is the certification ladder (`:20-241`, 241 lines at HEAD); `node_freshness.py` folded in at `:150-177` |
+| S5 prove the node works | `verify-node.sh`, `node_freshness.py` | **active** | `verify-node.sh` is the certification ladder (`:22-510`); `node_freshness.py` is folded in at `:299-323`; the full verdict and warning contract is III.M1.S5 |
 
 **S2 staged set (CF-087).** `node-create.sh --staged-files` prints the manifest of files the node
 receives, and that manifest is validated before an agent is spawned: a reference the runtime
@@ -222,7 +222,36 @@ ch:trace row=CF-298 spec=docs/handbook/chapters/M1-provisioning.md test=tests/te
 
 ch:trace row=CF-268 spec=docs/handbook/chapters/M1-provisioning.md#III.M1.S4 wave=none:serial test=tests/selftest.sh evidence=tests/selftest.sh witness=none:worker-local verdict=none:judge-pending commit=none:foreman-writes memory=none:foreman-writes
 
-**`node_freshness.py` (S5, settings surface — B07).**
+<a id="III.M1.S5"></a>
+### III.M1.S5 — prove the node works
+
+The shipped verifier is authoritative for this surface. `scripts/verify-node.sh` parses arguments before any bunker call. `--server NAME` is an explicit bus-server value; when it is absent, `SERVER` falls back to `BUNKER_SERVER` after parsing. Either one is sufficient. With neither, the script prints `set BUNKER_SERVER or pass --server <name>` and exits 2. `--help` and a bare invocation print usage and exit 2 before server, port, transport or bunker validation. `tests/selftest.sh` CF-063 proves these branches, including `--server` without `BUNKER_SERVER` by advancing to transport validation.
+
+The gateway/auth verdicts are exact: `/api/status` must return 200 with `"auth_required": true`; unauthenticated stats pass only for 401, 302 or 403. A 000 transport result is not an HTTP refusal: the gateway and unauthenticated-stats rows warn, call `unverified()`, and contribute to `VERIFY: UNVERIFIED`, exit 3. A non-200 HTTP response such as 404, 500 or 200 on the unauthenticated stats route is `FAIL unauth_refused`; any FAIL wins over UNVERIFIED. The `bunker-exec` transport is a counted FAIL because its request never leaves the node.
+
+Every verifier warning site is listed here. Line numbers are derived from the current `scripts/verify-node.sh`; the two branch-specific rows at 231–232 and 261/263 are separate emitted branches of one call-site statement.
+
+| Source | Warning | Verdict effect |
+|---|---|---|
+| `verify-node.sh:183` | `node_ip`: only a loopback address was reported | warns and leaves the gateway unmeasurable; the final verdict is UNVERIFIED unless a FAIL also exists |
+| `verify-node.sh:184` | `transport`: node-address loopback cannot be used from the control host | same unverified transport outcome |
+| `verify-node.sh:231–232` | `gateway_reachable`: declared endpoint returned 000; internal probe answered 200 or did not answer | calls `unverified()`; `VERIFY: UNVERIFIED`, exit 3 |
+| `verify-node.sh:241` | `gateway_reachable`: no endpoint was available after address resolution | calls `unverified()`; `VERIFY: UNVERIFIED`, exit 3 |
+| `verify-node.sh:261` | `unauth_refused`: declared endpoint returned 000; internal stats returned 401/302/403 | calls `unverified()`; `VERIFY: UNVERIFIED`, exit 3 |
+| `verify-node.sh:263` | `unauth_refused`: declared endpoint returned 000 and internal stats also did not answer | calls `unverified()`; `VERIFY: UNVERIFIED`, exit 3 |
+| `verify-node.sh:269` | `unauth_refused`: no endpoint was available for stats | calls `unverified()`; `VERIFY: UNVERIFIED`, exit 3 |
+| `verify-node.sh:318` | `checkout_freshness`: checkout could not be measured | warning only; no `unverified()` call, so this can still end `VERIFY: PASS`, exit 0 unless strict freshness or another leg changes it |
+| `verify-node.sh:383` | `seed_drift`: seed could not be measured | calls `unverified()`; `VERIFY: UNVERIFIED`, exit 3, or FAIL with `--strict-seed` |
+| `verify-node.sh:457` | `harness_identity`: manifest has no measured version | calls `unverified()`; `VERIFY: UNVERIFIED`, exit 3 |
+
+The terminal precedence is explicit in the script: `FAILED > 0` prints `VERIFY: FAIL (n)` and exits 1; otherwise `UNVERIFIED > 0` prints `VERIFY: UNVERIFIED — …` and exits 3; otherwise it prints `VERIFY: PASS` and exits 0. A verifier PASS is not a full work certification: the control host still needs a real dispatch/result round trip and independently recomputed artifact digest.
+
+ch:trace row=CF-273 spec=docs/handbook/OUTLINE.md#node-side-modules wave=none:serial test=tests/selftest.sh doc=docs/OPERATIONS.md evidence=none:worker-probes-captured-in-report witness=none:live-node-not-required-for-doc-reconciliation verdict=none:foreman-runs-gitreins commit=none:worker-sha memory=none:foreman-writes
+STATUS: complete
+TIER: T1
+EVIDENCE: docs/OPERATIONS.md
+
+**`node_freshness.py` (S5, settings surface — B07).** The `--path`
 
 | Setting | Default | Range | Governs | What breaks if changed |
 |---|---|---|---|---|
@@ -305,7 +334,7 @@ The following citations describe legacy source coverage, not target qualificatio
 | **F2 legs (CREATED vs VERIFIED)** | `node-create.sh --project P --repo git@gitlab… --deploy-key K` then `verify-node.sh --agent A --server S` | the clone succeeds under the per-repo key, the repo's suite runs (node-dependent tests included), the sealed Go module cache adds 0 bytes, `VERIFY: PASS` | not run | **UNVERIFIED** — needs the real read-only deploy key and a fresh bunker node; this repo proves the mechanism, not the grant |
 | gateway auth staged before the adapter | `bash tests/selftest.sh` §55 (`project-node.sh --apply --project <p> --layers 20` in a fixture home) | `PASS gateway_auth — dashboard.basic_auth present …; password in …/.node/auth/gateway.pass (mode 600, value not printed)` and the adapter's `PASS gateway_start — /api/status -> 200`; the same adapter still refuses without the block | 2026-11-07 | **PASS** (fixture only — no live node run) |
 | verify-node transport (CF-224) | `bash tests/selftest.sh` §62 | the pre-fix `bf16c05` verifier has no `--transport` (`unknown arg`, exit 2) and certifies a loopback-only node `VERIFY: PASS`; this tree refuses the same fixture `VERIFY: UNVERIFIED`, PASSes `node-address`/`published-port`/`tunnel` runs with the transport named in the row, names a dead published port (`no published port for cf-fixture:10800`) without printing `000`, and grades `--transport bunker-exec` `VERIFY: FAIL (2)` | 2026-11-08 | **PASS** (offline fixtures only — no bunker, no network; `docs/audits/cf-224-verify-transport-2026-11-08.md`) |
-| verify-node usage (CF-063) | `bash -n scripts/verify-node.sh`; `bash tests/selftest.sh` CF-063 arm | `scripts/verify-node.sh` parses `-h`/`--help` before environment, port, transport and bunker validation; bare invocation and `--help` print the usage line and exit 2, while an operational invocation without `BUNKER_SERVER` names that missing requirement | 2026-11-10 | **PASS** (offline fixture only; no live bunker contacted) |
+| verify-node usage and verdict contract (CF-273) | `bash -n scripts/verify-node.sh`; `bash tests/selftest.sh` CF-063 arm and §17/§62 fixture | `--server NAME` alone is sufficient; with neither server source the script names the refusal and exits 2; the fixture proves stats 000 becomes WARN/`VERIFY: UNVERIFIED`, exit 3, while HTTP 404/500/200 are FAIL | current tree | **PASS** (offline fixtures only; no live bunker contacted) |
 | staged-set validator (CF-087) | `bash tests/node-create-staged-set.sh all` | four spellings of one unstaged reference in the entry point, one arm per staged member (`lib.sh`, `disk_floor.py`, `install-node.sh`), a needed member dropped from the declared set and an unreferenced member added both exit nonzero with a named `staged_set` row, and the printed set is closed under every reference its own members carry: `STAGED_SET: PASS` | 2026-11-09 | **PASS** (offline probe, 1.1 s; the pre-fix `node-create.sh` from 23114f4 scores `STAGED_SET: FAIL (5)`) |
 | spawn/staging failure diagnostics (CF-056) | `bash tests/selftest.sh` §16 (`tests/selftest.sh::cf056-spawn-staging-failure`) | a staging failure names the failed artifact and emits no later `PASS provision`; a spawn failure names a unique per-run log containing the agent id and its final diagnostic | 2026-11-10 | **PASS** (offline fixture only — no live bunker evidence) |
 | identity-file union (CF-289) | `bash tests/selftest.sh` §47 — the `CF-289-node-json-union` arms; preconditions `bash -n scripts/project-node.sh`, `python3 -m py_compile scripts/node_identity.py` | `PASS CF-289-node-json-union — identity-then-apply leaves agent/namespace/duckbrain/provisioned_by AND the ladder's keys (mode 600, exit 0)` plus the red control `PASS pre-fix 23114f4 exits 0 while deleting agent/namespace/duckbrain/provisioned_by — this arm discriminates` | 2026-11-09 | **PASS** (offline fixture only — the identity step and the ladder both run on a fixture home; no live node run) |
@@ -334,7 +363,7 @@ Provisioning rate, refusal rate and per-leg latency are answerable only by readi
 
 ## 9. Log lines (verbatim)
 
-**Scope (B09, measured).** `grep -cE '\b(ok|bad|warn|note|say)\s+"' scripts/bunker-provision.sh scripts/verify-node.sh` = **108 + 33** helper call sites. The 5 rows below are the evidentiary refusal/lie-case rows (F1-1, CF-224); the generic per-row helper surface is not inventoried one-per-site — the uncovered count is a named RED on this field.
+**Scope (B09, measured).** `grep -cE '\b(ok|bad|warn|note|say)\s+"' scripts/bunker-provision.sh scripts/verify-node.sh` = **128 + 52** helper call sites at the current tree. The warning inventory below covers every verifier warn site; the broader helper count is not a claim that every PASS/FAIL/NOTE site is tabulated here. The current tree has 7 verifier warn statements (10 emitted branches).
 
 | Level | Line | Emitted when | Kind |
 |---|---|---|---|
@@ -342,7 +371,7 @@ Provisioning rate, refusal rate and per-leg latency are answerable only by readi
 | — | `  FAIL  reach:%s — %s` | an unreachable crier URL | evidentiary |
 | — | `installed under \$HOME/.node/auth at mode 600: <file>=600` (`bunker-provision.sh:417`) | `--apply` credential row | evidentiary — the node reports each installed file mode; any non-600 mode is a FAIL (CF-214) |
 | — | `RESULT: FAIL` (`verify-node.sh:76`) | the `agent_alive` leg fails early (before the terminal `VERIFY:` forms) | evidentiary — an early-branch failure that exits 1, distinct from `VERIFY: FAIL (N)` (B24) |
-| — | `VERIFY: PASS` / `VERIFY: FAIL (N)` / `VERIFY: UNVERIFIED — …` (`verify-node.sh:233-241`) | ladder exit | evidentiary |
+| — | `VERIFY: PASS` / `VERIFY: FAIL (N)` / `VERIFY: UNVERIFIED — …` (`verify-node.sh:502-510`) | ladder exit | evidentiary |
 
 ## 10. Failure modes, indications and recovery
 
@@ -386,7 +415,7 @@ Provisioning rate, refusal rate and per-leg latency are answerable only by readi
   labelled "presence only — the adapter's gate is the authority", so nothing is authorised by it, but it
   is the same over-claim class CF-292 is closing and it is filed as a finding rather than fixed here
   (`scripts/project-node.sh` is outside this change's fence).
-- **Certification ladder** (`verify-node.sh`, **504 lines** at this tree — the CF-224 transport legs inserted the transport validation and the named-transport rows below step 1 and shifted every prior locator; the earlier `241 lines` pin was `08a2c8a` after the CF-270 `--port` fix, and all locators are re-pinned here):
+- **Certification ladder** (`verify-node.sh`, **510 lines** at this tree — the current source includes argument/server resolution, transport validation, the named-transport rows below step 1 and the terminal verdict precedence):
   - `:53-68` **port validation (CF-270)** — `--port` is validated **before any use**: a digit test (`:53-56`, `case "$PORT" in ''|*[!0-9]*)`), a 5-digit length cap (`:59`, `[ "${#PORT}" -le 5 ]`), then two `verify-node: --port must be digits 1-65535 (got: …)` → exit 2 refusals (`:60-63`; and `:65-68`), with a base-10 re-expansion `PORT=$((10#$PORT))` at `:64` between them. A non-digit `--port` is refused here and no longer interpolates into the remote `bash -lc` shell.
   - `:73-121` **transport validation (NEW legs, CF-224)** — `--transport` is one of `node-address` (default), `published-port`, `tunnel`, `bunker-exec` (`:75-81`, anything else prints the accepted set and exits 2); `published-port`/`tunnel` **require** `--transport-address HOST:PORT` (`:84-88`), split into `T_HOST`/`T_PORT` (`:89-93`), and the port carries the same digit/1-65535 rule as `--port` (`:100-115`); an address with a transport that does not use one is refused (`:117-120`). `NODE_TRANSPORT`/`NODE_TRANSPORT_ADDRESS` (read at `:30-31`) are the spawn-path form; flags win.
   - `:135-141` `agent_alive` — `bunker exec … echo ALIVE $(hostname)` must return `ALIVE*`; on
@@ -439,7 +468,7 @@ Provisioning rate, refusal rate and per-leg latency are answerable only by readi
 ## 13. Evidence of record
 
 - Code read: `bunker-provision.sh:38-46, 95-123, 147, 175-249, 354-358, 424-495, 518-533, 550-611`,
-  `disk_floor.py:40-44, 136-167`, `verify-node.sh:20-241`, `node_identity.py` (full),
+  `disk_floor.py:40-44, 136-167`, `verify-node.sh:22-510`, `node_identity.py` (full),
   `node_seed.py:43-44, 114-164, 205-333, 373-394`; settings surfaces of `node_env.py`,
   `node_seed_drift.py`, `node_freshness.py`, `bunker_config_gen.py`.
 - **CF-003 slice, read and re-measured 2026-11-07:** `scripts/deploy_key.py` (whole file),

@@ -272,7 +272,7 @@ Rules:
 
 ## Verifier usage contract (CF-063)
 
-`scripts/verify-node.sh` parses `-h`/`--help` before validation, `BUNKER_SERVER` lookup, port or transport checks, and any bunker call. The help arm prints the usage line and exits 2 for both `scripts/verify-node.sh --help` and a bare `scripts/verify-node.sh`, regardless of whether `BUNKER_SERVER` is set. Operational invocations still require `BUNKER_SERVER` or `--server <name>` and refuse with that name when neither is provided. The offline regression is `bash tests/selftest.sh` (CF-063 arm); the exact command to verify the script syntax is `bash -n scripts/verify-node.sh`.
+`scripts/verify-node.sh` parses `-h`/`--help` before validation, port or transport checks, and any bunker call. The help arm prints the usage line and exits 2 for both `scripts/verify-node.sh --help` and a bare `scripts/verify-node.sh`, regardless of whether `BUNKER_SERVER` is set. After parsing, an explicit `--server <name>` takes precedence; otherwise `SERVER` falls back to `BUNKER_SERVER`. Operational invocations refuse with `set BUNKER_SERVER or pass --server <name>` and exit 2 when neither is provided. The offline regression is `bash tests/selftest.sh` (CF-063 arm); the exact command to verify the script syntax is `bash -n scripts/verify-node.sh`.
 
 ch:trace row=CF-063 spec=specs/NODE.md#verifier-usage test=tests/selftest.sh::cf063-verify-node-usage doc=docs/handbook/chapters/M1-provisioning.md evidence=tests/selftest.sh::cf063-verify-node-usage witness=none:offline-fixture verdict=none:foreman-runs-judge commit=none:worker-sha memory=none:foreman-closeout STATUS=complete TIER=1 EVIDENCE=offline-fixture
 

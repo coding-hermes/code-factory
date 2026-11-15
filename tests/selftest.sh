@@ -7356,6 +7356,14 @@ else
   say "  FAIL  CF-063 operational invocation lost its missing-server refusal (exit $cf063_operational_rc): $(printf '%s\n' "$cf063_operational" | head -1)"
   fails=$((fails+1))
 fi
+cf063_flag=$(env -i PATH="$PATH" HOME="$cf063/prefix/home" /bin/bash "$HERE/scripts/verify-node.sh" \
+  --agent fixture --server fixture --transport invalid 2>&1); cf063_flag_rc=$?
+if [ "$cf063_flag_rc" -eq 2 ] && printf '%s\n' "$cf063_flag" | grep -Fq 'verify-node: --transport must be node-address, published-port, tunnel or bunker-exec (got: invalid)'; then
+  say "  PASS  CF-063 --server alone satisfies the server guard before transport validation, exit $cf063_flag_rc"
+else
+  say "  FAIL  CF-063 --server alone did not reach transport validation (exit $cf063_flag_rc): $(printf '%s\n' "$cf063_flag" | head -1)"
+  fails=$((fails+1))
+fi
 rm -rf "$cf063"
 
 # ch:trace row=CF-211 spec=specs/ENVELOPE.md#result-node--reply_to-inbox wave=none:serial-worker test=tests/test_bus_result_delivery.py doc=specs/ENVELOPE.md prompt=none:worker-brief evidence=tests/test_bus_result_delivery.py witness=none:local-fixture verdict=none:foreman-runs-judge commit=none:self-referential-hash memory=none:foreman-closeout
