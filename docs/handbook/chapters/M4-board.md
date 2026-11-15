@@ -511,6 +511,14 @@ claim_generation. Only the broker allocates generations on group claim/reclaim;
 renewal never advances them. The result's Git OID is returned after publication,
 not embedded in its own commit.
 
+The broker is the only actor permitted to claim. No worker, foreman, scheduler,
+boardctl invocation or other clone may construct or submit a candidate against the
+protected canonical ref: non-broker writes are denied by server policy (§15), and
+boardctl only constructs and validates requests against this contract, never a second
+claim authority (CV-04-D). A forge that cannot enforce that policy fails readiness with
+`BOARD_CAS_UNSUPPORTED`, so a repository without atomic compare-and-swap has no
+permitted claimant at all.
+
 The broker serializes project effects against epoch advance (Part I §1.9.3a), then:
 
 1. Fetches the protected ref into an isolated worktree and verifies it equals the
