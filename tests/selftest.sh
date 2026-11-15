@@ -5,8 +5,11 @@ HERE="$(cd "$(dirname "$0")/.." && pwd)"
 . "$HERE/scripts/lib.sh"
 fails=0
 finished=0
+selftest_section="startup"
+selftest_last_command="initialization"
 finish() {
   local rc="${1:-1}"
+  local count="${fails:-0}"
   [ "$finished" -eq 1 ] && return
   finished=1
   trap - EXIT
@@ -15,20 +18,41 @@ finish() {
     say "EXIT=0"
     exit 0
   fi
-  say "SELFTEST: FAIL (${fails:-1})"
+  # An unexpected abort is itself one attributable failure, even when no named
+  # row had a chance to run. This keeps AGENTS.md rule 2 visible to pollers.
+  [ "$count" -gt 0 ] || count=1
+  say "SELFTEST: FAIL ($count)"
   say "EXIT=1"
   exit 1
 }
+# Record the command before it runs. The section headings are ordinary `say`
+# calls, so the DEBUG trap can keep the section state in one place without
+# requiring every future section to remember a second bookkeeping call.
+selftest_debug_trap() {
+  local command="$BASH_COMMAND"
+  selftest_last_command="$command"
+  if [[ "$command" == say\ \"[0-9]* ]]; then
+    selftest_section="${command#say \"}"
+    selftest_section="${selftest_section%\"}"
+  fi
+}
+trap selftest_debug_trap DEBUG
 # Keep an unexpected top-level abort observable to pollers too. Subshells run
 # fixture commands and must not append a suite sentinel to captured output.
 selftest_exit_trap() {
   local rc=$?
   [ "${BASH_SUBSHELL:-0}" -eq 0 ] || return
-  [ "$finished" -eq 1 ] || finish 1
+  if [ "$finished" -eq 0 ]; then
+    say "SELFTEST: ABORT section=${selftest_section:-<none>} command=${selftest_last_command:-<none>} rc=$rc"
+    [ "${fails:-0}" -gt 0 ] || fails=1
+    finish 1
+  fi
   return "$rc"
 }
 trap selftest_exit_trap EXIT
 t() { if eval "$2" >/dev/null 2>&1; then say "  PASS  $1"; else say "  FAIL  $1"; fails=$((fails+1)); fi; }
+
+# ch:trace row=CF-443 spec=docs/handbook/OUTLINE.md#M4-board wave=none:serial test=docs/audits/cf443-selftest-abort-proof.sh doc=docs/audits/cf443-selftest-abort-proof.md evidence=docs/audits/cf443-selftest-abort-proof.md witness=none:local-hermetic-fixture verdict=none:foreman-runs-and-judges commit=none:worker-commit memory=none:foreman-closeout
 
 say "1. every script parses"
 for f in "$HERE"/scripts/*.sh "$HERE"/scripts/harness/*.sh "$HERE"/tests/*.sh; do
