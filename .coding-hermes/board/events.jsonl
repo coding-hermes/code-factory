@@ -790,3 +790,4 @@
 {"id":789,"timestamp":"2026-11-14T22:47:15Z","event_type":"task_completed","task_id":"CF-283","actor":"foreman","detail":"{\"status\":\"complete\"}"}
 {"id":790,"timestamp":"2026-11-14T22:48:03Z","event_type":"task_created","task_id":"CF-444","actor":"foreman","detail":"{\"id\":\"CF-444\",\"status\":\"pending\"}"}
 {"id":791,"timestamp":"2026-11-14T22:48:03Z","event_type":"audit","task_id":"CF-444","actor":"foreman","detail":"filed from tick code-factory-2026-11-14-21-10-16 while closing CF-006: two tier-2 stalls with no verdict and no history dir, one clean PASS on the retry (c53263aa). Board closeout is coupled to the judge because --status complete requires --evidence-run-id."}
+{"id":792,"timestamp":"2026-11-15T01:32:23Z","event_type":"task_completed","task_id":"CF-435","actor":"foreman","detail":"{\"status\":\"complete\"}"}
