@@ -4101,6 +4101,12 @@ if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_harness_memory_codex_r
 else
   say "  FAIL  Codex evidence retention fixture (CF-329)"; fails=$((fails+1))
 fi
+# ch:trace row=CF-446 spec=specs/HARNESS-MEMORY.md#32-codex--stamped-through-a-free-form-field test=tests/test_codex_turn_cache_retention.py doc=docs/handbook/chapters/M5-harness.md evidence=tests/test_codex_turn_cache_retention.py::test_expired_removed_fresh_kept_and_foreign_untouched witness=none:local-fixture verdict=none:foreman-will-run-gitreins commit=none:worker-commit memory=none:foreman-close
+if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_codex_turn_cache_retention.py"; then
+  say "  PASS  Codex turn cache retention window prunes expired turns and keeps live/foreign ones (CF-446)"
+else
+  say "  FAIL  Codex turn cache retention fixture (CF-446)"; fails=$((fails+1))
+fi
 # The battery is a checker; a checker that cannot print FAIL is decoration (AGENTS.md rule 2).
 # Every leg below runs it against a fixture adapter dir and a fixture HOME: no credential, no
 # network, no install. A green matrix is only worth the fixtures that can turn it red.

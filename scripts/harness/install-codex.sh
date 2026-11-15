@@ -80,6 +80,21 @@ TIMEOUT_S="${CF_TIMEOUT_S:-300}"
 MODE="--check"
 DEEP=0
 
+# CF-446: the retained turn cache is bounded by ONE named window. Every credential-bearing turn
+# leaves a run.* directory under the cache root (CF-329 preserves that turn's rollout and SQLite
+# index inside it for a memory exporter), and nothing removed the directory itself — so a node
+# running turns continuously leaked one credential-bearing directory per turn, forever. The
+# symptom of that leak is unrelated tool timeouts, not a cache problem, which is why the window is
+# a SETTING resolved in one place rather than a constant threaded through the pruning code:
+#   --turn-cache-max-age <hours>, then CF_TURN_CACHE_MAX_AGE_H, then this default.
+# This adapter reads NO config file (it has none), so the flag and the environment variable ARE the
+# contract; specs/HARNESS-MEMORY.md §3.2 says so rather than inventing a loader for one knob.
+TURN_CACHE_DEFAULT_MAX_AGE_H=72
+TURN_CACHE_MAX_AGE_MAX_H=8760        # one year: a longer window is a typo, not policy
+TURN_CACHE_MAX_AGE_H=""
+TURN_CACHE_MAX_AGE_SRC=""
+TURN_CACHE_MAX_AGE_FLAG=""
+
 # The required set from specs/HARNESS-MATRIX.md §5. CF_API_KEY_FILE is required for a paid
 # provider; CF_SKILLS_DIR and CF_HARNESS_OPTS are accepted and recorded (codex has its own
 # AGENTS.md convention for skills, and the options bag is recorded so two runs are comparable).
@@ -115,6 +130,19 @@ CF_* environment variable; the directive is the only source, so nothing is infer
   CF_MAX_TURNS      --max-turns      turn budget, default 40                              (optional)
   CF_TIMEOUT_S      --timeout-s      wall-clock budget for one turn, default 1800         (optional)
 CODEX_VARS
+  cat <<'CODEX_TURNCACHE'
+THE TURN CACHE (CF-446). A credential-bearing turn leaves ONE run.* directory under
+$XDG_CACHE_HOME/cf-codex (default ~/.cache/cf-codex) — that directory is the turn's isolated
+CODEX_HOME, and its Codex rollout + SQLite index are preserved there for an exporter while the
+credential files in it are removed on exit (CF-329). The directory itself is retained for a
+bounded window and then pruned. --turn prunes BEFORE it creates its own home, and never removes
+the home of the turn that is running.
+  --turn-cache-max-age H   retention window in hours, default 72
+  CF_TURN_CACHE_MAX_AGE_H  the same window from the environment
+Resolution order: --turn-cache-max-age, then CF_TURN_CACHE_MAX_AGE_H, then the default; the run
+reports the window and which source won. A malformed, negative or out-of-range value is refused
+(exit 2) instead of falling back, because a silent fallback is how a cache stops being bounded.
+CODEX_TURNCACHE
 }
 
 # --- the CF_* argument surface ---------------------------------------------------------------
@@ -134,7 +162,7 @@ while [ "$#" -gt 0 ]; do
     # A credential as a VALUE is a FAIL, and the value is never echoed.
     --api-key|--key|--token|--openai-api-key)
       refuse "credential_argv" "a credential may never travel as an argument (AGENTS.md r8) — pass --api-key-file <path> instead" ;;
-    --model|--provider|--base-url|--api-key-file|--workdir|--namespace|--run-id|--lane|--skills-dir|--harness-opts|--max-turns|--timeout-s)
+    --model|--provider|--base-url|--api-key-file|--workdir|--namespace|--run-id|--lane|--skills-dir|--harness-opts|--max-turns|--timeout-s|--turn-cache-max-age)
       _flag="$1"
       if [ "$#" -lt 2 ] || [ "${2#--}" != "$2" ]; then refuse "args" "$_flag needs a value"; fi
       _v="$2"
@@ -151,6 +179,7 @@ while [ "$#" -gt 0 ]; do
         --harness-opts) VAR[CF_HARNESS_OPTS]="$_v" ;;
         --max-turns) VAR[CF_MAX_TURNS]="$_v" ;;
         --timeout-s) TIMEOUT_S="$_v" ;;
+        --turn-cache-max-age) TURN_CACHE_MAX_AGE_FLAG="$_v" ;;
       esac
       shift 2
       ;;
@@ -273,6 +302,92 @@ inside_turn_cache() {
   case "${1:-}" in "$root"/run.?*) ;; *) return 1 ;; esac
   leaf="${1#"$root"/}"
   case "$leaf" in */*) return 1 ;; esac
+  return 0
+}
+
+# CF-446: resolve the retention window from ONE ordered chain and record which source won.
+# Precedence, highest first: --turn-cache-max-age, CF_TURN_CACHE_MAX_AGE_H, the default above.
+# A malformed, negative or out-of-range value is REFUSED by name and its origin is named with it —
+# never silently replaced by the default. A silent fallback is how a cache stops being bounded:
+# the operator believes they set 24h and the node keeps 72h of credential-bearing directories.
+# This is the scripts/disk_floor.py precedent (ordered chain, named source, fail closed) applied to
+# the one knob this adapter owns.
+resolve_turn_cache_max_age() {
+  local raw src
+  if [ -n "${TURN_CACHE_MAX_AGE_FLAG:-}" ]; then
+    raw="$TURN_CACHE_MAX_AGE_FLAG"; src="--turn-cache-max-age"
+  elif [ -n "${CF_TURN_CACHE_MAX_AGE_H:-}" ]; then
+    raw="$CF_TURN_CACHE_MAX_AGE_H"; src="CF_TURN_CACHE_MAX_AGE_H"
+  else
+    raw="$TURN_CACHE_DEFAULT_MAX_AGE_H"; src="default"
+  fi
+  case "$raw" in
+    -*) refuse "turn_cache" "retention window from $src is NEGATIVE ('$raw') — the window is a positive number of hours and a negative one would expire every turn including the next (CF-446)" ;;
+    ''|*[!0-9]*) refuse "turn_cache" "retention window from $src is not a whole number of hours: '$raw' — refusing rather than falling back to ${TURN_CACHE_DEFAULT_MAX_AGE_H}h (CF-446)" ;;
+  esac
+  # A leading zero is a number in base 10 and NOT in bash's octal arithmetic ("08" errors out), so
+  # the value is forced to base 10 before it is compared or used.
+  if [ "$((10#$raw))" -lt 1 ] || [ "$((10#$raw))" -gt "$TURN_CACHE_MAX_AGE_MAX_H" ]; then
+    refuse "turn_cache" "retention window from $src is out of range 1..${TURN_CACHE_MAX_AGE_MAX_H} hours: '$raw' (CF-446)"
+  fi
+  TURN_CACHE_MAX_AGE_H="$((10#$raw))"
+  TURN_CACHE_MAX_AGE_SRC="$src"
+}
+
+# CF-446: prune the retained turn cache. Called by --turn BEFORE it creates its own home, so the
+# directory this run writes is not yet a candidate; the live-turn comparison is a guard against a
+# later refactor, not dead code. Every candidate is admitted by inside_turn_cache — the exact same
+# predicate the EXIT trap uses — so this can never become a second, weaker glob that removes
+# something outside the cache root (CF-277: a removal is provable only when the path is provably
+# inside it). A directory that cannot be pruned is a NAMED failure and the turn does not run: a
+# cache that silently stops being pruned is the disk-fill path the window exists to close.
+prune_turn_cache() {  # prune_turn_cache <cache root> [live turn home]
+  local root="${1:-}" keep="${2:-}" p now mtime age_min window_min removed=0 failed=0
+  if [ ! -e "$root" ]; then
+    note "turn_cache_prune — no cache root yet ($root); nothing to prune"
+    return 0
+  fi
+  if [ ! -d "$root" ]; then
+    bad "turn_cache_prune" "cache root is not a directory: $root — nothing can be pruned"
+    return 1
+  fi
+  if [ ! -r "$root" ] || [ ! -x "$root" ]; then
+    bad "turn_cache_prune" "cache root is not readable/searchable: $root (mode $(stat -c '%a' "$root" 2>/dev/null || echo '?')) — nothing can be pruned"
+    return 1
+  fi
+  window_min=$(( TURN_CACHE_MAX_AGE_H * 60 ))
+  now=$(date +%s)
+  for p in "$root"/run.*; do
+    [ -e "$p" ] || continue
+    if ! inside_turn_cache "$p"; then
+      note "turn_cache_prune — leaving $(basename "$p") (not one run.* leaf directly under the cache root)"
+      continue
+    fi
+    if [ -n "$keep" ] && [ "$p" = "$keep" ]; then
+      note "turn_cache_prune — keeping the live turn's directory $(basename "$p")"
+      continue
+    fi
+    [ -d "$p" ] || continue
+    mtime=$(stat -c '%Y' "$p" 2>/dev/null) || {
+      bad "turn_cache_prune" "cannot read the modification time of $(basename "$p") under $root — nothing was pruned"
+      failed=$((failed + 1))
+      continue
+    }
+    case "$mtime" in ''|*[!0-9]*) bad "turn_cache_prune" "unreadable modification time for $(basename "$p")"; failed=$((failed+1)); continue ;; esac
+    age_min=$(( (now - mtime) / 60 ))
+    [ "$age_min" -gt "$window_min" ] || continue
+    if rm -rf -- "$p" 2>/dev/null; then
+      removed=$((removed + 1))
+    else
+      bad "turn_cache_prune" "cannot prune $(basename "$p") under $root — rm failed (permissions?)"
+      failed=$((failed + 1))
+    fi
+  done
+  if [ "$failed" -gt 0 ]; then
+    note "turn_cache_prune — $failed directory(ies) older than ${TURN_CACHE_MAX_AGE_H}h could not be removed under $root"
+    return 1
+  fi
+  ok "turn_cache_prune" "$root — $removed directory(ies) older than ${TURN_CACHE_MAX_AGE_H}h removed"
   return 0
 }
 
@@ -465,8 +580,26 @@ turn_home_fail() {  # turn_home_fail <rc> <leg> <reason>
   exit "$rc"
 }
 
+# CF-446: a prune that could not complete must not read as a turn that ran. Same shape as
+# turn_home_fail — the failing status is captured at the failure point and IS the exit code,
+# normalised to 1 when it is somehow zero so a failed prune is always visible as a non-zero exit.
+turn_cache_fail() {  # turn_cache_fail <rc> <reason>
+  local rc="$1"
+  case "$rc" in ''|*[!0-9]*|0) rc=1 ;; esac
+  bad "turn_cache_prune" "$2"
+  say ""
+  verdict CODEX action
+  exit "$rc"
+}
+
 # --- modes -----------------------------------------------------------------------------------
 say "harness: codex (pin $PIN, mode $MODE)"
+
+# CF-446: the retention window is resolved (and reported) in EVERY mode, so the value a turn will
+# enforce is never a surprise discovered afterwards; a malformed value refuses here, before any
+# install or turn touches the node.
+resolve_turn_cache_max_age
+ok "turn_cache" "max age ${TURN_CACHE_MAX_AGE_H}h (source: ${TURN_CACHE_MAX_AGE_SRC})"
 
 if [ "$MODE" = "--check" ] || [ "$MODE" = "--apply" ]; then
   validate_vars
@@ -643,6 +776,12 @@ case "$MODE" in
       rm -f -- "$turn_home/auth.json" "$turn_home/config.toml"
     }
     trap cleanup EXIT INT TERM
+    # CF-446: prune the retained cache BEFORE this turn creates its own home — so the directory
+    # written below can never be a candidate — and never let a failed prune pass as a turn that
+    # ran. The live turn's home is passed as well: at this point it is still empty, and comparing
+    # against it anyway keeps a later refactor from deleting the evidence of a running turn.
+    prune_turn_cache "$cache_root" "$turn_home" \
+      || turn_cache_fail $? "the turn cache could not be pruned — refusing to add another directory to a cache that is not being bounded (CF-446)"
     if [ -n "${VAR[CF_API_KEY_FILE]:-}" ]; then
       mkdir -p "$cache_root" && chmod 700 "$cache_root" \
         || turn_home_fail $? "turn_home" "cannot create the turn cache root $cache_root"

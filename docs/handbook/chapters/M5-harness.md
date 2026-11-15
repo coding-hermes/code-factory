@@ -144,12 +144,30 @@ are offline fixture evidence, not proof of an upstream installation or a live no
 
 **CF-329 — Codex evidence retention.** The credential-bearing Codex turn creates one
 isolated home under the guarded turn cache. Its `EXIT` trap at
-`scripts/harness/install-codex.sh:640-645` removes only `auth.json` and `config.toml`;
+`scripts/harness/install-codex.sh:773-778` removes only `auth.json` and `config.toml`;
 it preserves the run directory, rollout JSONL and SQLite index. The turn reports the
-preserved rollout and its run id at `:715-720`, while the isolated-home PASS row records
-the directory and run id at `:681`. The fixture
+preserved rollout and its run id at `:855-859`, while the isolated-home PASS row records
+the directory and run id at `:820`. The fixture
 `tests/test_harness_memory_codex_retention.py` proves both halves without a live
 provider; this is the foreign-harness provisioning evidence owned by III.M5.S2.
+
+**CF-446 — the retained cache has a named, bounded window.** Retention without a bound is
+a disk-fill path: every credential-bearing turn leaves one `run.XXXXXXXX` directory under
+the cache root (`:294`, `${XDG_CACHE_HOME:-$HOME/.cache}/cf-codex`) and the CF-329 trap
+deliberately keeps it. The window is therefore a setting, resolved in one place
+(`resolve_turn_cache_max_age`, `:315`) in this order — `--turn-cache-max-age <hours>`, then
+`CF_TURN_CACHE_MAX_AGE_H`, then the default `TURN_CACHE_DEFAULT_MAX_AGE_H=72` at `:92` — and
+the run prints the window with the source that won it (`:602`). The adapter reads **no
+config file**, so the flag and the environment variable are the whole contract; no loader
+was invented for one knob. `--turn` prunes (`prune_turn_cache`, `:344`) **before** it creates
+its own home (`:783`), so the live turn is never a candidate, and every candidate passes
+`inside_turn_cache` (`:299`) — the predicate the CF-329 trap uses, never a second, weaker
+glob, so a directory outside the cache root or a nested `run.x/sub` is never removed. A
+malformed, negative or out-of-range value is refused by name and origin (exit 2) instead of
+falling back to the default, and a prune that cannot complete is a named `turn_cache_prune`
+FAIL that makes the turn exit non-zero. `tests/test_codex_turn_cache_retention.py` proves
+all three: expired removed, in-window kept, foreign untouched, plus the permission-denied
+leg and the pre-fix negative control.
 
 **S2 no longer has a silent member.** `aider` and `goose` were named in `specs/HARNESS.md` with **no
 adapter file**, which is the one state this module forbids: a harness the spec names and the

@@ -66,7 +66,7 @@ run that never happened (`specs/FLEET-MEMORY.md:87`).
 | identity | **cannot set**; `codex exec --thread-source "<run_id>"` lands verbatim in `session_meta.thread_source` (verified on both the success and failure paths) |
 | capture | post-process the rollout at run end — it carries `model_served` (`thread_settings_applied`), usage (`token_usage_record`), git (`session_meta.git`), and the artifact surface (`item_completed` → `FileChange.changes`) |
 | gap | no USD cost anywhere in a rollout (only `rate_limits` percentages) |
-| trap | **`scripts/harness/install-codex.sh:640-645` preserves the evidence and removes credentials**: its guarded `trap cleanup EXIT` deletes only the turn's `auth.json` and `config.toml`; the run directory, `sessions/` rollout and SQLite index remain for an exporter, and `:681` records the preserved directory with its run id |
+| trap | **`scripts/harness/install-codex.sh:773-778` preserves the evidence and removes credentials**: its guarded `trap cleanup EXIT` deletes only the turn's `auth.json` and `config.toml`; the run directory, `sessions/` rollout and SQLite index remain for an exporter, and `:820` records the preserved directory with its run id. **CF-446: that directory is retained for a NAMED, bounded window.** Every credential-bearing turn leaves one `run.XXXXXXXX` directory under the cache root (`:294`, `${XDG_CACHE_HOME:-$HOME/.cache}/cf-codex`), so the window is a setting, resolved in one place (`resolve_turn_cache_max_age`, `:315`) in this order — `--turn-cache-max-age <hours>`, then `CF_TURN_CACHE_MAX_AGE_H`, then the default `TURN_CACHE_DEFAULT_MAX_AGE_H=72` at `:92`; the run reports the window and which source won (`:602`). The adapter reads **no config file**, so the flag and the environment variable ARE the contract — no loader is invented for one knob. `--turn` prunes (`prune_turn_cache`, `:344`) **before** it creates its own home (`:783`), so the live turn is never a candidate, and every candidate is admitted by `inside_turn_cache` (`:299`) — the same predicate the EXIT trap uses, never a second, weaker glob. A malformed, negative or out-of-range value is refused by name and origin (exit 2) rather than falling back to the default, and a prune that cannot complete is a named `turn_cache_prune` FAIL that makes the turn exit non-zero: an unbounded cache fills the disk and surfaces as unrelated tool timeouts |
 | status | no exporter yet; each credential-bearing turn now names a preserved rollout directory and run id for a future exporter |
 
 ### 3.3 Claude Code — computed id, result object for cost
@@ -145,7 +145,7 @@ silent skip.
 
 | harness | trap | consequence if missed |
 |---|---|---|
-| codex | `install-codex.sh:640-645` removes only `auth.json` and `config.toml`; the turn home and native evidence survive | an exporter can read the preserved rollout and SQLite index |
+| codex | `install-codex.sh:773-778` removes only `auth.json` and `config.toml`; the turn home and native evidence survive — for a window bounded by `--turn-cache-max-age` / `CF_TURN_CACHE_MAX_AGE_H` / the 72h default (`:92`), pruned at `:783` before the next turn's home exists | an exporter can read the preserved rollout and SQLite index, and a node running turns continuously does not leak one credential-bearing directory per turn |
 | claude-code | `--bare` disables hooks | a hook-based exporter never fires |
 | pi | session is memory-only until the first assistant message | an early failure exports nothing at all |
 | dsh | `--json` truncates at 8 KiB/string | the record is silently incomplete |
