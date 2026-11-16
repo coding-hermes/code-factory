@@ -23,7 +23,7 @@ it — `contract-vectors.json` remains the single normative source of executable
 | `cf2a.criterion.schema.json` | `cf.criterion.v1`, the executable acceptance criterion |
 | `cf2a.evidence.schema.json` | `cf.evidence.v1`, one record, five phase-discriminated subjects |
 | `cf2a.execution.schema.json` | `cf.launch-commitment.v1`, `cf.launch-confirmation.v1`, `cf.launch-input.v1`, `cf.launch-response.v1`, `worker-result.v1`, `cf.settlement.v1`, `cf.cancellation.v1` |
-| `cf2a.board-claim.schema.json` | `cf.group-claim.v1`, the bounded ordered group claim |
+| `cf2a.board-claim.schema.json` | `cf.board-group-claim.v1`, the bounded ordered group claim |
 | `cf2a.memory.schema.json` | `cf.memory-record.v1` with the role-discriminated body union |
 | `cf2a.config.schema.json` | `cf.config.v1`, the configuration document with explicit origins |
 

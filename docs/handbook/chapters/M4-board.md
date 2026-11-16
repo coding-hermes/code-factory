@@ -502,67 +502,38 @@ new row revisions, never discarded.
 
 New claims use the one `cf.board-group-claim.v1` definition. There is exactly one
 claim record, one request envelope and one transaction-marker type for it, and no
-chapter owns a second copy. The **claim record** is the machine artifact
+chapter owns a second copy. The **claim request body** is the machine artifact
 `conformance/schemas/cf2a.board-claim.schema.json` and CT-10's field list, which must
-agree member for member:
+agree member for member. The schema, this section, CT-10 and
+`docs/SYSTEM-MODEL.yaml` are the authoritative sources; a cited implementation file
+is coverage evidence only. This contract is used by **F16 MULTI-NODE FAN-OUT** (the
+broker claims one ordered group before any target starts) and by **F5 LANDING**
+(closure consumes the remote claim receipt).
 
-`{schema_version:"cf.board-group-claim.v1",claim_id:ID,claim_generation:PosInt,
-project_id:ID,claimant:{claimant_id:ID,owner_fence:Fence},
-group:{max_members:256,min_members:UInt,member_count:UInt},
-ordering:{field:"task_id",direction:"ascending",comparison:"bytewise UTF-8"},
-members:[{task_id:ID,board_row_revision:UInt,criterion_digest:SHA}][1..256],
-board:{ref:Text,base_oid:GitOID,marker_path:Text},claimed_at_seq:UInt,
-lease_expires_at:Time}`.
+The closed request shape is exactly
+`{schema_version:"cf.board-group-claim.v1",operation_id:ID,idempotency_key:ID,
+project_id:ID,board_id:ID,board_revision:GitOID,owner_fence:Fence,
+ordering:literal,claims:ClaimPrecondition[1..256],lease_expires_at:Time,
+transition:claim|renew|release,evidence_refs:EvidenceRef[]}`. The broker's
+response is a separate typed receipt and adds allocated `claim_id`,
+`claim_generation`, `new_revision`, `row_digest` and `event_digest` per member;
+those response-only fields are not silently required in the request schema.
 
-The bound is **256**, declared once as `group.max_members` and `members.maxItems`; the
-1000 that CT-10 carried is the defect and is retired, not a second candidate. A wider
-group is a different record, not a larger claim. `board.base_oid` is the normal object
-id — 40 or 64 lowercase hex, never abbreviated and never flagged — and it is the CAS
-precondition; `board.ref` and `board.marker_path` bind the protected ref and the §1.9.6
-marker location. `owner_fence` lives inside `claimant`; there is no top-level fence and
-no nested `board_revision:{algorithm,value}` object. `claim_generation` is at least 1 on
-a persisted claim record because the broker allocates it; a `0` sentinel never appears
-in a stored record. Preconditions are carried by `members` themselves — `task_id`,
-`board_row_revision` and `criterion_digest` — so there is no separate precondition type
-and no second name for the same three values.
+The bound is **256**, declared by the schema's `claims.maxItems`; the historical
+1000 bound is retired, not a second candidate. A wider group is a different record,
+not a larger claim. `board_revision` is the CAS precondition and is a plain 40 or
+64-character lowercase object id; it is never an abbreviated or nested object.
+`owner_fence` is the request's fence and `claim_generation` is the request's UInt
+precondition; the broker allocates the persisted claim generation in its receipt.
 
-`ordering` is that object and nothing else: `members` must be listed in task_id
-bytewise-ascending order, and a list out of that order is `INVALID_FIELD` before any
-candidate is built. The earlier free-text ordering literal is retired, and `TaskRow` has
-no priority field, so no priority term can appear in any order. Eligibility — settled
-dependencies, expected status, and the rule that a correction retains its original
-worker — is evaluated **before** the member list is fixed and is not part of the
-ordering; conflating the two is what produced the old string that no consumer could
-sort by.
-
-**One named residual.** The landed claim record has no member for the operation
-envelope: `operation_id`, `idempotency_key`, `transition` and `evidence_refs` cannot be
-represented, so a request can express group **creation** but not `renew` or `release`,
-and a retried claim has no idempotency key to dedupe on. This chapter keeps those four
-fields normative for the request envelope (§15.2's CAS retry and §15.3's readback both
-depend on them) and names the gap rather than inventing a contrary record: the
-conformance bundle must grow either a request-envelope type carrying them or a
-`transition` member on the claim record, and until it does, the machine form covers
-creation only. A second, smaller mismatch sits inside the same file: its
-`schema_version` constant still reads `cf.group-claim.v1` while CT-10 and
-`conformance/fixtures/board-group-claim.json` both read `cf.board-group-claim.v1`. The
-two-of-three value is the one named here, and the constant is the copy to correct —
-a schema whose fixture cannot validate against it proves nothing about the contract.
-Everything else below describes that envelope.
-
-`transition` is the one discriminator. Group **creation** is `claim` and is the only
-transition that allocates: `operation_id` is the `claim_group_id`, the broker
-allocates one `claim_id` and generation `1` per member, and the wave plan is the
-ordered member set. `renew` and `release` are the same closed type applied to exactly
-one existing claim: `members` has length 1, the member's `board_row_revision` is the
-in-progress row's revision, and neither transition allocates a `claim_id` or advances a
-generation. Both transitions are unreachable in the machine form as landed (see the
-residual above).
-`cf.board-claim.v1` is a retired name, not a second creating type; a reader that
-still receives that name converts the body under this same definition, and a body
-carrying a creating transition under it is refused. The owner_fence principal is the
-claimant and is distinct from per-claim `claim_generation`. The result's Git OID is
-returned after publication, not embedded in its own commit.
+`ordering` is one fixed literal and `claims` must be listed in ascending
+`(created_seq, task_id)` bytewise order. An out-of-order list is `INVALID_FIELD`
+before any candidate is built. The ordering does not include priority. Eligibility —
+settled dependencies, expected status and the correction worker rule — is evaluated
+before the member list is fixed; it is a cross-field admission condition, not another
+ordering vocabulary. `cf.board-claim.v1` and `cf.group-claim.v1` are retired names,
+not accepted target versions. Renew and release remain the registered transitions of
+this same request body; they do not allocate a new group claim.
 
 The broker is the only actor permitted to claim. No worker, foreman, scheduler,
 boardctl invocation or other clone may construct or submit a candidate against the
@@ -571,6 +542,38 @@ boardctl only constructs and validates requests against this contract, never a s
 claim authority (CV-04-D). A forge that cannot enforce that policy fails readiness with
 `BOARD_CAS_UNSUPPORTED`, so a repository without atomic compare-and-swap has no
 permitted claimant at all.
+
+Validation is closed and deterministic. The JSON Schema is the shape oracle: every
+listed member is required unless marked optional, `additionalProperties:false` applies
+to the root, `owner_fence` and each claim member, `evidence_refs` may be empty, and
+null is not a legal substitute for an absent value. `board_revision` is a plain
+40/64-character lowercase Git object id; `claim_generation` is `UInt` on the request
+and the broker allocates the persisted generation; `lease_expires_at` is UTC
+`date-time`; `transition` is exactly `claim|renew|release`; and claims are 1..256.
+The claims array is unique by `task_id` and sorted by `(created_seq, task_id)` using
+bytewise UTF-8 comparison. Unknown keys, duplicate task ids, a reversed order, a
+paraphrased ordering literal, wrong enum, malformed time/object id, or any range
+violation returns `INVALID_FIELD` before candidate construction and before any CAS or
+native start. Cross-field eligibility then checks the pinned reducer: accepted
+initiative, expected status, settled dependencies, live fence and no path/resource
+conflict. Its actor is the broker; Boardctl is only the validator/adapter; the remote
+published board plus its old OID is authoritative.
+
+The response is the typed receipt in request order:
+`{operation_id,claim_group_id,board_revision,lease_expires_at,duplicate,members}`,
+where each member is `{task_id,claim_id,claim_generation,new_revision,row_digest,event_digest}`.
+The broker must persist the complete row/event/marker candidate, protected old-OID CAS,
+and remote readback before returning it or permitting F16 targets to start. A same
+operation and canonical input replays the original receipt with `duplicate:true` and
+no second append; the same idempotency key with different canonical input returns
+`IDEMPOTENCY_KEY_REUSED`; stale revision/fence returns `CLAIM_CONFLICT` or
+`STALE_OWNER`; lease setup returns `LEASE_SETUP_FAILED`. A lost push acknowledgement
+is recovered by marker lookup, never by submitting a new claim. A failed private
+candidate leaves the canonical board unchanged (`STAGING_FAILED`/`CLAIM_CONFLICT`);
+a malformed published board is `PARTIAL_WRITE`, exposes `UNAVAILABLE`, and the
+manager board adapter preserves evidence, repairs from the last verified parent,
+revalidates the full reducer and only then re-enables admission. No partial group
+launch is permitted.
 
 The broker serializes project effects against epoch advance (Part I §1.9.3a), then:
 

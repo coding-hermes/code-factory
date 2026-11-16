@@ -252,11 +252,59 @@ original receipt remains available by request_id. Transport must not convert fai
 execution. Empty/error malformed requests echo validated IDs when available; otherwise
 request_id and corr_id are server-allocated diagnostic IDs and no effect is admitted.
 
-The following table is the type registry. A referenced chapter section is a type
+The following is the type registry. A referenced chapter section is a type
 expansion, not permission to choose fields. Source filenames in historical coverage
 are not type definitions. Manager CT-24–30 use the exact routes, typed configuration,
 Observation/Operation/Readiness, allocator vectors and event samples of Part I §1.9
 and Part V §V.0, not the earlier card shorthand `desired_generation` aliases.
+
+**Complete-schema acceptance rule (P5G-15; F1, F2, F5, F8, F13 and F16).** The
+machine-readable schemas under `docs/handbook/conformance/schemas/` are the shape
+authority for every nested request and response named by CT-01–CT-30. The registry,
+`docs/SYSTEM-MODEL.yaml`, Part I §1.9, M1 §17, M4 §15 and Part V §V.9 are normative
+projections of those same types; they may explain ownership and recovery but may not
+introduce a field, alias, enum, bound or alternate version. `factory.v1` is the
+canonical desired-state document (Part V); `cf.config.v1` is its normalized,
+origin-bearing persisted configuration record (the CT-24/CV-24-A record), not a
+competing desired-state wire. `cf2a.v1` is the outer transport envelope, and the
+body version is always the registered type in the table below.
+
+For every object: all listed members are required unless the type says optional or
+`or null`; omission, explicit null and empty string/array/map are distinct and use
+only the semantics stated by that type. Objects are closed (`additionalProperties`
+false) except the named `extensions` maps; unknown keys and duplicate keys are
+refused before side effects. Arrays preserve order unless explicitly called sets;
+sets are unique and bytewise sorted. Enums are closed, booleans are not integers,
+units are part of the field name or type (`*_s` seconds, `*_bytes` bytes,
+`*_gib` binary GiB, worker budget slots, micro-USD per million tokens), and no
+implicit string/number coercion is allowed. A response is the typed
+`ResponseBody` in §IV.2.1: success has `error:null`, failure has non-null `error`
+and `data:null`; transport status never changes the domain result. The named owner
+is the actor that allocates or persists the identity in §IV.1, while the named
+producer/consumer and ordering in the CT row determine who may submit and read it.
+
+The shared failure rule is: parse/shape errors are HTTP 400, authentication/scope
+errors 401/403, schema/version errors 422, conflicts 409, and unavailable durable
+authority 503 with `Retry-After: 5`; the typed error code and JSON pointer are
+returned. Validation precedes reservation, CAS, native start or publication. Same
+idempotency key plus the same canonical request replays the original receipt with
+no second effect; a changed digest returns `IDEMPOTENCY_KEY_REUSED`. A timeout or
+lost acknowledgement is an unknown outcome and recovers by readback using the same
+identity, never by inventing a new operation. Recovery and ordering are owned by the
+flow named in each CT row: F2 resumes durable provisioning stages, F5 revalidates
+before publication/closeout, F8 fences and repairs, F13 applies generation/CAS
+migration order, and F16 waits for every target receipt before native start.
+
+Independent check: from the repository root run the command in
+`docs/handbook/conformance/README.md`; it validates all positive bindings and refuses
+all 16 negative arms. Then run `python3 tests/test_p5g15_schema_rules.py`; it loads
+`cf2a.board-claim.schema.json`, checks the CV-19-A positive claim, mutates one field
+at a time for missing required/unknown/enum/bound/order/duplicate cases, and checks
+that the cited version vocabulary and flow ids occur in the normative sources. The
+expected final line is `P5G-15 schema rules: PASS`; any accepted negative arm or
+term/version drift exits non-zero. The source of executable examples remains
+`docs/handbook/contract-vectors.json`, never a chapter-local copy.
+
 
 | ID / verb / body version | Request fields beyond version/key | Result data and domain rules |
 |---|---|---|

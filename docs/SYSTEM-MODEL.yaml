@@ -1817,7 +1817,7 @@ execution_contracts:
       correction: A correction retains the same task, claim and original worker until terminal disposition; it never waits behind its own new claim.
     GroupClaim:
       schema_version: cf.board-group-claim.v1
-      writer: claimant
+      writer: broker
       fields:
         operation_id: ID
         idempotency_key: ID
