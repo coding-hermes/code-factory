@@ -147,13 +147,15 @@ not 0, all unrelated skip-guards.
 `CF-101`–`CF-112` — twelve rows and twelve `task_created` events. Those appends were published inside
 `8c13bec9`, the fleet lane's board commit, which swept them together with its own `CF-470` row; they are
 therefore **not** in the documentation commit that carries this paragraph, and this note records the
-split rather than claiming the whole delta. Against `51c9fe62` (546 task rows, 844 events) the board at
-`8c13bec9` reads 559 rows and 859 events: twelve rows and twelve events are this change's, the balance
-is the sibling's row and its events. Verify from the commit carrying this line rather than trusting the
-prose: `git show <rev>:.coding-hermes/board/tasks.jsonl | wc -l` = 559 and
-`git show <rev>:.coding-hermes/board/events.jsonl | wc -l` = 859. The frozen snapshot on the
-`Current state` line above stays pinned to `2f07051` and is deliberately **not** restamped — adding
-rows does not make a measurement taken at another tip wrong.
+split rather than claiming the whole delta. Measure against the immutable landing commit, because the
+board keeps moving as sibling lanes file rows: `git show 8c13bec9:.coding-hermes/board/tasks.jsonl | wc -l`
+= 559 and `git show 8c13bec9:.coding-hermes/board/events.jsonl | wc -l` = 859, against 546 rows and 844
+events at `51c9fe62` — twelve rows and twelve events are this change's, the balance is the sibling's row
+and its events. The tip that publishes this paragraph already reads 562 rows and 862 events, because
+`CF-471`–`CF-473` landed in `1129db56` (this change's parent) and are not part of it; that is exactly why
+the anchor above is the landing commit rather than whatever tip a reader happens to be on. The frozen
+snapshot on the `Current state` line above stays pinned to `2f07051` and is deliberately **not**
+restamped — adding rows does not make a measurement taken at another tip wrong.
 
 ### The other direction: test sections with no PRD requirement
 
