@@ -840,3 +840,4 @@
 {"id": 839, "timestamp": "2026-11-16T18:49:35Z", "event_type": "task_created", "task_id": "CF-468", "actor": "foreman", "detail": "{\"id\":\"CF-468\",\"status\":\"pending\"}"}
 {"id": 840, "timestamp": "2026-11-16T18:49:35Z", "event_type": "task_created", "task_id": "CF-469", "actor": "foreman", "detail": "{\"id\":\"CF-469\",\"status\":\"pending\"}"}
 {"id": 841, "timestamp": "2026-11-16T18:51:10Z", "event_type": "task_updated", "task_id": "CF-466", "actor": "foreman", "detail": "{\"title\":\"P2 — the ACCEPTANCE-PLAN section 75 row names no chapter, and the M1 settings table still calls --harness 'a harness name' while the landed contract is documented 64 lines below\"}"}
+{"id": 842, "timestamp": "2026-11-16T18:59:05Z", "event_type": "task_completed", "task_id": "CF-115", "actor": "foreman", "detail": "{\"status\":\"complete\"}"}
