@@ -22,7 +22,8 @@ export BUNKER_SERVER=your-bunker-server
 # 1. can this control host run the factory at all? (needs the bunker client)
 scripts/bunker-server-install.sh --check
 
-# 2. what does a node look like right now? (run inside the node)
+# 2. what does a node look like right now? (control host — a node runs the same
+#    check as ~/node-scripts/project-node.sh, the form the Status rows use)
 ./scripts/project-node.sh --check --project myproject
 
 # 3. make one, from the control host
