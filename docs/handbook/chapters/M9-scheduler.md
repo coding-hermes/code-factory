@@ -522,6 +522,23 @@ pin its version before accepting work. External envelopes remain `cf2a.v1`, with
 `round-admission.v1`, `worker-brief.v1`, `worker-result.v1`, `round-report.v1`
 and `custody.v1` bodies; these versions do not name a new internal wire protocol.
 
+Measured implementation boundary (not target conformance). At the cited scheduler
+source revision, migration 69 creates physical `execution_runs`,
+`workspace_leases`, `execution_attempts`, `execution_events`,
+`verification_receipts`, `execution_projections` and `execution_outbox` tables
+(`internal/database/migrations.go:1391-1492`), while `tick_dispatch` remains the
+measured dispatch receipt (`:1217-1236`). The deployed SQL therefore has concrete
+primary/foreign keys, unique idempotency keys, one active workspace writer, closed
+state checks and pending-outbox indexes, but it does not prove the logical §17
+round/capacity/settlement records or the cross-authority transaction sequence below.
+The source `execution_store.go` writes run/attempt/outbox rows and updates
+attempts/events/projections in separate paths; that is evidence of a partial
+implementation, not evidence that the target crash transactions are atomic. The
+resident-supervisor journal and its `START_INTENT`/`STARTED` boundary are the target
+contract in M2 §15.2/M11 §16, and the current repository does not qualify that
+runtime. Where this measured surface differs from the target below, the target is
+normative and the difference is a named finding, not an implementation claim.
+
 Each §17 record has a mandatory immutable key and all listed fields; IDs, digest,
 Fence and time types are Part IV §IV.2. Nullable fields are explicitly null until
 known. Every state change has a nonnegative integer `state_version` incremented
@@ -628,6 +645,8 @@ is authoritative, and matching means exact identity and digest.
 
 This vector is a specification oracle, not a runtime test or live qualification.
 [Part I §§1.9.2/1.9.9–1.9.10; M2 §15; M10 §16; M11 §16; F1/F8/F15]
+
+ch:trace row=P5G-02 spec=docs/handbook/OUTLINE.md#p5g-02-or-III.M9.S3 wave=none:serial test=tests/test_durable_records_vector.py doc=docs/handbook/chapters/M9-scheduler.md,docs/handbook/parts/II-flows.md evidence=tests/test_durable_records_vector.py witness=none:offline-specification-oracle verdict=none:foreman-verifies-and-closes commit=none:worker-commit memory=none:foreman-writes
 
 ## 18. Hook plan and receipts (P5-C-11)
 

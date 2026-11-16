@@ -7575,6 +7575,16 @@ else
   fails=$((fails+1))
 fi
 
+# P5G-02 durable records: execute the handbook's offline oracle. Its scratch-free
+# checks prove the recovery table is present, complete and traceable.
+say "durable records and crash recovery oracle is checkable (P5G-02)"
+if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_durable_records_vector.py"; then
+  say "  PASS  P5G-02 durable-record vector and trace marker"
+else
+  say "  FAIL  P5G-02 durable-record vector or trace marker"
+  fails=$((fails+1))
+fi
+
 # P5G-13 resident foreman contract: execute the checker, then prove its
 # fail-closed identity/version controls catch weakened scratch copies.
 say "resident foreman cancellation and reboot contract is wired and fail-closed (P5G-13)"
