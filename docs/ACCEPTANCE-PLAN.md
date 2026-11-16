@@ -2,6 +2,8 @@
 
 **Scope:** CF-101–CF-112 in [`PRD-code-factory.md`](PRD-code-factory.md), with contract details in `specs/NODE.md`, `specs/HARNESS.md`, and `specs/ENVELOPE.md`. This plan distinguishes source-level evidence from tests actually run. A passing repository self-test is not proof that every requirement is accepted.
 
+**Id-space route taken (CF-421, 2026-11-16): the requirement ids were kept, and given board rows.** These twelve ids and the board's task ids share one `CF-nnn` spelling, and before CF-421 they were two id spaces a reader could not tell apart — the board held zero rows in `CF-101`–`CF-112` while spending the same spelling on 540+ unrelated tasks, so an unmet requirement was invisible to every dispatcher. A rename was rejected because `PRD-code-factory.md`, the audit scripts and the CF-182 resolution check already cite `CF-101`–`CF-112`; renaming would invalidate every citation, including the check that exists to prove these ids resolve. So each requirement now owns a board row of the same id, and the mapping is explicit in the table under *Requirement ids are board rows: the explicit mapping (CF-421)* below, which names per id the deciding command, the owning board row and this plan's verdict. Records here stay labelled by id family: a requirement id is a requirement, never a task.
+
 **Re-read 2026-11-06 at tip `2f07051`:** the suite passes on a host with `~/.local/bin` on `PATH` —
 `SELFTEST: PASS`, exit 0, 358 `PASS` rows and 58 `  FAIL` rows (every `FAIL` an intentional negative
 fixture) at loadavg 8.19. The 2026-11-05 reading of the *unconfigured* host (`SELFTEST: FAIL (2)`
@@ -103,6 +105,55 @@ Status definitions: **PASS** = requirement's acceptance behavior was exercised a
 | CF-110 | Destroying a node and re-running creation reproduces it with no manual step. | **BLOCKED.** `node-create.sh` provisions/reuses an agent; no destroy-and-recreate path or evidence is present in the inspected flow. | After a defined destroy operation exists, run `destroy cf-accept-110`, then `CRIER_URL=http://crier.example:8767 scripts/node-create.sh --project crier --repo <accessible-repo-url> --harness hermes --agent cf-accept-110`, followed by `scripts/verify-node.sh --agent cf-accept-110 --server "$BUNKER_SERVER" --port "$PORT" --artifact <node-path>`. Require no manual intervention and compare required manifest/round-trip evidence. | Documented, authorized destroy operation and automatic reprovisioning lifecycle. Current scripts do not establish this acceptance gate. |
 | CF-111 | Manifest records project, repo, ref, harness, gateway port, node id, created-by. | **PARTIAL — schema gap closed in the PRD, no test in the tree.** `project-node.sh` writes several fields, but no schema assertion was run. The PRD listed seven fields while `specs/NODE.md` requires ten (`repo.path`, `harness.version`, `bus.agent_id`, `bus.base`, `created_at` included); the spec is the design authority (`AGENTS.md` rule 1), so the PRD cell now names the same ten. Nothing asserts them: `grep -rln node.json tests/` = 0 hits, and the writer currently omits two (CF-078). | After successful apply, validate the manifest: parse `$HOME/.node/node.json` and assert `node_id`, `project`, `repo.origin`, `repo.ref`, `repo.path`, `harness.name`, `harness.version`, `harness.port`, `bus.agent_id`, `bus.base`, `created_by`, `created_at` exist with expected types; missing/incorrect fields fail. Record sanitized manifest and validator output. | Successfully provisioned node; PRD and NODE spec now agree on the field set. |
 | CF-112 | Scheduler targets a node by lane; removing the target returns the lane to local path with no code change. | **BLOCKED — the named artifact does not ship.** PRD calls for `dispatch-targets.jsonl` plus two ticks, but `grep -rl dispatch-targets scripts tests` returns 0 hits: no script reads or writes that file, and no scheduler implementation or live tick evidence was found in this repo. | In an authorized integrated scheduler environment, add a lane target in `dispatch-targets.jsonl`, run one real tick and prove the directive reaches the named node; remove that target, run a second real tick, and prove the lane returns to local execution without code/config changes other than target removal. Preserve both tick IDs, routing evidence, and resulting artifacts; both paths must pass their gate. | Scheduler/target configuration, crier delivery, eligible node, local fallback, two observable real ticks. External integration gate; do not infer from config parsing alone. |
+
+### Requirement ids are board rows: the explicit mapping (CF-421)
+
+The matrix above scores twelve requirement ids; the board spends the same `CF-nnn` spelling on its own
+task ids. The two spaces are now joined by an explicit mapping rather than a rename — this table is
+that mapping, and `.coding-hermes/board/tasks.jsonl` is the authority for the row half. Each requirement
+owns exactly one board row, of the same id, whose `acceptance_criteria` carries the deciding command and
+its expected outcome, and whose `reasoning` cites this plan's verdict.
+
+| Requirement | Deciding command (from the PRD "Verified by" cell) | Board row that owns it | This plan's verdict |
+|---|---|---|---|
+| `CF-101` | `scripts/project-node.sh --apply --project X --repo Y --harness hermes` — exit 0, `$HOME/.node/node.json` parseable. Cell says **No test**. | CF-101 | NOT RUN |
+| `CF-102` | `bash tests/selftest.sh` §2 and §14, plus one `scripts/project-node.sh --layers NN` arm per layer 00/10/20/30/40/90 | CF-102 | PARTIAL |
+| `CF-103` | none shipped — cell says **No test**; required: two `--apply` runs and `find "$HOME/.node/node.json" "$HOME/repo" -type f -exec sha256sum {} +` identical across the pair | CF-103 | NOT RUN |
+| `CF-104` | none shipped — cell says **No test**; measured control `grep -rniE 'sudo\|apt-get' tests/` = 0 hits | CF-104 | NOT RUN |
+| `CF-105` | `bash tests/selftest.sh` §5 — `fetch_verified` accepts the matching sha256 and refuses the all-zero digest | CF-105 | PARTIAL |
+| `CF-106` | `bash tests/selftest.sh` §59 arms (a)–(c) — the verdict half only; the two `--check` legs must print the same row set | CF-106 | PARTIAL |
+| `CF-107` | `scripts/verify-node.sh --agent A --server S --port P --artifact PATH` — exit 0 with matching 64-hex digests, nonzero after one byte mutated. Cell says **No test**. | CF-107 | NOT RUN |
+| `CF-108` | none shipped — cell says **No test**; required: `stat -c '%a' <bundle>` = `600`, zero value occurrences in transcript and `/proc/<pid>/cmdline`, `test ! -e <bundle>` after use | CF-108 | NOT RUN |
+| `CF-109` | `bash tests/selftest.sh` §12 and §13, plus a `df`-stub boundary arm on `require_disk` (below floor → exit 1 naming both numbers) | CF-109 | PARTIAL |
+| `CF-110` | none — cell says **No test** and no destroy path ships; `grep -rn destroy scripts/project-node.sh scripts/node-create.sh` returns advisory text only | CF-110 | BLOCKED |
+| `CF-111` | none shipped — cell says **No test**; measured control `grep -rn 'bus\.agent_id\|harness\.port\|repo\.ref' tests/` = 0 hits | CF-111 | PARTIAL |
+| `CF-112` | none — cell says **No test**; measured control `grep -rl dispatch-targets scripts tests` = 0 hits | CF-112 | BLOCKED |
+
+Row status follows this plan's verdict and nothing else: the two **BLOCKED** ids are `blocked`, every
+**NOT RUN** and **PARTIAL** id is `pending`, and none is `complete` — a requirement whose measuring
+command does not exist cannot be closed by a test that does not exist. `CF-110` additionally carries
+`depends_on: [CF-008]`, the blocker this plan names. Priority is `P1` for the two ids the PRD's
+milestone-blockers block cites (`CF-110`, `CF-112`) and `P3` for the other ten.
+
+Re-measuring the PRD's cells while filing these rows found four citations that had drifted from the
+tree; each is recorded in its row rather than silently corrected here, because the PRD's figures are
+tip-pinned measurements: `free_gb` is now `scripts/lib.sh:77`, not `:32`; layer 10 now carries eight
+`--layers 10` arms where the CF-102 cell says it has none; `grep -rn destroy scripts/*.sh` returns 12
+hits, not 2, and the extra ten are `bunker-provision.sh`'s own agent-destroy verb — a different object
+from a node, which is why CF-110 stays blocked; and `grep -rn 'id -u' tests/ scripts/` returns 4 hits,
+not 0, all unrelated skip-guards.
+
+**Delta measured 2026-11-16 (CF-421) — twelve requirement rows filed:** this change appends board rows
+`CF-101`–`CF-112` — twelve rows and twelve `task_created` events. Those appends were published inside
+`8c13bec9`, the fleet lane's board commit, which swept them together with its own `CF-470` row; they are
+therefore **not** in the documentation commit that carries this paragraph, and this note records the
+split rather than claiming the whole delta. Against `51c9fe62` (546 task rows, 844 events) the board at
+`8c13bec9` reads 559 rows and 859 events: twelve rows and twelve events are this change's, the balance
+is the sibling's row and its events. Verify from the commit carrying this line rather than trusting the
+prose: `git show <rev>:.coding-hermes/board/tasks.jsonl | wc -l` = 559 and
+`git show <rev>:.coding-hermes/board/events.jsonl | wc -l` = 859. The frozen snapshot on the
+`Current state` line above stays pinned to `2f07051` and is deliberately **not** restamped — adding
+rows does not make a measurement taken at another tip wrong.
 
 ### The other direction: test sections with no PRD requirement
 

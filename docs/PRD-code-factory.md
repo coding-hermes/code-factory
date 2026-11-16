@@ -75,9 +75,10 @@ The open defects this milestone's legs depend on are `CF-080` (`--apply` clones
 the workspace after the bus layer has already FAILED, manufacturing the repo-with-no-bus node
 `AGENTS.md` rule 9 forbids), the never-exercised legs `CF-001` (scheduler→crier dispatch has never
 completed a full arm/tick cycle), `CF-004` (no round trip through the node's own gateway), requirement
-`CF-110` (no destroy path ships — a requirement id from the table above, so no board row exists or
-need exist for it) and requirement `CF-112` (no `dispatch-targets.jsonl` consumer ships — likewise
-requirement-only), one row that stops
+`CF-110` (no destroy path ships — a requirement id from the table above, which also carries a board row
+of the same id; the row is `blocked`, so this id now resolves as `row=blocked`, not as a
+requirement with no row) and requirement `CF-112` (no `dispatch-targets.jsonl` consumer ships —
+likewise both a requirement row and a `blocked` board row, never `complete`), one row that stops
 a leg and was missing from this list before 2026-11-04 — `CF-002` (P0: a node turn dies at
 `agent init failed: No inference provider configured`, so the "commit produced on a node" leg cannot
 be reached) — plus the dispatch
@@ -102,7 +103,10 @@ of `scripts/project-node.sh` runs the staged `scripts/node_gateway_auth.py` befo
 The list is decidable, not editorial: every id cited in it resolves to exactly one of two
 namespaces — `row=<status>` from `jq -r 'select(.id=="<id>") | .status' .coding-hermes/board/tasks.jsonl`,
 or `requirement-only` when the id names a row of the requirements table above and no board row carries
-it (at `171bf23`: `CF-110` and `CF-112`, which have never been rows). The check is `bash docs/audits/prd-blocker-resolution.sh`: it prints `row=<status>` or `requirement-only` for every id in the list above and exits 0 only when each resolves, is still open, and carries a `Verified by` cell. Then read
+it (at `171bf23`: `CF-110` and `CF-112`, which had never been rows). That rule stands; what changed on
+2026-11-16 under CF-421 is which namespace those two fall in — each requirement now owns a board row of
+its own id, so `CF-110` and `CF-112` resolve `row=blocked` and no id in the list is requirement-only any
+more. The check is `bash docs/audits/prd-blocker-resolution.sh`: it prints `row=<status>` or `requirement-only` for every id in the list above and exits 0 only when each resolves, is still open, and carries a `Verified by` cell. Then read
 `jq -r 'select(.status!="complete") | [.id,.priority] | @tsv' .coding-hermes/board/tasks.jsonl`, and
 require every open row whose failure stops one of the four legs named above to appear here; rows
 outside those legs (v1 scope features such as foreign harnesses or the deploy-key lane) belong to the
