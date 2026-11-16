@@ -14,9 +14,7 @@ import uuid
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPT = os.path.join(ROOT, "scripts", "board_evidence_check.py")
 RESOLVABLE = os.path.join(ROOT, "tests", "fixtures", "board_evidence", "resolvable")
-UNRESOLVABLE = os.path.join(
-    ROOT, "tests", "fixtures", "board_evidence", "unresolvable"
-)
+UNRESOLVABLE = os.path.join(ROOT, "tests", "fixtures", "board_evidence", "unresolvable")
 HISTORY_RESOLVABLE = os.path.join(
     ROOT, "tests", "fixtures", "board_evidence", "history_resolvable"
 )
@@ -66,9 +64,13 @@ class BoardEvidenceCheck(unittest.TestCase):
         result = self.run_checker(UNRESOLVABLE)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         findings = [
-            line for line in result.stdout.splitlines() if line.startswith("UNRESOLVED ")
+            line
+            for line in result.stdout.splitlines()
+            if line.startswith("UNRESOLVED ")
         ]
-        self.assertEqual(findings, ["UNRESOLVED FIXTURE-UNRESOLVED missing-fixture-run"])
+        self.assertEqual(
+            findings, ["UNRESOLVED FIXTURE-UNRESOLVED missing-fixture-run"]
+        )
         self.assertIn("checked 1 complete rows, 1 unresolved", result.stdout)
         strict = self.run_checker(UNRESOLVABLE, "--strict")
         self.assertEqual(strict.returncode, 1, strict.stdout + strict.stderr)
@@ -100,7 +102,9 @@ class BoardEvidenceCheck(unittest.TestCase):
         result = self.run_checker(ROOT)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         count_line = self.count_line(result.stdout)
-        match = re.fullmatch(r"checked (\d+) complete rows, (\d+) unresolved", count_line)
+        match = re.fullmatch(
+            r"checked (\d+) complete rows, (\d+) unresolved", count_line
+        )
         self.assertIsNotNone(match, result.stdout)
         complete_count, unresolved_count = map(int, match.groups())
         tasks_path = os.path.join(ROOT, ".coding-hermes", "board", "tasks.jsonl")
@@ -145,7 +149,9 @@ class BoardEvidenceCheck(unittest.TestCase):
 
             result = self.run_checker(temp_root)
             findings = [
-                line for line in result.stdout.splitlines() if line.startswith("UNRESOLVED ")
+                line
+                for line in result.stdout.splitlines()
+                if line.startswith("UNRESOLVED ")
             ]
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn(run_id, result.stdout)

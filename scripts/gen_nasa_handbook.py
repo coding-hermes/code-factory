@@ -130,7 +130,9 @@ def md_blocks(lines):
             while i < n and lines[i].lstrip().startswith("|"):
                 rows.append(lines[i])
                 i += 1
-            cells = [[c.strip() for c in split_cells(r.strip().strip("|"))] for r in rows]
+            cells = [
+                [c.strip() for c in split_cells(r.strip().strip("|"))] for r in rows
+            ]
             body = [
                 c
                 for c in cells
@@ -160,8 +162,10 @@ def md_blocks(lines):
                 # alone they rendered as orphaned paragraphs after the list.
                 # An indented line that is itself a list item is a (flattened)
                 # sub-item, not a continuation.
-                while i < n and re.match(r"^\s{2,}\S", lines[i]) and not re.match(
-                    r"^\s*([-*]|\d+\.)\s+", lines[i]
+                while (
+                    i < n
+                    and re.match(r"^\s{2,}\S", lines[i])
+                    and not re.match(r"^\s*([-*]|\d+\.)\s+", lines[i])
                 ):
                     items[-1] += " " + lines[i].strip()
                     i += 1

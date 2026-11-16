@@ -25,7 +25,9 @@ KILL_GRACE_SECONDS = 1.0
 def atomic_json(path: Path, payload: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(path.name + ".tmp")
-    temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    temporary.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
     os.replace(temporary, path)
 
 
@@ -35,7 +37,9 @@ def read_deadline(path: Path | None) -> float | None:
     try:
         value = float(path.read_text(encoding="utf-8").strip())
     except (OSError, ValueError) as exc:
-        raise ValueError(f"deadline file {path} is not a unix timestamp: {exc}") from exc
+        raise ValueError(
+            f"deadline file {path} is not a unix timestamp: {exc}"
+        ) from exc
     return value
 
 
@@ -53,7 +57,9 @@ class Lease:
         self.ttl_seconds = float(ttl_seconds)
         self.renew_seconds = float(renew_seconds or ttl_seconds / 2)
         if self.renew_seconds <= 0 or self.renew_seconds > self.ttl_seconds:
-            raise ValueError("renew interval must be greater than zero and no greater than ttl")
+            raise ValueError(
+                "renew interval must be greater than zero and no greater than ttl"
+            )
         self.clock = clock
         self.deadline = 0.0
         self.next_renewal = 0.0
@@ -98,7 +104,9 @@ def child_group_alive(pgid: int) -> bool:
     return True
 
 
-def terminate_group(process: subprocess.Popen[object], grace: float = KILL_GRACE_SECONDS) -> bool:
+def terminate_group(
+    process: subprocess.Popen[object], grace: float = KILL_GRACE_SECONDS
+) -> bool:
     """Terminate exactly the process group created for ``process`` and return if it is gone."""
     pgid = process.pid
     try:
@@ -120,7 +128,12 @@ def terminate_group(process: subprocess.Popen[object], grace: float = KILL_GRACE
 
 
 def command_event(phase: str, command: list[str], returncode: int) -> dict:
-    return {"event": "command", "phase": phase, "command": command, "returncode": returncode}
+    return {
+        "event": "command",
+        "phase": phase,
+        "command": command,
+        "returncode": returncode,
+    }
 
 
 def run_replay(config_path: Path, state_path: Path) -> int:
@@ -140,15 +153,21 @@ def run_replay(config_path: Path, state_path: Path) -> int:
     for phase in ("destroy", "create"):
         commands = config.get(phase)
         if not isinstance(commands, list) or not commands:
-            state.update(status="failed", error=f"{phase} commands are required", events=events)
+            state.update(
+                status="failed", error=f"{phase} commands are required", events=events
+            )
             atomic_json(state_path, state)
             print(f"FAIL {phase} — commands are required")
             return 1
         for command in commands:
-            if not isinstance(command, list) or not command or not all(
-                isinstance(item, str) and item for item in command
+            if (
+                not isinstance(command, list)
+                or not command
+                or not all(isinstance(item, str) and item for item in command)
             ):
-                state.update(status="failed", error=f"{phase} command is not argv", events=events)
+                state.update(
+                    status="failed", error=f"{phase} command is not argv", events=events
+                )
                 atomic_json(state_path, state)
                 print(f"FAIL {phase} — command must be a non-empty argv list")
                 return 1
@@ -164,7 +183,11 @@ def run_replay(config_path: Path, state_path: Path) -> int:
             except OSError as exc:
                 event = command_event(phase, command, 127)
                 events.append(event)
-                state.update(status="failed", error=f"{phase} could not start: {exc}", events=events)
+                state.update(
+                    status="failed",
+                    error=f"{phase} could not start: {exc}",
+                    events=events,
+                )
                 atomic_json(state_path, state)
                 print(f"FAIL {phase} — could not start: {exc}")
                 return 1
@@ -190,19 +213,25 @@ def run_replay(config_path: Path, state_path: Path) -> int:
         expected_path = root / expected_path
     expected_path = expected_path.resolve()
     if root not in expected_path.parents and expected_path != root:
-        state.update(status="failed", error="expected.path escapes state_dir", events=events)
+        state.update(
+            status="failed", error="expected.path escapes state_dir", events=events
+        )
         atomic_json(state_path, state)
         print("FAIL expected — path escapes state_dir")
         return 1
     try:
         measured = expected_path.read_text(encoding="utf-8")
     except OSError as exc:
-        state.update(status="failed", error=f"expected artifact absent: {exc}", events=events)
+        state.update(
+            status="failed", error=f"expected artifact absent: {exc}", events=events
+        )
         atomic_json(state_path, state)
         print(f"FAIL expected — artifact absent: {exc}")
         return 1
     if measured != expected.get("content"):
-        state.update(status="failed", error="expected artifact content differs", events=events)
+        state.update(
+            status="failed", error="expected artifact content differs", events=events
+        )
         atomic_json(state_path, state)
         print("FAIL expected — artifact content differs")
         return 1
@@ -218,7 +247,9 @@ def run_supervisor(args: argparse.Namespace) -> int:
         print("FAIL command — a child argv is required")
         return 1
     state_path = Path(args.state)
-    completion_path = Path(args.completion_artifact) if args.completion_artifact else None
+    completion_path = (
+        Path(args.completion_artifact) if args.completion_artifact else None
+    )
     deadline_path = Path(args.deadline_file) if args.deadline_file else None
     deadline = read_deadline(deadline_path)
     clock = time.monotonic
@@ -272,7 +303,9 @@ def run_supervisor(args: argparse.Namespace) -> int:
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                 )
-                events.append({"event": "start", "pid": process.pid, "pgid": process.pid})
+                events.append(
+                    {"event": "start", "pid": process.pid, "pgid": process.pid}
+                )
                 persist("running", pid=process.pid, pgid=process.pid)
             returncode = process.poll()
             if returncode is None:
@@ -283,7 +316,9 @@ def run_supervisor(args: argparse.Namespace) -> int:
                 continue
             pid = process.pid
             pgid = process.pid
-            events.append({"event": "exit", "pid": pid, "pgid": pgid, "returncode": returncode})
+            events.append(
+                {"event": "exit", "pid": pid, "pgid": pgid, "returncode": returncode}
+            )
             process = None
             if returncode == 0:
                 if deadline is not None and time.time() >= deadline:
@@ -296,11 +331,22 @@ def run_supervisor(args: argparse.Namespace) -> int:
                 print("PASS supervisor — child completed")
                 return 0
             if state["restarts"] >= args.max_restarts:
-                persist("failed", error=f"child exited {returncode}", pid=pid, pgid=pgid)
-                print(f"FAIL supervisor — child exited {returncode} after {state['restarts']} restart(s)")
+                persist(
+                    "failed", error=f"child exited {returncode}", pid=pid, pgid=pgid
+                )
+                print(
+                    f"FAIL supervisor — child exited {returncode} after {state['restarts']} restart(s)"
+                )
                 return 1
             state["restarts"] += 1
-            events.append({"event": "restart", "after_pid": pid, "returncode": returncode, "restart": state["restarts"]})
+            events.append(
+                {
+                    "event": "restart",
+                    "after_pid": pid,
+                    "returncode": returncode,
+                    "restart": state["restarts"],
+                }
+            )
             persist("running")
     except (OSError, ValueError) as exc:
         if process is not None:
@@ -326,7 +372,9 @@ def parser() -> argparse.ArgumentParser:
     supervise.add_argument("--deadline-file")
     supervise.add_argument("--ttl", type=positive_float, default=1800.0)
     supervise.add_argument("--renew-interval", type=positive_float, default=None)
-    supervise.add_argument("--poll-interval", type=positive_float, default=POLL_INTERVAL)
+    supervise.add_argument(
+        "--poll-interval", type=positive_float, default=POLL_INTERVAL
+    )
     supervise.add_argument("--max-restarts", type=int, default=3)
     supervise.add_argument("command", nargs=argparse.REMAINDER)
     replay = sub.add_parser("replay")

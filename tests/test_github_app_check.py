@@ -26,7 +26,17 @@ def transcript(outputs: list[tuple[str, int, str]]) -> str:
         "",
     ]
     for label, code, output in outputs:
-        lines.extend(["## %s" % label, "", "```text", output.rstrip(), "EXIT=%d" % code, "```", ""])
+        lines.extend(
+            [
+                "## %s" % label,
+                "",
+                "```text",
+                output.rstrip(),
+                "EXIT=%d" % code,
+                "```",
+                "",
+            ]
+        )
     return "\n".join(lines)
 
 
@@ -38,7 +48,7 @@ def assert_transcript_matches_fixture(outputs: list[tuple[str, int, str]]) -> No
     for line in transcript(outputs).splitlines():
         if "PASS  private_key_file — " in line:
             prefix, suffix = line.split(" — ", 1)
-            suffix = suffix[suffix.index(", mode 600"):]
+            suffix = suffix[suffix.index(", mode 600") :]
             line = prefix + " — <scratch>/cf-319/github-app.pem" + suffix
         normalized_lines.append(line)
     normalized = "\n".join(normalized_lines) + "\n"
@@ -49,7 +59,9 @@ def assert_transcript_matches_fixture(outputs: list[tuple[str, int, str]]) -> No
         raise AssertionError(
             "generated CF-319 transcript differs from committed fixture:\n"
             + "\n".join(
-                "- " + line for line in committed.splitlines() if line not in normalized.splitlines()
+                "- " + line
+                for line in committed.splitlines()
+                if line not in normalized.splitlines()
             )
         )
 
@@ -84,12 +96,21 @@ class GitHubStub(http.server.BaseHTTPRequestHandler):
         if self.path == "/apps/fixture-app":
             self._json(
                 200,
-                {"permissions": {"contents": "write", "pull_requests": "write", "metadata": "read"}},
+                {
+                    "permissions": {
+                        "contents": "write",
+                        "pull_requests": "write",
+                        "metadata": "read",
+                    }
+                },
             )
         elif self.path == "/installation/repositories?per_page=100":
             self._json(200, {"repositories": [{"full_name": REPO}]})
         elif self.path == "/repos/fixture-owner/fixture-repo":
-            self._json(self.repo_status, {"message": "forbidden" if self.repo_status == 403 else "ok"})
+            self._json(
+                self.repo_status,
+                {"message": "forbidden" if self.repo_status == 403 else "ok"},
+            )
         else:
             self.send_error(404)
 
@@ -141,7 +162,9 @@ def make_fixture(root: Path) -> Path:
     return env_file
 
 
-def run_check(script: Path, env_file: Path, api_base: str, root: Path, repo: str = "") -> subprocess.CompletedProcess[str]:
+def run_check(
+    script: Path, env_file: Path, api_base: str, root: Path, repo: str = ""
+) -> subprocess.CompletedProcess[str]:
     args = [
         "python3",
         "-B",
@@ -157,7 +180,11 @@ def run_check(script: Path, env_file: Path, api_base: str, root: Path, repo: str
     return subprocess.run(
         args,
         cwd=root,
-        env={"PATH": os.environ["PATH"], "HOME": str(root / "home"), "PYTHONDONTWRITEBYTECODE": "1"},
+        env={
+            "PATH": os.environ["PATH"],
+            "HOME": str(root / "home"),
+            "PYTHONDONTWRITEBYTECODE": "1",
+        },
         text=True,
         capture_output=True,
         check=False,
@@ -188,7 +215,9 @@ def main() -> int:
         assert "FAIL  repo_read" in arm_a.stdout
         assert "GET /repos/fixture-owner/fixture-repo -> 403" in arm_a.stdout
         assert "GET /repos/fixture-owner/fixture-repo" in GitHubStub.requests
-        outputs.append(("Arm A — unreadable repo (403)", arm_a.returncode, arm_a.stdout))
+        outputs.append(
+            ("Arm A — unreadable repo (403)", arm_a.returncode, arm_a.stdout)
+        )
 
         server, api_base = start_stub(200)
         try:
@@ -199,7 +228,10 @@ def main() -> int:
         assert arm_b.returncode == 0
         assert_common(arm_b.stdout)
         assert "PASS  repo_read" in arm_b.stdout
-        assert "GET /repos/fixture-owner/fixture-repo with a fresh token -> 200" in arm_b.stdout
+        assert (
+            "GET /repos/fixture-owner/fixture-repo with a fresh token -> 200"
+            in arm_b.stdout
+        )
         assert "GET /repos/fixture-owner/fixture-repo" in GitHubStub.requests
         outputs.append(("Arm B — readable repo (200)", arm_b.returncode, arm_b.stdout))
 
@@ -207,7 +239,9 @@ def main() -> int:
         copy_root.mkdir()
         copied_script = copy_root / "github-app-token.py"
         shutil.copyfile(TOKEN_SCRIPT, copied_script)
-        shutil.copyfile(ROOT / "scripts" / "github-app-setup.sh", copy_root / "github-app-setup.sh")
+        shutil.copyfile(
+            ROOT / "scripts" / "github-app-setup.sh", copy_root / "github-app-setup.sh"
+        )
         shutil.copyfile(ROOT / "scripts" / "lib.sh", copy_root / "lib.sh")
         no_repo_env = copy_root / "no-repo.env"
         no_repo_env.write_text(

@@ -84,7 +84,9 @@ img { display: block; margin: 0 auto; }
                width: 1.3mm; background: #000; }
 """ % {"serif": SERIF, "sans": SANS, "mono": MONO}
 
-_CSS_PORTRAIT = "@page { size: A4; margin: 20mm 0mm 18mm 0mm; }\nbody { padding: 0 16mm; }\n"
+_CSS_PORTRAIT = (
+    "@page { size: A4; margin: 20mm 0mm 18mm 0mm; }\nbody { padding: 0 16mm; }\n"
+)
 _CSS_LANDSCAPE = "@page { size: A4 landscape; margin: 16mm 0mm 14mm 0mm; }\nbody { padding: 0 12mm; }\n"
 CSS_LANDSCAPE = _CSS_LANDSCAPE + _BASE
 CSS_PORTRAIT = _CSS_PORTRAIT + _BASE
@@ -103,9 +105,9 @@ def cover(doc_id, title, subtitle, meta=()):
 def dochead(doc_id, section, right="", title=""):
     """Running head: doc number + handbook title + section, black bold, over a black rule."""
     left = " &middot; ".join([doc_id] + [t for t in (title, section) if t])
-    return (
-        "<div class='dochead'><span>%s</span><span class='r'>%s</span></div>"
-        % (left, right)
+    return "<div class='dochead'><span>%s</span><span class='r'>%s</span></div>" % (
+        left,
+        right,
     )
 
 
@@ -127,8 +129,12 @@ def stamp(pdf_path, doc_id, right="code-factory", footer="", subsys=None):
         y = rect.height - 18
         x_right = rect.width - 45.4
         # footer rule: one black hairline across the content width, above the foot
-        page.draw_line(fitz.Point(x_left, y - 6.2), fitz.Point(x_right, y - 6.2),
-                       color=(0, 0, 0), width=0.7)
+        page.draw_line(
+            fitz.Point(x_left, y - 6.2),
+            fitz.Point(x_right, y - 6.2),
+            color=(0, 0, 0),
+            width=0.7,
+        )
         name = ""
         if subsys and i - 1 < len(subsys):
             name = subsys[i - 1]

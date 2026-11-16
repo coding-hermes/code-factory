@@ -93,7 +93,12 @@ def run_case(*, present=None, create_refused=0, put_refused=0):
     try:
         env = dict(os.environ, CODER_API_TOKEN="stub-token", HOME=str(home))
         result = subprocess.run(
-            [sys.executable, str(SCRIPT), "--api-base", f"http://127.0.0.1:{server.server_port}"],
+            [
+                sys.executable,
+                str(SCRIPT),
+                "--api-base",
+                f"http://127.0.0.1:{server.server_port}",
+            ],
             cwd=ROOT,
             env=env,
             capture_output=True,

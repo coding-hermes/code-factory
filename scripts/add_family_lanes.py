@@ -22,9 +22,15 @@ class UsageParser(argparse.ArgumentParser):
 
 def parser():
     p = UsageParser(description="Create and configure the code-factory lane family.")
-    p.add_argument("--api-base", default=API, help=f"scheduler API base (default: {API})")
-    p.add_argument("--namespace", default=None, help="namespace override for every lane")
-    p.add_argument("--token-file", default="", help="read the bearer token from this file")
+    p.add_argument(
+        "--api-base", default=API, help=f"scheduler API base (default: {API})"
+    )
+    p.add_argument(
+        "--namespace", default=None, help="namespace override for every lane"
+    )
+    p.add_argument(
+        "--token-file", default="", help="read the bearer token from this file"
+    )
     return p
 
 
@@ -69,7 +75,10 @@ def api(api_base, token, method, path, body=None):
         api_base.rstrip("/") + path,
         data=data,
         method=method,
-        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        },
     )
     try:
         with urllib.request.urlopen(req, timeout=30) as response:
@@ -84,7 +93,9 @@ def api(api_base, token, method, path, body=None):
 
 def project_from_response(data):
     project = data.get("project") if isinstance(data, dict) else None
-    return project if isinstance(project, dict) else data if isinstance(data, dict) else {}
+    return (
+        project if isinstance(project, dict) else data if isinstance(data, dict) else {}
+    )
 
 
 def project_path(name):
@@ -174,14 +185,18 @@ def main(argv=None):
             present += 1
             if not isinstance(current, dict) or current.get("name") != name:
                 refused += 1
-                failures.append(f"{name}: GET response did not identify the requested project")
+                failures.append(
+                    f"{name}: GET response did not identify the requested project"
+                )
                 continue
         else:
             refused += 1
             failures.append(f"{name}: GET {status}")
             continue
 
-        accepted.append((name, prompt_name, current, desired_namespace(args, namespace)))
+        accepted.append(
+            (name, prompt_name, current, desired_namespace(args, namespace))
+        )
 
     # A refusal in phase 1 must not be hidden by a later phase. Still finish
     # the independent GET/POST pass so the summary accounts for every lane.
@@ -208,7 +223,9 @@ def main(argv=None):
             continue
         status, data = api(args.api_base, token, "GET", project_path(name))
         verified = project_from_response(data) if status == 200 else {}
-        if status != 200 or any(verified.get(field) != value for field, value in desired.items()):
+        if status != 200 or any(
+            verified.get(field) != value for field, value in desired.items()
+        ):
             refused += 1
             failures.append(f"{name}: phase-2 readback failed")
 

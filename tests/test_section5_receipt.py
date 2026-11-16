@@ -72,34 +72,50 @@ class Section5ReceiptTest(unittest.TestCase):
         }
 
     def test_every_declared_name_is_accepted_from_the_directive(self):
-        values, problems = WORKER_MOD.directive_vars({"vars": self.full_set()}, self.home)
+        values, problems = WORKER_MOD.directive_vars(
+            {"vars": self.full_set()}, self.home
+        )
         self.assertEqual([], problems, f"the full §5 set was refused: {problems}")
         missing = [n for n in WORKER_MOD.SECTION5_VARS if n not in values]
-        self.assertEqual([], missing, f"declared names dropped on the way in: {missing}")
+        self.assertEqual(
+            [], missing, f"declared names dropped on the way in: {missing}"
+        )
 
     def test_receipt_records_which_values_were_passed_without_recording_them(self):
         values, _ = WORKER_MOD.directive_vars({"vars": self.full_set()}, self.home)
         receipt = WORKER_MOD.section5_receipt(values)
         self.assertEqual(
-            set(WORKER_MOD.SECTION5_VARS), set(receipt),
+            set(WORKER_MOD.SECTION5_VARS),
+            set(receipt),
             "the receipt does not cover the declared set",
         )
         for name in WORKER_MOD.SECTION5_VARS:
             with self.subTest(name=name):
-                self.assertTrue(receipt[name]["set"], f"{name} passed but not recorded as set")
-                self.assertEqual({"set", "len"}, set(receipt[name]),
-                                 f"{name} receipt entry carries more than set/len")
-        self.assertNotIn(self.keyfile, repr(receipt),
-                         "the receipt recorded the credential path's value")
+                self.assertTrue(
+                    receipt[name]["set"], f"{name} passed but not recorded as set"
+                )
+                self.assertEqual(
+                    {"set", "len"},
+                    set(receipt[name]),
+                    f"{name} receipt entry carries more than set/len",
+                )
+        self.assertNotIn(
+            self.keyfile,
+            repr(receipt),
+            "the receipt recorded the credential path's value",
+        )
 
     def test_partial_set_is_still_reported_name_by_name(self):
         values, problems = WORKER_MOD.directive_vars(
-            {"vars": {"CF_MODEL": "m", "CF_PROVIDER": "p"}}, self.home)
+            {"vars": {"CF_MODEL": "m", "CF_PROVIDER": "p"}}, self.home
+        )
         self.assertEqual([], problems)
         receipt = WORKER_MOD.section5_receipt(values)
         self.assertTrue(receipt["CF_MODEL"]["set"])
-        self.assertFalse(receipt["CF_LANE"]["set"],
-                         "a name the directive did not carry must read as unset, not vanish")
+        self.assertFalse(
+            receipt["CF_LANE"]["set"],
+            "a name the directive did not carry must read as unset, not vanish",
+        )
 
     def test_harness_env_carries_the_directive_set_and_scrubs_ambient_cf(self):
         values, _ = WORKER_MOD.directive_vars({"vars": self.full_set()}, self.home)
@@ -114,25 +130,39 @@ class Section5ReceiptTest(unittest.TestCase):
                     os.environ.pop(key, None)
                 else:
                     os.environ[key] = prior
-        self.assertEqual("code-factory", env.get("CF_LANE"),
-                         "the directive's CF_LANE lost to the ambient environment")
-        self.assertNotIn("CF_SMUGGLED", env,
-                         "an ambient CF_* the directive never named reached the harness")
+        self.assertEqual(
+            "code-factory",
+            env.get("CF_LANE"),
+            "the directive's CF_LANE lost to the ambient environment",
+        )
+        self.assertNotIn(
+            "CF_SMUGGLED",
+            env,
+            "an ambient CF_* the directive never named reached the harness",
+        )
 
     def test_a_name_outside_section5_is_refused_by_name(self):
         _, problems = WORKER_MOD.directive_vars(
-            {"vars": dict(self.full_set(), CF_NOT_DECLARED="x")}, self.home)
-        self.assertTrue(any("CF_NOT_DECLARED" in p for p in problems),
-                        f"an undeclared name was accepted silently: {problems}")
+            {"vars": dict(self.full_set(), CF_NOT_DECLARED="x")}, self.home
+        )
+        self.assertTrue(
+            any("CF_NOT_DECLARED" in p for p in problems),
+            f"an undeclared name was accepted silently: {problems}",
+        )
 
     def test_a_credential_as_a_value_is_refused_by_name(self):
         secret = "sk-" + "fixture-not-real"
         _, problems = WORKER_MOD.directive_vars(
-            {"vars": dict(self.full_set(), CF_API_KEY_FILE=secret)}, self.home)
-        self.assertTrue(any("CF_API_KEY_FILE" in p for p in problems),
-                        f"a credential VALUE was accepted as a path: {problems}")
-        self.assertFalse(any(secret in p for p in problems),
-                         "the refusal echoed the credential it refused")
+            {"vars": dict(self.full_set(), CF_API_KEY_FILE=secret)}, self.home
+        )
+        self.assertTrue(
+            any("CF_API_KEY_FILE" in p for p in problems),
+            f"a credential VALUE was accepted as a path: {problems}",
+        )
+        self.assertFalse(
+            any(secret in p for p in problems),
+            "the refusal echoed the credential it refused",
+        )
 
 
 if __name__ == "__main__":

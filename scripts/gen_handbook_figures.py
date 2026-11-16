@@ -142,6 +142,7 @@ class Sheet:
     UPX = 4  # user units per mm at print scale
     W = int(PRINT_W_MM * UPX)  # 680 units = 170 mm
     FLOOR_U = 8.2
+
     def __init__(self, h_units: float):
         self.h = h_units
         self.body: list[str] = []
@@ -323,7 +324,13 @@ def system_map_sheet(model) -> Sheet:
 
     sh = Sheet(H)
     sh.text(16, 30, "CODE FACTORY — SYSTEM MAP", TITLE)
-    sh.text(664, 30, f"MODEL {model.get('issue', 'UNISSUED')} · SHA-256 {model_digest[:16]}", TINY, anchor="end")
+    sh.text(
+        664,
+        30,
+        f"MODEL {model.get('issue', 'UNISSUED')} · SHA-256 {model_digest[:16]}",
+        TINY,
+        anchor="end",
+    )
     sh.text(
         664,
         52,
@@ -342,7 +349,9 @@ def system_map_sheet(model) -> Sheet:
             pos[c["id"]] = (bx, by, BW, BH, li)
             host = c.get("host")
             if host not in host_labels:
-                raise ValueError(f"component {c['id']} has no declared host/trust domain")
+                raise ValueError(
+                    f"component {c['id']} has no declared host/trust domain"
+                )
             dash = host_dashes[host]
             dash_attr = f' stroke-dasharray="{dash}"' if dash else ""
             sh.add(
@@ -362,7 +371,13 @@ def system_map_sheet(model) -> Sheet:
                 sh.text(bx + BW / 2, y0 + j * SMALL, ln, SMALL, anchor="middle")
             if c.get("tag"):
                 sh.text(bx + BW - 4, by + 10, c["tag"], TINY, anchor="end")
-            sh.text(bx + BW / 2, by + BH - 5, component_host_labels[host], TINY, anchor="middle")
+            sh.text(
+                bx + BW / 2,
+                by + BH - 5,
+                component_host_labels[host],
+                TINY,
+                anchor="middle",
+            )
 
     gutter_top = {i: panels[i][2] + panels[i][3] for i in range(len(panels) - 1)}
     lanes: dict[int, list[float]] = {i: [] for i in range(len(panels) - 1)}
@@ -437,7 +452,9 @@ def system_map_sheet(model) -> Sheet:
         sh, 16, yl, STATE_LEGEND, "CONTRACT STATE — LINE STYLE, INK ONLY", fs=TINY
     )
     sh.text(370, yl, "HOST / TRUST ENCLOSURE — COMPONENT BOUNDARY", TINY)
-    for i, host in enumerate(("control", "bunker", "authority", "external", "controller-and-bunker")):
+    for i, host in enumerate(
+        ("control", "bunker", "authority", "external", "controller-and-bunker")
+    ):
         hy = yl + (i + 1) * TINY * 1.9
         dash = host_dashes[host]
         dash_attr = f' stroke-dasharray="{dash}"' if dash else ""
@@ -599,19 +616,37 @@ def board_lifecycle() -> Sheet:
         (
             "in_progress",
             "pending",
-            ([(275, 170), (240, 170), (240, 70), (275, 70)], "RELEASE AFTER QUIESCENCE", 234, 120, -90),
+            (
+                [(275, 170), (240, 170), (240, 70), (275, 70)],
+                "RELEASE AFTER QUIESCENCE",
+                234,
+                120,
+                -90,
+            ),
             "S",
         ),
         (
             "blocked",
             "pending",
-            ([(120, 148), (120, 114), (300, 114), (300, 92)], "RESUME: BLOCKER EVIDENCE", 208, 110, None),
+            (
+                [(120, 148), (120, 114), (300, 114), (300, 92)],
+                "RESUME: BLOCKER EVIDENCE",
+                208,
+                110,
+                None,
+            ),
             "S",
         ),
         (
             "deferred",
             "pending",
-            ([(560, 148), (560, 126), (380, 126), (380, 92)], "RESUME: RETURN CONDITION", 472, 122, None),
+            (
+                [(560, 148), (560, 126), (380, 126), (380, 92)],
+                "RESUME: RETURN CONDITION",
+                472,
+                122,
+                None,
+            ),
             "S",
         ),
         ("in_progress", "cancel_requested", "CANCEL REQUEST", "V"),
@@ -622,13 +657,25 @@ def board_lifecycle() -> Sheet:
         (
             "complete",
             "pending",
-            ([(625, 370), (655, 370), (655, 70), (405, 70)], "AUTHORIZED REOPEN + EVIDENCE + NEW REVISION", 649, 220, -90),
+            (
+                [(625, 370), (655, 370), (655, 70), (405, 70)],
+                "AUTHORIZED REOPEN + EVIDENCE + NEW REVISION",
+                649,
+                220,
+                -90,
+            ),
             "S",
         ),
         (
             "cancelled",
             "pending",
-            ([(55, 370), (25, 370), (25, 70), (275, 70)], "AUTHORIZED REOPEN + EVIDENCE + NEW REVISION", 19, 220, -90),
+            (
+                [(55, 370), (25, 370), (25, 70), (275, 70)],
+                "AUTHORIZED REOPEN + EVIDENCE + NEW REVISION",
+                19,
+                220,
+                -90,
+            ),
             "S",
         ),
     ]
@@ -785,7 +832,9 @@ def module_sheet(model, mod) -> Sheet:
             n = len(g)
             for i, w in enumerate(g):
                 off = (i - (n - 1) / 2) * (26 if tgt is None else 20)
-                w["entry"] = panel_cy + off if tgt is None else comp_cy[mids.index(tgt)] + off
+                w["entry"] = (
+                    panel_cy + off if tgt is None else comp_cy[mids.index(tgt)] + off
+                )
         # global separation pass: a boundary port may not sit on a component's
         # entry line, or their labels collide (CT-02 vs CT-15 on M9)
         entries = sorted(sw, key=lambda w: w["entry"])
@@ -796,9 +845,7 @@ def module_sheet(model, mod) -> Sheet:
                 if e["target"] is None:  # ports have edge freedom — move them
                     e["entry"] = min(prev + 22, panel_bottom - 14)
                 elif entries[i - 1]["target"] is None:
-                    entries[i - 1]["entry"] = max(
-                        e["entry"] - 22, TOP + 14
-                    )
+                    entries[i - 1]["entry"] = max(e["entry"] - 22, TOP + 14)
                     entries[i]["entry"] = max(e["entry"], entries[i - 1]["entry"] + 22)
         merged: dict = {}
         for w in sorted(sw, key=lambda w: w["entry"]):
@@ -850,12 +897,20 @@ def module_sheet(model, mod) -> Sheet:
         tag = _host_tag(cid, c)
         if tag == "IN THE BUNKER":
             _enclosure(
-                sh, CB_L - 6, cy - CH / 2 - 20, CB_W + 12, CH + 28,
+                sh,
+                CB_L - 6,
+                cy - CH / 2 - 20,
+                CB_W + 12,
+                CH + 28,
                 "BUNKER EXECUTION BOUNDARY",
             )
         elif cid == "crier":
             _enclosure(
-                sh, CB_L - 6, cy - CH / 2 - 20, CB_W + 12, CH + 28,
+                sh,
+                CB_L - 6,
+                cy - CH / 2 - 20,
+                CB_W + 12,
+                CH + 28,
                 "CRIER · LAUNCH / RETURN BOUNDARY",
             )
     if not mids:  # M0 — the shell substrate, no bus component
@@ -863,8 +918,16 @@ def module_sheet(model, mod) -> Sheet:
         sh.box(CB_L, cy - CH / 2 - 5, CB_W, CH + 10)
         sh.text(CB_L + CB_W / 2, cy - 12, "SHELL SUBSTRATE", F_SMALL, anchor="middle")
         sh.text(CB_L + CB_W / 2, cy - 1, "NO BUS COMPONENT", F_TINY, anchor="middle")
-        sh.text(CB_L + CB_W / 2, cy + 11, "OK · BAD · WARN · NOTE", F_TINY, anchor="middle")
-        sh.text(CB_L + CB_W / 2, cy + 21, "FETCH_VERIFIED · REQUIRE_DISK", F_TINY, anchor="middle")
+        sh.text(
+            CB_L + CB_W / 2, cy + 11, "OK · BAD · WARN · NOTE", F_TINY, anchor="middle"
+        )
+        sh.text(
+            CB_L + CB_W / 2,
+            cy + 21,
+            "FETCH_VERIFIED · REQUIRE_DISK",
+            F_TINY,
+            anchor="middle",
+        )
 
     if not rows_by_side["IN"]:
         sh.text(24, 130, "NO UPSTREAM CONTRACTS", F_TINY)
@@ -883,7 +946,9 @@ def module_sheet(model, mod) -> Sheet:
             else:
                 sh.poly(
                     [(174, y_peer), (cx, y_peer), (cx, ye), (x_end, ye)],
-                    sw=1.4, dash=dash, arrow=True,
+                    sw=1.4,
+                    dash=dash,
+                    arrow=True,
                 )
                 lab = (cx + x_end) / 2
         else:
@@ -894,7 +959,9 @@ def module_sheet(model, mod) -> Sheet:
             else:
                 sh.poly(
                     [(x0, ye), (cx, ye), (cx, y_peer), (504.8, y_peer)],
-                    sw=1.4, dash=dash, arrow=True,
+                    sw=1.4,
+                    dash=dash,
+                    arrow=True,
                 )
                 lab = (x0 + cx) / 2
         sh.text(lab, ye - 5, w["cid"], F_TINY, anchor="middle")
@@ -905,7 +972,11 @@ def module_sheet(model, mod) -> Sheet:
             x = PLX if side == "IN" else PRX
             y, hh = r["y"], r["h"]
             comp = by_id.get(r["peer"])
-            name = SHORT.get(comp["name"], comp["name"]) if comp else str(r["peer"]).upper()
+            name = (
+                SHORT.get(comp["name"], comp["name"])
+                if comp
+                else str(r["peer"]).upper()
+            )
             sh.box(x, y, PW, hh)
             sh.text(x + 10, y + 15, name, F_SMALL)
             sh.text(x + 10, y + 26, _host_tag(r["peer"], comp), F_TINY)
@@ -917,9 +988,18 @@ def module_sheet(model, mod) -> Sheet:
                 ty += 22
             tag = _host_tag(r["peer"], comp)
             if tag == "IN THE BUNKER":
-                _enclosure(sh, x - 6, y - 20, PW + 12, hh + 28, "BUNKER EXECUTION BOUNDARY")
+                _enclosure(
+                    sh, x - 6, y - 20, PW + 12, hh + 28, "BUNKER EXECUTION BOUNDARY"
+                )
             elif r["peer"] == "crier":
-                _enclosure(sh, x - 6, y - 20, PW + 12, hh + 28, "CRIER · LAUNCH / RETURN BOUNDARY")
+                _enclosure(
+                    sh,
+                    x - 6,
+                    y - 20,
+                    PW + 12,
+                    hh + 28,
+                    "CRIER · LAUNCH / RETURN BOUNDARY",
+                )
             for w in r["ks"]:
                 draw_wire(w, y + hh / 2, r["cx"])
 
@@ -934,9 +1014,13 @@ def module_sheet(model, mod) -> Sheet:
         if abs(ip - ic) == 1:  # adjacent in the stack: through the shared gap
             x = CB_L + CB_W / 2
             if ic > ip:
-                sh.line(x, y1 + CH / 2, x, y2 - CH / 2 - 1, sw=1.4, dash=dash, arrow=True)
+                sh.line(
+                    x, y1 + CH / 2, x, y2 - CH / 2 - 1, sw=1.4, dash=dash, arrow=True
+                )
             else:
-                sh.line(x, y1 - CH / 2, x, y2 + CH / 2 + 1, sw=1.4, dash=dash, arrow=True)
+                sh.line(
+                    x, y1 - CH / 2, x, y2 + CH / 2 + 1, sw=1.4, dash=dash, arrow=True
+                )
             mid = (y1 + y2) / 2
             sh.add(
                 f'<rect x="{x - wdt / 2 - 3:.1f}" y="{mid - 5:.1f}" width="{wdt + 6:.1f}" '
@@ -947,7 +1031,9 @@ def module_sheet(model, mod) -> Sheet:
             xc = 412
             sh.poly(
                 [(CB_L + CB_W, y1), (xc, y1), (xc, y2), (CB_L + CB_W - 1.2, y2)],
-                sw=1.4, dash=dash, arrow=True,
+                sw=1.4,
+                dash=dash,
+                arrow=True,
             )
             gap_centers = [
                 (comp_cy[i] + CH / 2 + comp_cy[i + 1] - CH / 2) / 2
@@ -966,10 +1052,17 @@ def module_sheet(model, mod) -> Sheet:
     if part:
         for i, fl in enumerate(part):
             r_, c_ = divmod(i, 3)
-            sh.text(24 + c_ * 212, fy + 16 + r_ * 15, f"{fl['id']}  {fl['name']}".upper(), F_SMALL)
+            sh.text(
+                24 + c_ * 212,
+                fy + 16 + r_ * 15,
+                f"{fl['id']}  {fl['name']}".upper(),
+                F_SMALL,
+            )
         flow_bottom = fy + 16 + ((len(part) - 1) // 3) * 15
     else:
-        sh.text(24, fy + 16, "NONE — NO FLOW STEP NAMES THIS MODULE'S COMPONENTS", F_SMALL)
+        sh.text(
+            24, fy + 16, "NONE — NO FLOW STEP NAMES THIS MODULE'S COMPONENTS", F_SMALL
+        )
         flow_bottom = fy + 16
 
     ly = flow_bottom + 30
@@ -1036,89 +1129,362 @@ FLOW_FIXES = {
         (["crier", "scheduler", "READINESS BINDING: IDENTITY + VERSION"]),
         (["manager", "scheduler", "LOCAL: ADMISSION ENABLED ONLY AFTER READBACK"]),
     ],
-
     "F3": [
         (["node", "duckbrain", "R1 RUN RECORD — WRITER: NODE WORKER (CT-09, MISSING)"]),
-        (["node", "duckbrain", "R2 FLEET INDEX — WRITER: NODE WORKER (CT-09, MISSING)"]),
+        (
+            [
+                "node",
+                "duckbrain",
+                "R2 FLEET INDEX — WRITER: NODE WORKER (CT-09, MISSING)",
+            ]
+        ),
         (["foreman", "duckbrain", "WORKER / WAVE RECORDS — WRITER: FOREMAN (CT-15)"]),
-        (["foreman", "duckbrain", "FINAL-ROUND SUMMARY AT SETTLEMENT — DISTINCT RECORD"]),
-        (["foreman", "duckbrain", "R3 WEEKLY ROLLUP — ADDITIONAL, NEVER THE ROUND RECORD"]),
+        (
+            [
+                "foreman",
+                "duckbrain",
+                "FINAL-ROUND SUMMARY AT SETTLEMENT — DISTINCT RECORD",
+            ]
+        ),
+        (
+            [
+                "foreman",
+                "duckbrain",
+                "R3 WEEKLY ROLLUP — ADDITIONAL, NEVER THE ROUND RECORD",
+            ]
+        ),
         (["owner", "duckbrain", "RECALL REQUEST: BY PROJECT, WEEK, LANE"]),
         (["duckbrain", "owner", "RECALL RESULTS WITH PROVENANCE + FRESHNESS"]),
         (["foreman", "foreman", "LOCAL: PRE-BRIEF RECALL SHAPES THE WORK SELECTION"]),
-        (["duckbrain", "duckbrain", "LOCAL: GIT-BACKED NAMESPACE PERSIST + PENDING-SYNC STATE"]),
+        (
+            [
+                "duckbrain",
+                "duckbrain",
+                "LOCAL: GIT-BACKED NAMESPACE PERSIST + PENDING-SYNC STATE",
+            ]
+        ),
     ],
     "F4": [
-        (["owner", "handbook", "1. SOURCE / REQUIREMENTS INTAKE: REDLINES + PRIOR ISSUE"]),
+        (
+            [
+                "owner",
+                "handbook",
+                "1. SOURCE / REQUIREMENTS INTAKE: REDLINES + PRIOR ISSUE",
+            ]
+        ),
         (["foreman", "docsgate", "2. SKELETON + PINNED SOURCE DELIVERED"]),
         (["panel", "docsgate", "3. SEAT AUTHORS: FILLS, CITES FILE:LINE"]),
-        (["docsgate", "foreman", "4. STRUCTURAL PASS OR NAMED REFUSALS (CT-16) — NOT ACCEPTANCE"]),
-        (["panel", "foreman", "5. INDEPENDENT SEMANTIC REVIEW: SEATS + SPLITS REPORTED"]),
-        (["panel", "foreman", "BRANCH — CHANGES REQUESTED: CORRECTION + REVIEW REPEAT", "BR"]),
-        (["spine", "handbook", "6. CROSS-DOCUMENT CHECKS: CT IDS, STATES, DANGLING REFS"]),
-        (["handbook", "handbook", "7. LOCAL: LINT + BUILD + RENDER QA + DISPOSITION COVERAGE"]),
-        (["handbook", "owner", "8. VERSIONED REVIEW PACKAGE + EXACT ARTIFACT IDENTITY (CT-18)"]),
-        (["owner", "handbook", "9. OWNER DECISION: ACCEPTED ISSUE OR CHANGES REQUESTED"]),
-        (["handbook", "foreman", "10. ACCEPTED SOURCE INTEGRATION, OR NAMED CORRECTION LOOP"]),
+        (
+            [
+                "docsgate",
+                "foreman",
+                "4. STRUCTURAL PASS OR NAMED REFUSALS (CT-16) — NOT ACCEPTANCE",
+            ]
+        ),
+        (
+            [
+                "panel",
+                "foreman",
+                "5. INDEPENDENT SEMANTIC REVIEW: SEATS + SPLITS REPORTED",
+            ]
+        ),
+        (
+            [
+                "panel",
+                "foreman",
+                "BRANCH — CHANGES REQUESTED: CORRECTION + REVIEW REPEAT",
+                "BR",
+            ]
+        ),
+        (
+            [
+                "spine",
+                "handbook",
+                "6. CROSS-DOCUMENT CHECKS: CT IDS, STATES, DANGLING REFS",
+            ]
+        ),
+        (
+            [
+                "handbook",
+                "handbook",
+                "7. LOCAL: LINT + BUILD + RENDER QA + DISPOSITION COVERAGE",
+            ]
+        ),
+        (
+            [
+                "handbook",
+                "owner",
+                "8. VERSIONED REVIEW PACKAGE + EXACT ARTIFACT IDENTITY (CT-18)",
+            ]
+        ),
+        (
+            [
+                "owner",
+                "handbook",
+                "9. OWNER DECISION: ACCEPTED ISSUE OR CHANGES REQUESTED",
+            ]
+        ),
+        (
+            [
+                "handbook",
+                "foreman",
+                "10. ACCEPTED SOURCE INTEGRATION, OR NAMED CORRECTION LOOP",
+            ]
+        ),
     ],
     "F5": [
         (["node", "gitreins", "STAGE 1 · PRE-COMMIT GUARD: STAGED BYTES ONLY (CT-12)"]),
-        (["gitreins", "node", "STAGE 1 · PASS OR REFUSE; REFUSAL LEAVES HEAD UNMOVED", "BR"]),
-        (["node", "gitreins", "STAGE 2 · SOURCE JUDGE: EXACT COMMIT + CRITERIA + TESTS"]),
-        (["gitreins", "foreman", "STAGE 2 · SOURCE VERDICT + EVIDENCE BOUND TO COMMIT (CT-13)"]),
-        (["owner", "lander", "STAGE 3 · INTEGRATE BY CONFIGURED PR / DIRECT-MERGE POLICY"]),
-        (["lander", "gitreins", "STAGE 3 · INTEGRATED CANDIDATE: MERGED TREE + RERUN CHECKS"]),
-        (["gitreins", "lander", "STAGE 3 · INTEGRATED VERDICT; CAS CONFLICT INVALIDATES / RERUNS"]),
+        (
+            [
+                "gitreins",
+                "node",
+                "STAGE 1 · PASS OR REFUSE; REFUSAL LEAVES HEAD UNMOVED",
+                "BR",
+            ]
+        ),
+        (
+            [
+                "node",
+                "gitreins",
+                "STAGE 2 · SOURCE JUDGE: EXACT COMMIT + CRITERIA + TESTS",
+            ]
+        ),
+        (
+            [
+                "gitreins",
+                "foreman",
+                "STAGE 2 · SOURCE VERDICT + EVIDENCE BOUND TO COMMIT (CT-13)",
+            ]
+        ),
+        (
+            [
+                "owner",
+                "lander",
+                "STAGE 3 · INTEGRATE BY CONFIGURED PR / DIRECT-MERGE POLICY",
+            ]
+        ),
+        (
+            [
+                "lander",
+                "gitreins",
+                "STAGE 3 · INTEGRATED CANDIDATE: MERGED TREE + RERUN CHECKS",
+            ]
+        ),
+        (
+            [
+                "gitreins",
+                "lander",
+                "STAGE 3 · INTEGRATED VERDICT; CAS CONFLICT INVALIDATES / RERUNS",
+            ]
+        ),
         (["lander", "foreman", "STAGE 3 · REMOTE TREE + REF READBACK = PUBLISHED"]),
         (["foreman", "board", "STAGE 4 · CLOSE AGAINST TESTED PARENT (CT-14)"]),
         (["foreman", "duckbrain", "STAGE 4 · RETAIN ALL EVIDENCE (CT-15)"]),
     ],
     "F6": [
-        (["provisioner", "safety", "MAINTENANCE TRIGGER: PERIODIC OR CAPACITY PRESSURE"]),
-        (["safety", "safety", "LOCAL: INVENTORY CANDIDATES — ACTIVE-CLAIM + PROTECTED-PATH CHECKS FIRST"]),
-        (["provisioner", "safety", "ALTERNATIVE A: RECLAIM DISK — CACHES + JOB DIRS PAST 24 H TTL (M8 §3 S1)"]),
-        (["provisioner", "safety", "ALTERNATIVE B: NODE HYGIENE — ORPHAN HOMES / KEYS, 60 MIN GRACE (M1 §5)"]),
-        (["safety", "node", "PROTECTED PATHS REFUSED BEFORE INSPECTION: REPO, NODE.JSON, CRIER.JSON (M8 §5)"]),
-        (["node", "node", "ALTERNATIVE C: REPO FRESHNESS MEASURES LAG VS ORIGIN (M3 §5)"]),
-        (["verifier", "node", "ALTERNATIVE D: NODE FRESHNESS — BRANCH / HEAD / LAG (M1 §11)"]),
-        (["safety", "provisioner", "RESULT: BYTES RECLAIMED + RETAINED / REFUSED REASONS"]),
+        (
+            [
+                "provisioner",
+                "safety",
+                "MAINTENANCE TRIGGER: PERIODIC OR CAPACITY PRESSURE",
+            ]
+        ),
+        (
+            [
+                "safety",
+                "safety",
+                "LOCAL: INVENTORY CANDIDATES — ACTIVE-CLAIM + PROTECTED-PATH CHECKS FIRST",
+            ]
+        ),
+        (
+            [
+                "provisioner",
+                "safety",
+                "ALTERNATIVE A: RECLAIM DISK — CACHES + JOB DIRS PAST 24 H TTL (M8 §3 S1)",
+            ]
+        ),
+        (
+            [
+                "provisioner",
+                "safety",
+                "ALTERNATIVE B: NODE HYGIENE — ORPHAN HOMES / KEYS, 60 MIN GRACE (M1 §5)",
+            ]
+        ),
+        (
+            [
+                "safety",
+                "node",
+                "PROTECTED PATHS REFUSED BEFORE INSPECTION: REPO, NODE.JSON, CRIER.JSON (M8 §5)",
+            ]
+        ),
+        (
+            [
+                "node",
+                "node",
+                "ALTERNATIVE C: REPO FRESHNESS MEASURES LAG VS ORIGIN (M3 §5)",
+            ]
+        ),
+        (
+            [
+                "verifier",
+                "node",
+                "ALTERNATIVE D: NODE FRESHNESS — BRANCH / HEAD / LAG (M1 §11)",
+            ]
+        ),
+        (
+            [
+                "safety",
+                "provisioner",
+                "RESULT: BYTES RECLAIMED + RETAINED / REFUSED REASONS",
+            ]
+        ),
     ],
     "F7": [
-        (["owner", "scheduler", "READ REQUEST: GET /API/V1/METRICS — SPAWNS, DEFERRALS, TICKS (M9 §8)"]),
+        (
+            [
+                "owner",
+                "scheduler",
+                "READ REQUEST: GET /API/V1/METRICS — SPAWNS, DEFERRALS, TICKS (M9 §8)",
+            ]
+        ),
         (["scheduler", "owner", "METRICS RESPONSE"]),
-        (["owner", "scheduler", "READ REQUEST: /API/V1/STATUS — PER-PROJECT FAILURE RATES (M9 §5)"]),
+        (
+            [
+                "owner",
+                "scheduler",
+                "READ REQUEST: /API/V1/STATUS — PER-PROJECT FAILURE RATES (M9 §5)",
+            ]
+        ),
         (["scheduler", "owner", "STATUS RESPONSE"]),
         (["owner", "crier", "READ REQUEST: /METRICS — GUARD + INBOX SERIES (M10 §8)"]),
         (["crier", "owner", "METRICS RESPONSE"]),
-        (["proxy", "proxy", "FILE APPEND: USAGE JSONL PER REQUEST — A LOG, NOT AN HTTP READ (M12 §8)"]),
+        (
+            [
+                "proxy",
+                "proxy",
+                "FILE APPEND: USAGE JSONL PER REQUEST — A LOG, NOT AN HTTP READ (M12 §8)",
+            ]
+        ),
         (["proxy", "owner", "USAGE JSONL READ OUT: NODE, MODEL, STATUS, BYTES"]),
-        (["manager", "manager", "LOCAL: OBSERVE DESIRED VS EFFECTIVE → SCOPED REPAIR + READINESS"]),
-        (["manager", "owner", "FACTORY EVENT DELIVERY: RECEIVER INTERPRETS / PAGES / REPAIRS"]),
+        (
+            [
+                "manager",
+                "manager",
+                "LOCAL: OBSERVE DESIRED VS EFFECTIVE → SCOPED REPAIR + READINESS",
+            ]
+        ),
+        (
+            [
+                "manager",
+                "owner",
+                "FACTORY EVENT DELIVERY: RECEIVER INTERPRETS / PAGES / REPAIRS",
+            ]
+        ),
     ],
     "F8": [
-        (["dispatcher", "dispatcher", "BRANCH A — REPLAY: REDELIVERY REPLAYS THE RECORDED RESULT"]),
+        (
+            [
+                "dispatcher",
+                "dispatcher",
+                "BRANCH A — REPLAY: REDELIVERY REPLAYS THE RECORDED RESULT",
+            ]
+        ),
         (["crier", "node", "BRANCH B — LEASE EXPIRY: UNACKED REDELIVERS, NOT LOST"]),
-        (["scheduler", "sessionstore", "BRANCH C — REAP: --REAP-SESSIONS, DRY-RUN FIRST"]),
-        (["sessionstore", "scheduler", "REAP RESULT: STALE SESSIONS CLOSED ONLY ON --APPLY"]),
-        (["board", "foreman", "BRANCH D — BOARD READ RESOLVES FROM ORIGIN/MAIN (M4 §3)"]),
+        (
+            [
+                "scheduler",
+                "sessionstore",
+                "BRANCH C — REAP: --REAP-SESSIONS, DRY-RUN FIRST",
+            ]
+        ),
+        (
+            [
+                "sessionstore",
+                "scheduler",
+                "REAP RESULT: STALE SESSIONS CLOSED ONLY ON --APPLY",
+            ]
+        ),
+        (
+            [
+                "board",
+                "foreman",
+                "BRANCH D — BOARD READ RESOLVES FROM ORIGIN/MAIN (M4 §3)",
+            ]
+        ),
         (["board", "owner", "LOCK CHECK RESULT: ERROR — LOCK STATE UNKNOWN (M4 §3)"]),
-        (["owner", "owner", "LOCAL: STOP AND DIAGNOSE — NEVER WRITE ON AN UNKNOWN LOCK"]),
+        (
+            [
+                "owner",
+                "owner",
+                "LOCAL: STOP AND DIAGNOSE — NEVER WRITE ON AN UNKNOWN LOCK",
+            ]
+        ),
         (["scheduler", "board", "CONVERGE: STATE + READINESS RECONCILED, THEN RETRY"]),
     ],
     "F9": [
-        (["gateway", "scheduler", "MODE: GATEWAY FAILS — TICK DEFERRED, NOT EXEC-SPAWNED (M9 §5)"]),
-        (["scheduler", "node", "MODE: LOAD GATE — SPAWNS DEFERRED WHILE LOAD ≥ THRESHOLD (M9 §3)"]),
-        (["guard", "node", "MODE: GUARD PROVIDER OUTAGE — FAIL-OPEN UNLESS FAILCLOSED (M10 §10)"]),
-        (["proxy", "node", "MODE: PROXY FAILS CLOSED AT STARTUP — NO TOKEN / NO KEY → EXIT 2 (M12 §11)"]),
-        (["node", "node", "IMPL EVIDENCE: ABSENT HOOK EXITS 0 — A SILENT BYPASS TO DISPOSE (M3 §10)"]),
-        (["node", "gitreins", "EXIT BRANCH — GATE RESTORED: PRE-COMMIT GRADING RESUMES", "BR"]),
-        (["scheduler", "gateway", "EXIT BRANCH — DEPENDENCY BACK: ADMISSION RE-EVALUATED, MODE CLEARED", "BR"]),
+        (
+            [
+                "gateway",
+                "scheduler",
+                "MODE: GATEWAY FAILS — TICK DEFERRED, NOT EXEC-SPAWNED (M9 §5)",
+            ]
+        ),
+        (
+            [
+                "scheduler",
+                "node",
+                "MODE: LOAD GATE — SPAWNS DEFERRED WHILE LOAD ≥ THRESHOLD (M9 §3)",
+            ]
+        ),
+        (
+            [
+                "guard",
+                "node",
+                "MODE: GUARD PROVIDER OUTAGE — FAIL-OPEN UNLESS FAILCLOSED (M10 §10)",
+            ]
+        ),
+        (
+            [
+                "proxy",
+                "node",
+                "MODE: PROXY FAILS CLOSED AT STARTUP — NO TOKEN / NO KEY → EXIT 2 (M12 §11)",
+            ]
+        ),
+        (
+            [
+                "node",
+                "node",
+                "IMPL EVIDENCE: ABSENT HOOK EXITS 0 — A SILENT BYPASS TO DISPOSE (M3 §10)",
+            ]
+        ),
+        (
+            [
+                "node",
+                "gitreins",
+                "EXIT BRANCH — GATE RESTORED: PRE-COMMIT GRADING RESUMES",
+                "BR",
+            ]
+        ),
+        (
+            [
+                "scheduler",
+                "gateway",
+                "EXIT BRANCH — DEPENDENCY BACK: ADMISSION RE-EVALUATED, MODE CLEARED",
+                "BR",
+            ]
+        ),
     ],
     "F10": [
         (["owner", "manager", "1. AUTHORIZE STOP / REMOVE / REBUILD + RETENTION"]),
         (["manager", "manager", "2. BIND PRINCIPAL, TARGET, GENERATION, SCOPE"]),
         (["manager", "provisioner", "3. DRAIN + QUIESCE / CHECKPOINT ACTIVE WORK"]),
-        (["provisioner", "safety", "4. PRESERVE WORKSPACE / MEMORY + RESTORE READBACK"]),
+        (
+            [
+                "provisioner",
+                "safety",
+                "4. PRESERVE WORKSPACE / MEMORY + RESTORE READBACK",
+            ]
+        ),
         (["provisioner", "bunker", "5. DESTROY AFTER PRESERVATION + QUIESCENCE"]),
         (["provisioner", "safety", "6. REAP ORPHANS AGAINST LIVE REGISTRY"]),
         (["manager", "provisioner", "7. REBUILD SIGNED MANIFEST + PINNED ARTIFACTS"]),
@@ -1129,62 +1495,280 @@ FLOW_FIXES = {
         (["manager", "owner", "12. REPORT RETAINED / LOST EVIDENCE"]),
     ],
     "F11": [
-        (["scheduler", "board", "REFRESH BEFORE ELIGIBILITY: REPO + BOARD COPIES, REVISION RECORDED"]),
+        (
+            [
+                "scheduler",
+                "board",
+                "REFRESH BEFORE ELIGIBILITY: REPO + BOARD COPIES, REVISION RECORDED",
+            ]
+        ),
         (["board", "scheduler", "READ RESULT: BOARD VERSION + OWNERSHIP"]),
-        (["scheduler", "scheduler", "LOCAL: ADMISSION MODE — OVERRIDE → NAMESPACE → COOLDOWN (M9 §3)"]),
-        (["scheduler", "scheduler", "LOCAL: BOARD-STASIS GATE — A SCHEDULER DECISION FROM OBSERVATIONS"]),
-        (["scheduler", "board", "WORKABILITY: WORK / NO-WORK / UNREADABLE ARE DISTINCT (M9 §3)"]),
-        (["scheduler", "scheduler", "LOCAL: USAGE POOLS RESERVED, OR A CAPACITY DENIAL EMITTED (M9 §3)"]),
-        (["scheduler", "scheduler", "IMPL EVIDENCE: NOOP-PACING SPACES A NO-ARTIFACT LANE, 2× TO 8× FLOOR"]),
+        (
+            [
+                "scheduler",
+                "scheduler",
+                "LOCAL: ADMISSION MODE — OVERRIDE → NAMESPACE → COOLDOWN (M9 §3)",
+            ]
+        ),
+        (
+            [
+                "scheduler",
+                "scheduler",
+                "LOCAL: BOARD-STASIS GATE — A SCHEDULER DECISION FROM OBSERVATIONS",
+            ]
+        ),
+        (
+            [
+                "scheduler",
+                "board",
+                "WORKABILITY: WORK / NO-WORK / UNREADABLE ARE DISTINCT (M9 §3)",
+            ]
+        ),
+        (
+            [
+                "scheduler",
+                "scheduler",
+                "LOCAL: USAGE POOLS RESERVED, OR A CAPACITY DENIAL EMITTED (M9 §3)",
+            ]
+        ),
+        (
+            [
+                "scheduler",
+                "scheduler",
+                "IMPL EVIDENCE: NOOP-PACING SPACES A NO-ARTIFACT LANE, 2× TO 8× FLOOR",
+            ]
+        ),
         (["scheduler", "crier", "ADMITTED: THE ENVELOPE IS DISPATCHED (CT-02)"]),
-        (["scheduler", "scheduler", "DEFERRED: NAMED REASON + NEXT ELIGIBLE WAKEUP — NEVER DROPPED"]),
-        (["scheduler", "board", "AFTER SETTLEMENT: FINAL REFRESH + BOARD-CHECK VERIFIER, DURABLE INCOMPLETE ON FAILURE"]),
+        (
+            [
+                "scheduler",
+                "scheduler",
+                "DEFERRED: NAMED REASON + NEXT ELIGIBLE WAKEUP — NEVER DROPPED",
+            ]
+        ),
+        (
+            [
+                "scheduler",
+                "board",
+                "AFTER SETTLEMENT: FINAL REFRESH + BOARD-CHECK VERIFIER, DURABLE INCOMPLETE ON FAILURE",
+            ]
+        ),
     ],
     "F12": [
-        (["owner", "github", "ISSUE: JWT FROM THE 0600 APP KEY → INSTALLATION TOKEN (M7 §5)"]),
-        (["github", "owner", "TOKEN TO A 0600 FILE — THE VALUE IS NEVER PRINTED (M7 §7)"]),
-        (["github", "node", "INSTALL: REFRESH --NODE WRITES AUTH/GITHUB.TOKEN (M7 §5)"]),
-        (["node", "github", "READBACK: INSTALLED CREDENTIAL CHECKED AGAINST THE ISSUE"]),
-        (["scoper", "dispatcher", "SEPARATE DOMAIN: PER-DISPATCH SCOPED TOKEN (M11 §6)"]),
-        (["node", "proxy", "SEPARATE DOMAIN: NODE BEARER ≠ GITHUB TOKEN — FAIL-CLOSED (M12 §6)"]),
-        (["owner", "github", "BRANCH — EXPIRY / LEAK SIGNAL: RENEW OR REVOKE WITH AUTHORITY", "BR"]),
-        (["github", "node", "REPLACEMENT ACCESS INSTALLED; OLD AUTHORITY DENIED (M7 §12)"]),
+        (
+            [
+                "owner",
+                "github",
+                "ISSUE: JWT FROM THE 0600 APP KEY → INSTALLATION TOKEN (M7 §5)",
+            ]
+        ),
+        (
+            [
+                "github",
+                "owner",
+                "TOKEN TO A 0600 FILE — THE VALUE IS NEVER PRINTED (M7 §7)",
+            ]
+        ),
+        (
+            [
+                "github",
+                "node",
+                "INSTALL: REFRESH --NODE WRITES AUTH/GITHUB.TOKEN (M7 §5)",
+            ]
+        ),
+        (
+            [
+                "node",
+                "github",
+                "READBACK: INSTALLED CREDENTIAL CHECKED AGAINST THE ISSUE",
+            ]
+        ),
+        (
+            [
+                "scoper",
+                "dispatcher",
+                "SEPARATE DOMAIN: PER-DISPATCH SCOPED TOKEN (M11 §6)",
+            ]
+        ),
+        (
+            [
+                "node",
+                "proxy",
+                "SEPARATE DOMAIN: NODE BEARER ≠ GITHUB TOKEN — FAIL-CLOSED (M12 §6)",
+            ]
+        ),
+        (
+            [
+                "owner",
+                "github",
+                "BRANCH — EXPIRY / LEAK SIGNAL: RENEW OR REVOKE WITH AUTHORITY",
+                "BR",
+            ]
+        ),
+        (
+            [
+                "github",
+                "node",
+                "REPLACEMENT ACCESS INSTALLED; OLD AUTHORITY DENIED (M7 §12)",
+            ]
+        ),
     ],
     "F13": [
         (["owner", "manager", "DESIRED PIN + COMPATIBILITY MATRIX (M5 §5)"]),
-        (["manager", "harness", "INSTALLER FETCHES A DIGEST-CHECKED ARTIFACT, APPLIES (M5 §5)"]),
-        (["harness", "manager", "READBACK: INSTALLED VERSION VS PIN; DRIFT NAMED (M5 §10)"]),
+        (
+            [
+                "manager",
+                "harness",
+                "INSTALLER FETCHES A DIGEST-CHECKED ARTIFACT, APPLIES (M5 §5)",
+            ]
+        ),
+        (
+            [
+                "harness",
+                "manager",
+                "READBACK: INSTALLED VERSION VS PIN; DRIFT NAMED (M5 §10)",
+            ]
+        ),
         (["manager", "scheduler", "MIGRATION STORES APPLY THE SCHEMA CHANGE (M9 §3)"]),
-        (["manager", "board", "MIGRATE: BOARDCTL NORMALIZE-STATUSES — ROW VOCABULARY (M4 §4)"]),
+        (
+            [
+                "manager",
+                "board",
+                "MIGRATE: BOARDCTL NORMALIZE-STATUSES — ROW VOCABULARY (M4 §4)",
+            ]
+        ),
         (["manager", "manager", "LOCAL: EFFECTIVE RUNTIME READINESS RESULT"]),
-        (["manager", "manager", "BRANCH — FAILED APPLY: ROLLBACK OR NAMED FORWARD RECOVERY", "BR"]),
+        (
+            [
+                "manager",
+                "manager",
+                "BRANCH — FAILED APPLY: ROLLBACK OR NAMED FORWARD RECOVERY",
+                "BR",
+            ]
+        ),
     ],
     "F14": [
-        (["node", "sessionstore", "EMIT: EVERY TURN, MODEL, TOKENS, COST → SESSION SINK (CT-11)"]),
-        (["scheduler", "scheduler", "LOCAL: TICK + SPAWN COUNTERS — SCHEDULER METRICS SURFACE (M9 §8)"]),
-        (["proxy", "proxy", "APPEND: USAGE JSONL — CAPTURE LOSS SILENT (IMPL EVIDENCE, M12 §11)"]),
-        (["foreman", "duckbrain", "MEMORY RECORDS — PROVENANCE DISTINCT FROM TOKEN TELEMETRY (CT-15)"]),
-        (["scheduler", "duckbrain", "NAMESPACE SYNC EVERY 5 M — SYNCHRONIZATION, NOT TELEMETRY (M9 §5)"]),
-        (["owner", "scheduler", "READOUT: METRICS QUERY, CORRELATED BY RUN / TASK IDS"]),
+        (
+            [
+                "node",
+                "sessionstore",
+                "EMIT: EVERY TURN, MODEL, TOKENS, COST → SESSION SINK (CT-11)",
+            ]
+        ),
+        (
+            [
+                "scheduler",
+                "scheduler",
+                "LOCAL: TICK + SPAWN COUNTERS — SCHEDULER METRICS SURFACE (M9 §8)",
+            ]
+        ),
+        (
+            [
+                "proxy",
+                "proxy",
+                "APPEND: USAGE JSONL — CAPTURE LOSS SILENT (IMPL EVIDENCE, M12 §11)",
+            ]
+        ),
+        (
+            [
+                "foreman",
+                "duckbrain",
+                "MEMORY RECORDS — PROVENANCE DISTINCT FROM TOKEN TELEMETRY (CT-15)",
+            ]
+        ),
+        (
+            [
+                "scheduler",
+                "duckbrain",
+                "NAMESPACE SYNC EVERY 5 M — SYNCHRONIZATION, NOT TELEMETRY (M9 §5)",
+            ]
+        ),
+        (
+            [
+                "owner",
+                "scheduler",
+                "READOUT: METRICS QUERY, CORRELATED BY RUN / TASK IDS",
+            ]
+        ),
     ],
     "F15": [
-        (["owner", "manager", "BACKUP SCOPE + TRIGGER: REPO/BOARD, MEMORY, SCHEDULER/CRIER STATE (M4 §7)"]),
-        (["manager", "board", "SNAPSHOT: BOARD_DRIFT COMPARES CHECKOUT VS ORIGIN/MAIN ROW BY ROW (M4 §7)"]),
+        (
+            [
+                "owner",
+                "manager",
+                "BACKUP SCOPE + TRIGGER: REPO/BOARD, MEMORY, SCHEDULER/CRIER STATE (M4 §7)",
+            ]
+        ),
+        (
+            [
+                "manager",
+                "board",
+                "SNAPSHOT: BOARD_DRIFT COMPARES CHECKOUT VS ORIGIN/MAIN ROW BY ROW (M4 §7)",
+            ]
+        ),
         (["manager", "scheduler", "CHECKPOINT: --VERIFY-BOARD AT BOOT (M9 §5)"]),
-        (["manager", "duckbrain", "SNAPSHOT: DUCKBRAIN HISTORY + DATA TO THE BACKUP DESTINATION"]),
-        (["manager", "manager", "LOCAL: RESTORE INTO A SCRATCH HOME — ISOLATED, NOT LIVE (OUTLINE F15)"]),
-        (["duckbrain", "manager", "MEMORY READBACK: A KNOWN ROW READ BACK PROVES THE RESTORE"]),
+        (
+            [
+                "manager",
+                "duckbrain",
+                "SNAPSHOT: DUCKBRAIN HISTORY + DATA TO THE BACKUP DESTINATION",
+            ]
+        ),
+        (
+            [
+                "manager",
+                "manager",
+                "LOCAL: RESTORE INTO A SCRATCH HOME — ISOLATED, NOT LIVE (OUTLINE F15)",
+            ]
+        ),
+        (
+            [
+                "duckbrain",
+                "manager",
+                "MEMORY READBACK: A KNOWN ROW READ BACK PROVES THE RESTORE",
+            ]
+        ),
         (["board", "manager", "BOARD READBACK: REPRESENTATIVE ROWS VIA BOARDCTL"]),
         (["manager", "owner", "RECOVERY-POINT + REVOKED-SECRET POLICY BEFORE RESUME"]),
     ],
     "F16": [
-        (["scheduler", "crier", "PER-TARGET DISPATCH: ENVELOPE TO EACH REGISTRY AGENT (M11 §3 S4)"]),
+        (
+            [
+                "scheduler",
+                "crier",
+                "PER-TARGET DISPATCH: ENVELOPE TO EACH REGISTRY AGENT (M11 §3 S4)",
+            ]
+        ),
         (["crier", "dispatcher", "CRIER DELIVERY BOUNDARY: CUSTODY + REPLAY IDENTITY"]),
-        (["dispatcher", "bunker", "EXEC: BUNKER EXEC RUNS THE HARNESS IN EACH TARGET CONTAINER (M11 §3 S1)"]),
-        (["dispatcher", "crier", "RESULT + ACK: REPLY DELIVERED BEFORE ACK (M11 §3 S3)"]),
+        (
+            [
+                "dispatcher",
+                "bunker",
+                "EXEC: BUNKER EXEC RUNS THE HARNESS IN EACH TARGET CONTAINER (M11 §3 S1)",
+            ]
+        ),
+        (
+            [
+                "dispatcher",
+                "crier",
+                "RESULT + ACK: REPLY DELIVERED BEFORE ACK (M11 §3 S3)",
+            ]
+        ),
         (["crier", "scheduler", "SETTLEMENT: COMPLETION SETTLES PER DISPATCH (CT-06)"]),
-        (["dispatcher", "dispatcher", "IMPL EVIDENCE: SERIAL LOOP — ONE LONG JOB HEAD-OF-LINE-BLOCKS LATER AGENTS (M11 §11 F11-5)"]),
-        (["dispatcher", "dispatcher", "REDELIVERY: REPLAYS THE RECORDED RESULT — NEVER RERUNS (M11 §3 S3)"]),
+        (
+            [
+                "dispatcher",
+                "dispatcher",
+                "IMPL EVIDENCE: SERIAL LOOP — ONE LONG JOB HEAD-OF-LINE-BLOCKS LATER AGENTS (M11 §11 F11-5)",
+            ]
+        ),
+        (
+            [
+                "dispatcher",
+                "dispatcher",
+                "REDELIVERY: REPLAYS THE RECORDED RESULT — NEVER RERUNS (M11 §3 S3)",
+            ]
+        ),
     ],
 }
 
@@ -1260,7 +1844,11 @@ def seq_sheet(model, flow) -> Sheet:
             # paper-backed label: an intermediate dashed lifeline is interrupted
             # behind the text instead of striking through it (parts-strip rule)
             wdt = len(s) * 5.5 + 6
-            rx = x - wdt / 2 if anchor == "middle" else (x - wdt if anchor == "end" else x - 3)
+            rx = (
+                x - wdt / 2
+                if anchor == "middle"
+                else (x - wdt if anchor == "end" else x - 3)
+            )
             sh.add(
                 f'<rect x="{rx:.1f}" y="{y_ - 8.1:.1f}" width="{wdt:.1f}" '
                 f'height="10.9" fill="{PAPER}"/>'
@@ -1321,7 +1909,9 @@ def fig_fill(svg: str) -> float:
     W, H = float(vb.group(1)), float(vb.group(2))
     body = svg.split("</defs>", 1)[-1]  # the marker def's dummy path stays out
     xs, ys = [], []
-    for m in re.finditer(r"<(rect|line|polyline|text|circle|ellipse)\b([^>]*?)/?>", body):
+    for m in re.finditer(
+        r"<(rect|line|polyline|text|circle|ellipse)\b([^>]*?)/?>", body
+    ):
         at = m.group(2)
         if m.group(1) == "polyline" or "points" in at:
             for px, py in re.findall(r"(-?[\d.]+),(-?[\d.]+)", at):

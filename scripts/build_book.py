@@ -668,7 +668,9 @@ def flow_sheets(
 
 
 def _canonical_json(value: object) -> bytes:
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+    return json.dumps(
+        value, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode()
 
 
 def _git_oid(ref: str) -> str:
@@ -742,12 +744,20 @@ def _digest_paths(paths) -> str | None:
     for p in paths:
         p = pathlib.Path(p)
         if p.is_file():
-            entries.append([str(p.relative_to(ROOT)) if ROOT in p.parents else str(p),
-                            _sha256_path(p)])
+            entries.append(
+                [
+                    str(p.relative_to(ROOT)) if ROOT in p.parents else str(p),
+                    _sha256_path(p),
+                ]
+            )
         elif p.is_dir():
             for f in sorted(x for x in p.rglob("*") if x.is_file()):
-                entries.append([str(f.relative_to(ROOT)) if ROOT in f.parents else str(f),
-                                _sha256_path(f)])
+                entries.append(
+                    [
+                        str(f.relative_to(ROOT)) if ROOT in f.parents else str(f),
+                        _sha256_path(f),
+                    ]
+                )
     if not entries:
         return None
     return hashlib.sha256(_canonical_json(entries)).hexdigest()
@@ -760,13 +770,18 @@ def _digest_paths(paths) -> str | None:
 # allowed to mean (P7-EVIDENCE-GRADE-01).
 RELEASE_STAGES = (
     # stage,                    evidence_class,          result,     runtime
-    ("lint",                    "source-static",         "pass",     "NOT_APPLICABLE"),
-    ("build",                   "rendered-artifact",     "pass",     "NOT_APPLICABLE"),
-    ("visual_qa",               "rendered-readback",     "pending",  "NOT_APPLICABLE"),
-    ("completeness",            "cross-contract-closure", "pending", "NOT_APPLICABLE"),
-    ("cross_section_consistency", "cross-contract-closure", "pending", "NOT_APPLICABLE"),
-    ("operational_conformance", "runtime-execution",     "pending",  "NOT_RUN"),
-    ("owner_acceptance",        "owner-decision",        "pending",  "NOT_APPLICABLE"),
+    ("lint", "source-static", "pass", "NOT_APPLICABLE"),
+    ("build", "rendered-artifact", "pass", "NOT_APPLICABLE"),
+    ("visual_qa", "rendered-readback", "pending", "NOT_APPLICABLE"),
+    ("completeness", "cross-contract-closure", "pending", "NOT_APPLICABLE"),
+    (
+        "cross_section_consistency",
+        "cross-contract-closure",
+        "pending",
+        "NOT_APPLICABLE",
+    ),
+    ("operational_conformance", "runtime-execution", "pending", "NOT_RUN"),
+    ("owner_acceptance", "owner-decision", "pending", "NOT_APPLICABLE"),
 )
 
 STAGE_MEANING = {
@@ -787,9 +802,7 @@ def write_build_record(
     recorded_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
     # ---- identity of everything the artifact was made from ----------------------
-    manifest_files = [
-        HB / rel for part in book["parts"] for rel in part["files"]
-    ]
+    manifest_files = [HB / rel for part in book["parts"] for rel in part["files"]]
     identities = {
         "source": {
             "commit": source_commit,
@@ -814,12 +827,16 @@ def write_build_record(
         "build": {
             "tool": "scripts/build_book.py",
             "sha256": _sha256_path(pathlib.Path(__file__).resolve()),
-            "style_sha256": _sha256_path(pathlib.Path(__file__).resolve().parent / "book_style.py"),
+            "style_sha256": _sha256_path(
+                pathlib.Path(__file__).resolve().parent / "book_style.py"
+            ),
             "generator_sha256": _sha256_path(
                 pathlib.Path(__file__).resolve().parent / "gen_handbook_figures.py"
             ),
             "python": "%d.%d" % sys.version_info[:2],
-            "pymupdf": getattr(fitz, "__version__", getattr(fitz, "VersionBind", "unknown")),
+            "pymupdf": getattr(
+                fitz, "__version__", getattr(fitz, "VersionBind", "unknown")
+            ),
         },
     }
 
@@ -836,9 +853,9 @@ def write_build_record(
             "source_tree": source_tree,
             "document_sha256": document_sha256,
             "recorded_at": recorded_at,
-            "findings": [] if passed else [
-                STAGE_MEANING.get(evidence_class, "not evaluated by build_book.py")
-            ],
+            "findings": []
+            if passed
+            else [STAGE_MEANING.get(evidence_class, "not evaluated by build_book.py")],
         }
         if stage == "operational_conformance":
             check["findings"] = [
@@ -859,15 +876,17 @@ def write_build_record(
         try:
             rec = json.loads(prior.read_text())
             art = rec.get("artifacts", [{}])[0]
-            history.append({
-                "record": prior.name,
-                "doc_id": rec.get("doc_id"),
-                "document_sha256": rec.get("document_sha256"),
-                "bytes": art.get("bytes"),
-                "pages": art.get("pages"),
-                "recorded_at": rec.get("checks", [{}])[0].get("recorded_at"),
-                "payload_digest": rec.get("memory", {}).get("payload_digest"),
-            })
+            history.append(
+                {
+                    "record": prior.name,
+                    "doc_id": rec.get("doc_id"),
+                    "document_sha256": rec.get("document_sha256"),
+                    "bytes": art.get("bytes"),
+                    "pages": art.get("pages"),
+                    "recorded_at": rec.get("checks", [{}])[0].get("recorded_at"),
+                    "payload_digest": rec.get("memory", {}).get("payload_digest"),
+                }
+            )
         except (OSError, ValueError, KeyError, IndexError, json.JSONDecodeError):
             continue
 
@@ -931,7 +950,13 @@ def parse_build_record(path: pathlib.Path) -> dict:
         record = json.loads(path.read_text())
         if record["schema_version"] != "handbook-release.v1":
             raise ValueError("schema_version")
-        for key in ("doc_id", "revision", "source_commit", "source_tree", "document_sha256"):
+        for key in (
+            "doc_id",
+            "revision",
+            "source_commit",
+            "source_tree",
+            "document_sha256",
+        ):
             if not isinstance(record[key], str) or not record[key]:
                 raise ValueError(key)
         for key in ("source_commit", "source_tree"):
@@ -946,11 +971,18 @@ def parse_build_record(path: pathlib.Path) -> dict:
         artifact_bytes = artifact_path.read_bytes()
         if hashlib.sha256(artifact_bytes).hexdigest() != record["document_sha256"]:
             raise ValueError("artifact digest")
-        if artifact["sha256"] != record["document_sha256"] or artifact["bytes"] != len(artifact_bytes):
+        if artifact["sha256"] != record["document_sha256"] or artifact["bytes"] != len(
+            artifact_bytes
+        ):
             raise ValueError("artifact binding")
         expected_stages = {
-            "lint", "build", "visual_qa", "completeness",
-            "cross_section_consistency", "operational_conformance", "owner_acceptance",
+            "lint",
+            "build",
+            "visual_qa",
+            "completeness",
+            "cross_section_consistency",
+            "operational_conformance",
+            "owner_acceptance",
         }
         stages = [check["stage"] for check in record["checks"]]
         if len(stages) != len(set(stages)) or set(stages) != expected_stages:
@@ -961,18 +993,32 @@ def parse_build_record(path: pathlib.Path) -> dict:
             if check["result"] == "pending" and check["evidence_refs"]:
                 raise ValueError("pending evidence")
         build = next(check for check in record["checks"] if check["stage"] == "build")
-        if build["result"] != "pass" or build["exit"] != 0 or not build["ok_line"].startswith("OK"):
+        if (
+            build["result"] != "pass"
+            or build["exit"] != 0
+            or not build["ok_line"].startswith("OK")
+        ):
             raise ValueError("build receipt")
         dispositions = record["dispositions"]
-        open_ids = [row["id"] for row in dispositions["rows"] if row["state"] != "ADOPTED"]
-        if dispositions["open_ids"] != open_ids or dispositions["open_count"] != len(open_ids):
+        open_ids = [
+            row["id"] for row in dispositions["rows"] if row["state"] != "ADOPTED"
+        ]
+        if dispositions["open_ids"] != open_ids or dispositions["open_count"] != len(
+            open_ids
+        ):
             raise ValueError("disposition counts")
         for row in dispositions["rows"]:
-            if row["state"] == "ADOPTED" and not re.fullmatch(r"[0-9a-f]{40}", row["resolving_commit"] or ""):
+            if row["state"] == "ADOPTED" and not re.fullmatch(
+                r"[0-9a-f]{40}", row["resolving_commit"] or ""
+            ):
                 raise ValueError("adoption commit")
             if row["state"] != "ADOPTED" and not row["reason"]:
                 raise ValueError("disposition reason")
-        payload = {key: value for key, value in record.items() if key not in {"record_id", "memory"}}
+        payload = {
+            key: value
+            for key, value in record.items()
+            if key not in {"record_id", "memory"}
+        }
         memory = record["memory"]
         digest = hashlib.sha256(_canonical_json(payload)).hexdigest()
         if memory["payload_digest"] != digest:
@@ -980,7 +1026,9 @@ def parse_build_record(path: pathlib.Path) -> dict:
         if memory["record_id"] != record["record_id"] or memory["revision"] != 1:
             raise ValueError("memory identity/revision")
         for key in ("local_commit", "sync_commit"):
-            if memory[key] is not None and not re.fullmatch(r"[0-9a-f]{40}", memory[key]):
+            if memory[key] is not None and not re.fullmatch(
+                r"[0-9a-f]{40}", memory[key]
+            ):
                 raise ValueError(key)
         if memory["sync_commit"] is not None and memory["local_commit"] is None:
             raise ValueError("sync without local commit")
@@ -1000,7 +1048,9 @@ def main() -> int:
         except ValueError as exc:
             print(f"RECORD_FAIL: {exc}")
             return 2
-        print(f"RECORD_OK: {a.check_record} payload_digest={checked['memory']['payload_digest']}")
+        print(
+            f"RECORD_OK: {a.check_record} payload_digest={checked['memory']['payload_digest']}"
+        )
         return 0
 
     # Markdown debris fails the build before anything renders.
@@ -1021,7 +1071,9 @@ def main() -> int:
     change_date = str(doc.get("change") or "").strip()
     # Figure codes live in BOOK.yaml, not in filenames: one id resolves to one object.
     fig_codes = {str(f["file"]): str(f["code"]) for f in book.get("figures", [])}
-    fig_captions = {str(f["file"]): str(f.get("caption", "")) for f in book.get("figures", [])}
+    fig_captions = {
+        str(f["file"]): str(f.get("caption", "")) for f in book.get("figures", [])
+    }
 
     sheets: list[
         tuple[str, list[str], str]
@@ -1226,13 +1278,13 @@ def main() -> int:
                 # Label it, so two sheets carrying "FIGURE 2.1" read as an intentional
                 # reprint rather than a duplicate id (P6-LAYOUT-01).
                 owner_part = {"0": "FM", "2": "II", "3": "III"}.get(code.split(".")[0])
-                reprint_of = owner_part if owner_part and p["id"] != owner_part else None
+                reprint_of = (
+                    owner_part if owner_part and p["id"] != owner_part else None
+                )
                 title = f"PART {p['id']} · FIGURE {code}"
                 if reprint_of:
                     title += " · REPRINT"
-                    heading = (
-                        f"<h2>FIGURE {code} — REPRINT — as of {today}</h2>"
-                    )
+                    heading = f"<h2>FIGURE {code} — REPRINT — as of {today}</h2>"
                 else:
                     heading = f"<h2>FIGURE {code} — as of {today}</h2>"
                 caption = fig_captions.get(rel_fig, "")
@@ -1241,7 +1293,8 @@ def main() -> int:
                     explanation = (
                         f"<p class='reprint'>REPRINT. The issued copy of FIGURE {code} is "
                         f"mounted in Part {reprint_of} where it is read; this sheet repeats "
-                        "it so the front matter can be read on its own.</p>" + explanation
+                        "it so the front matter can be read on its own.</p>"
+                        + explanation
                     )
                 if fig_scaled_h(fig) > SEP_FIG_MAX_MM:
                     # Keep the full-scale print floor. A tall hero gets an explicit
@@ -1251,8 +1304,11 @@ def main() -> int:
                     sheets.append(
                         (
                             title,
-                            [heading, explanation,
-                             f"<p>FIGURE {code} continues at full scale on the immediately adjacent sheet.</p>"],
+                            [
+                                heading,
+                                explanation,
+                                f"<p>FIGURE {code} continues at full scale on the immediately adjacent sheet.</p>",
+                            ],
                             tab,
                         )
                     )
@@ -1315,8 +1371,13 @@ def main() -> int:
         print(f"PAGE FAIL: {npages} .page divs but {pdf_page_count(a.out)} PDF pages")
         return 2
 
-    bs.stamp(a.out, doc_id, basic=today, change=change_date,
-             classification=str(doc.get("classification", "INTERNAL")))
+    bs.stamp(
+        a.out,
+        doc_id,
+        basic=today,
+        change=change_date,
+        classification=str(doc.get("classification", "INTERNAL")),
+    )
 
     # A printed contents table is not a destination. Resolve every part and section
     # heading in the RENDERED pages, in reading order, and write a real PDF outline so

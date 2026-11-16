@@ -15,6 +15,7 @@ cannot be generated again.
 
 Output: docs/handbook/parts/IV-contract-register.md
 """
+
 from __future__ import annotations
 
 import pathlib
@@ -38,8 +39,10 @@ def side(kind: str, c: dict, dst: str) -> tuple[str, bool]:
     if cite:
         return cite, True
     if kind == "sender_guarantee":
-        return (f"RED — no `file:line` in the model states what `{c.get('from')}` "
-                "commits to."), False
+        return (
+            f"RED — no `file:line` in the model states what `{c.get('from')}` "
+            "commits to."
+        ), False
     return (f"RED — what `{dst}` accepts and rejects is not stated here."), False
 
 
@@ -80,9 +83,16 @@ def main() -> int:
         state = STATE_MARK.get(c.get("state", ""), c.get("state", ""))
         downgraded = None
         if state == "PROVEN" and not (send_ok and recv_ok):
-            downgraded = ("State downgraded from PROVEN: a PROVEN row needs BOTH sides "
-                          "cited, and " + ("the sender guarantee" if not send_ok else
-                                           "the receiver requirement") + " is RED.")
+            downgraded = (
+                "State downgraded from PROVEN: a PROVEN row needs BOTH sides "
+                "cited, and "
+                + (
+                    "the sender guarantee"
+                    if not send_ok
+                    else "the receiver requirement"
+                )
+                + " is RED."
+            )
             state = "UNVERIFIED"
         red_sides += (0 if send_ok else 1) + (0 if recv_ok else 1)
 
@@ -121,11 +131,16 @@ def main() -> int:
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text("\n".join(lines) + "\n")
-    proven = sum(1 for c in contracts
-                 if STATE_MARK.get(c.get("state", ""), c.get("state", "")) == "PROVEN")
-    print(f"wrote {OUT.relative_to(ROOT)} — {len(contracts)} contracts, "
-          f"{proven} PROVEN, {red_sides} RED sides, both-sided: "
-          f"{2 * len(contracts) - red_sides}/{2 * len(contracts)}")
+    proven = sum(
+        1
+        for c in contracts
+        if STATE_MARK.get(c.get("state", ""), c.get("state", "")) == "PROVEN"
+    )
+    print(
+        f"wrote {OUT.relative_to(ROOT)} — {len(contracts)} contracts, "
+        f"{proven} PROVEN, {red_sides} RED sides, both-sided: "
+        f"{2 * len(contracts) - red_sides}/{2 * len(contracts)}"
+    )
     return 0
 
 

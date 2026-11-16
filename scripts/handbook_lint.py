@@ -21,6 +21,7 @@ _panel/ and _quorum*/ session archives are not book sources and are not gated.
 
     python3 scripts/handbook_lint.py            # lint the manifest files
 """
+
 from __future__ import annotations
 
 import pathlib
@@ -73,8 +74,12 @@ def lint_file(path: pathlib.Path) -> list[tuple[int, str, str]]:
         # 3. markdown-escaped pipes inside code spans
         for span in re.finditer(r"`([^`]+)`", line):
             body = span.group(1)
-            if "\\|" in body and not (_META_REFERENCE.fullmatch(body) or _GREP_SPAN.search(body)):
-                findings.append((i, "markdown pipe inside code span", body.strip()[:70]))
+            if "\\|" in body and not (
+                _META_REFERENCE.fullmatch(body) or _GREP_SPAN.search(body)
+            ):
+                findings.append(
+                    (i, "markdown pipe inside code span", body.strip()[:70])
+                )
 
         # 4. stray quote escapes in prose
         if '\\"' in prose:
@@ -85,7 +90,9 @@ def lint_file(path: pathlib.Path) -> list[tuple[int, str, str]]:
     #    file-level catches the damaging case: a span opened and never closed that
     #    leaks the rest of the file as code.)
     if ticks % 2:
-        findings.append((0, "unbalanced backticks", f"{ticks} backticks outside fences"))
+        findings.append(
+            (0, "unbalanced backticks", f"{ticks} backticks outside fences")
+        )
 
     return findings
 

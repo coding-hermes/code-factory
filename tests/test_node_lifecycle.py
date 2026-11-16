@@ -217,14 +217,18 @@ class NodeLifecycleTest(unittest.TestCase):
             self.assertNotEqual(0, result.returncode)
             payload = read_state(state)
             self.assertEqual("cancelled", payload["status"])
-            cancelled = [event for event in payload["events"] if event["event"] == "cancel"]
+            cancelled = [
+                event for event in payload["events"] if event["event"] == "cancel"
+            ]
             self.assertEqual(1, len(cancelled))
             self.assertEqual(cancelled[0]["pid"], cancelled[0]["pgid"])
             self.assertTrue(cancelled[0]["killed"])
             self.assertFalse(completion.exists())
             grandchild = root / "grandchild.pid"
             if grandchild.exists():
-                self.assertTrue(proc_gone(int(grandchild.read_text())), grandchild.read_text())
+                self.assertTrue(
+                    proc_gone(int(grandchild.read_text())), grandchild.read_text()
+                )
 
     def test_destroy_create_replay_reconstructs_recorded_node_state(self) -> None:
         with tempfile.TemporaryDirectory(prefix="cf008-replay-") as raw:
@@ -237,7 +241,9 @@ class NodeLifecycleTest(unittest.TestCase):
                 json.dumps(
                     {
                         "state_dir": str(root),
-                        "destroy": [[sys.executable, str(fixture), str(root), "destroy"]],
+                        "destroy": [
+                            [sys.executable, str(fixture), str(root), "destroy"]
+                        ],
                         "create": [[sys.executable, str(fixture), str(root), "create"]],
                         "expected": {
                             "path": "node-state.json",
@@ -248,7 +254,15 @@ class NodeLifecycleTest(unittest.TestCase):
                 encoding="utf-8",
             )
             result = subprocess.run(
-                [sys.executable, str(SCRIPT), "replay", "--config", str(config), "--state", str(state)],
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    "replay",
+                    "--config",
+                    str(config),
+                    "--state",
+                    str(state),
+                ],
                 capture_output=True,
                 text=True,
                 timeout=10,
@@ -260,8 +274,12 @@ class NodeLifecycleTest(unittest.TestCase):
             )
             payload = read_state(state)
             self.assertEqual("replayed", payload["status"])
-            commands = [event for event in payload["events"] if event["event"] == "command"]
-            self.assertEqual(["destroy", "create"], [event["phase"] for event in commands])
+            commands = [
+                event for event in payload["events"] if event["event"] == "command"
+            ]
+            self.assertEqual(
+                ["destroy", "create"], [event["phase"] for event in commands]
+            )
             self.assertEqual(
                 config.read_text(encoding="utf-8"),
                 payload["config_snapshot"],

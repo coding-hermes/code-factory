@@ -17,6 +17,7 @@ The fonts must ALSO be installed as system fonts (fc-wise) for the FIGURES: an S
 as an <img> cannot fetch webfonts, so its Routed Gothic labels resolve from the system.
 The build copies docs/handbook/assets/fonts to the output dir for the HTML side.
 """
+
 from __future__ import annotations
 
 import pathlib
@@ -121,9 +122,11 @@ def cover(doc_id: str, title: str, subtitle: str, meta=()) -> str:
 
 def head_html(doc_id: str, title_line: str, section: str) -> str:
     """Running head: the template's .head — doc number over title over section, rule."""
-    return ("<header class='head'><div class='doc'>%s &middot; INTERNAL</div>"
-            "<div class='title'>%s</div><div class='part'>%s</div>"
-            "<div class='rule'></div></header>" % (doc_id, title_line, section))
+    return (
+        "<header class='head'><div class='doc'>%s &middot; INTERNAL</div>"
+        "<div class='title'>%s</div><div class='part'>%s</div>"
+        "<div class='rule'></div></header>" % (doc_id, title_line, section)
+    )
 
 
 def tab_html(text: str) -> str:
@@ -138,24 +141,36 @@ def foot_html(sub: str, date: str, change: str = "") -> str:
     issue/change furniture in one place — one folio, one place, nothing left as an
     empty form box on a printed sheet.
     """
-    return ("<footer class='foot'><div class='rule'></div><div class='sub'>%s</div>"
-            "<div class='line'>"
-            "<span>Mission <span class='fill' style='width:20mm'>CF2A</span></span>"
-            "<span>Basic Date <span class='fill' style='width:30mm'>%s</span></span>"
-            "<span>Change Date <span class='fill' style='width:30mm'>%s</span></span>"
-            "</div></footer>" % (sub, date, change))
+    return (
+        "<footer class='foot'><div class='rule'></div><div class='sub'>%s</div>"
+        "<div class='line'>"
+        "<span>Mission <span class='fill' style='width:20mm'>CF2A</span></span>"
+        "<span>Basic Date <span class='fill' style='width:30mm'>%s</span></span>"
+        "<span>Change Date <span class='fill' style='width:30mm'>%s</span></span>"
+        "</div></footer>" % (sub, date, change)
+    )
 
 
-def print_pdf(html_path: str | pathlib.Path, pdf_path: str | pathlib.Path,
-              timeout: int = 600) -> None:
+def print_pdf(
+    html_path: str | pathlib.Path, pdf_path: str | pathlib.Path, timeout: int = 600
+) -> None:
     """Print with the flags the template's fonts need: --allow-file-access-from-files
     lets the page load ./fonts, --virtual-time-budget lets them settle before capture."""
     subprocess.run(
-        [CHROME, "--headless=new", "--disable-gpu", "--no-sandbox",
-         "--allow-file-access-from-files", "--virtual-time-budget=30000",
-         "--no-pdf-header-footer", "--print-to-pdf=" + str(pdf_path),
-         pathlib.Path(html_path).resolve().as_uri()],
-        capture_output=True, text=True, timeout=timeout,
+        [
+            CHROME,
+            "--headless=new",
+            "--disable-gpu",
+            "--no-sandbox",
+            "--allow-file-access-from-files",
+            "--virtual-time-budget=30000",
+            "--no-pdf-header-footer",
+            "--print-to-pdf=" + str(pdf_path),
+            pathlib.Path(html_path).resolve().as_uri(),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=timeout,
     )
 
 
@@ -166,16 +181,26 @@ def fit_line(html_path: str | pathlib.Path) -> tuple[str, int]:
     a well-formed print must produce (a second gate: Chrome printing a blank page
     or dropping one shows up here)."""
     r = subprocess.run(
-        [CHROME, "--headless=new", "--disable-gpu", "--no-sandbox",
-         "--allow-file-access-from-files", "--virtual-time-budget=30000",
-         "--dump-dom", pathlib.Path(html_path).resolve().as_uri()],
-        capture_output=True, text=True, timeout=300,
+        [
+            CHROME,
+            "--headless=new",
+            "--disable-gpu",
+            "--no-sandbox",
+            "--allow-file-access-from-files",
+            "--virtual-time-budget=30000",
+            "--dump-dom",
+            pathlib.Path(html_path).resolve().as_uri(),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=300,
     )
     m = re.search(r'data-fit="([^"]*)"', r.stdout)
     fit = m.group(1) if m else "unknown (no fit script output)"
     wp = re.search(r'data-worstpages="([^"]*)"', r.stdout)
     if wp and fit.startswith("OVERFLOW"):
         import html as _h
+
         print("worst pages:", _h.unescape(wp.group(1)))
     return fit, len(re.findall(r'class="page"', r.stdout))
 
@@ -210,18 +235,33 @@ def stamp(pdf_path, doc_id, basic="", change="", classification="INTERNAL"):
         left = 45.47
         right_edge = rect.width - 45.47
         tw = fitz.TextWriter(rect)
-        tw.append((left, y), "%s \u00b7 %s" % (doc_id, classification), font=font, fontsize=size)
+        tw.append(
+            (left, y),
+            "%s \u00b7 %s" % (doc_id, classification),
+            font=font,
+            fontsize=size,
+        )
         num = "%d OF %d" % (i, total)
-        tw.append(((rect.width - font.text_length(num, size)) / 2, y), num,
-                  font=font, fontsize=size)
+        tw.append(
+            ((rect.width - font.text_length(num, size)) / 2, y),
+            num,
+            font=font,
+            fontsize=size,
+        )
         rline = " \u00b7 ".join(
-            part for part in (
+            part
+            for part in (
                 ("issue %s" % basic) if basic else "",
                 ("change %s" % change) if change else "change \u2014",
-            ) if part
+            )
+            if part
         )
-        tw.append((right_edge - font.text_length(rline, size), y), rline,
-                  font=font, fontsize=size)
+        tw.append(
+            (right_edge - font.text_length(rline, size), y),
+            rline,
+            font=font,
+            fontsize=size,
+        )
         tw.write_text(page)
     doc.saveIncr()
     doc.close()
@@ -337,7 +377,8 @@ def measure_floors(pdf_path) -> tuple[list[str], list[str]]:
         )
         if body_size < FLOOR_BODY - FLOOR_TOL:
             violations.append(
-                "body text measures %.2f pt, below the %.1f pt floor" % (body_size, FLOOR_BODY)
+                "body text measures %.2f pt, below the %.1f pt floor"
+                % (body_size, FLOOR_BODY)
             )
         table_sizes = sorted(s for s in serif_chars if FLOOR_TABLE <= s < FLOOR_BODY)
         if table_sizes:
@@ -368,7 +409,9 @@ def set_outline(pdf_path, entries) -> int:
     contents destinations"). Returns the number of entries written.
     """
     doc = fitz.open(pdf_path)
-    toc = [[int(lvl), str(title), int(page)] for lvl, title, page in entries if page >= 1]
+    toc = [
+        [int(lvl), str(title), int(page)] for lvl, title, page in entries if page >= 1
+    ]
     doc.set_toc(toc)
     doc.saveIncr()
     doc.close()

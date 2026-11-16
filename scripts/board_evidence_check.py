@@ -33,7 +33,9 @@ def _default_history_roots(root):
     common_dir = result.stdout.strip()
     if not os.path.isabs(common_dir):
         common_dir = os.path.join(root, common_dir)
-    shared = os.path.join(os.path.dirname(os.path.abspath(common_dir)), ".gitreins", "history")
+    shared = os.path.join(
+        os.path.dirname(os.path.abspath(common_dir)), ".gitreins", "history"
+    )
     if shared not in roots:
         roots.append(shared)
     return roots
@@ -165,7 +167,9 @@ def expected_unresolved(root=None):
     literal does.  It exists so the expected count has exactly one named source,
     which the selftest arm asserts against the reported count.
     """
-    _complete_rows, findings, _ignored, _bases = check(os.path.abspath(root or DEFAULT_ROOT), None)
+    _complete_rows, findings, _ignored, _bases = check(
+        os.path.abspath(root or DEFAULT_ROOT), None
+    )
     return len(findings)
 
 
@@ -214,11 +218,14 @@ def main(argv=None):
     print(
         f"stores: events={os.path.join(os.path.abspath(args.root), '.coding-hermes', 'board', 'events.jsonl')} "
         + " ".join(
-            f"history={base} ({_history_run_count(base)} run dirs)" for base in history_bases
+            f"history={base} ({_history_run_count(base)} run dirs)"
+            for base in history_bases
         )
     )
     if os.path.abspath(args.root) == DEFAULT_ROOT:
-        print(f"expected_unresolved={EXPECTED_UNRESOLVED} (derived from the board, not stored)")
+        print(
+            f"expected_unresolved={EXPECTED_UNRESOLVED} (derived from the board, not stored)"
+        )
     print(f"checked {len(complete_rows)} complete rows, {len(findings)} unresolved")
     if args.strict and findings:
         return 1

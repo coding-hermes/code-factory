@@ -12,6 +12,7 @@ An orphan is identified mechanically, not by name alone:
 
 Print the pids it killed so the supervisor log records the reaping.
 """
+
 from __future__ import annotations
 
 import os
@@ -28,7 +29,7 @@ def ppid_of(pid: str) -> int | None:
     except OSError:
         return None
     # comm can contain spaces and parens; everything after the last ')' is stable
-    tail = raw[raw.rfind(")") + 2:].split()
+    tail = raw[raw.rfind(")") + 2 :].split()
     try:
         return int(tail[1])
     except (IndexError, ValueError):
@@ -41,7 +42,12 @@ def main() -> int:
         if not entry.name.isdigit():
             continue
         try:
-            cmd = (entry / "cmdline").read_bytes().replace(b"\x00", b" ").decode(errors="replace")
+            cmd = (
+                (entry / "cmdline")
+                .read_bytes()
+                .replace(b"\x00", b" ")
+                .decode(errors="replace")
+            )
         except OSError:
             continue
         if SIGNATURE not in cmd:

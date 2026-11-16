@@ -20,6 +20,7 @@ Usage:
   board_read.py --next 10       # the next N dispatchable rows
   board_read.py --source        # just the source and its freshness
 """
+
 from __future__ import annotations
 
 import argparse
@@ -29,14 +30,25 @@ import subprocess
 import sys
 
 BOARD = ".coding-hermes/board/tasks.jsonl"
-TERMINAL = {"complete", "completed", "done", "closed", "cancelled", "canceled", "blocked", "deferred"}
+TERMINAL = {
+    "complete",
+    "completed",
+    "done",
+    "closed",
+    "cancelled",
+    "canceled",
+    "blocked",
+    "deferred",
+}
 
 
 def git(root: pathlib.Path, *args: str) -> str | None:
     try:
         out = subprocess.run(
             ["git", "-C", str(root), *args],
-            capture_output=True, text=True, timeout=25,
+            capture_output=True,
+            text=True,
+            timeout=25,
         )
     except (OSError, subprocess.SubprocessError):
         return None
@@ -71,7 +83,9 @@ def load(root: pathlib.Path) -> tuple[list[dict], str]:
 
 
 def workable(rows: list[dict]) -> list[dict]:
-    done = {str(r.get("id")) for r in rows if str(r.get("status", "")).lower() in TERMINAL}
+    done = {
+        str(r.get("id")) for r in rows if str(r.get("status", "")).lower() in TERMINAL
+    }
     out = []
     for r in rows:
         if str(r.get("status", "")).lower() != "pending":
@@ -98,8 +112,15 @@ def main() -> int:
 
     rows, source = load(root)
     if not rows:
-        print(json.dumps({"source": source, "rows": 0,
-                          "error": "no board found in any ref or in the worktree"}))
+        print(
+            json.dumps(
+                {
+                    "source": source,
+                    "rows": 0,
+                    "error": "no board found in any ref or in the worktree",
+                }
+            )
+        )
         return 0
 
     if a.source:
@@ -117,7 +138,9 @@ def main() -> int:
     print("status       : " + "  ".join(f"{k}={v}" for k, v in sorted(counts.items())))
     print(f"dispatchable : {len(nxt)} pending rows with satisfied dependencies")
     for r in nxt[: a.next]:
-        print(f"  {r.get('id'):<10} {str(r.get('priority')):<3} {str(r.get('title', ''))[:90]}")
+        print(
+            f"  {r.get('id'):<10} {str(r.get('priority')):<3} {str(r.get('title', ''))[:90]}"
+        )
     return 0
 
 
