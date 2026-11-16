@@ -8071,5 +8071,59 @@ else
 fi
 rm -rf "$cf125"
 
+# ch:trace row=CF-473 spec=README.md#quick-start test=tests/selftest.sh::cf473-python-remedy doc=README.md prompt=none:worker-brief evidence=tests/selftest.sh witness=none:local-fixture verdict=none:foreman-verifies commit=none:self-referential-hash memory=none:foreman-owns
+# BEGIN cf473-python-remedy
+# Part of section 75: a numbered §76 would need a matching row in the plan-side arm census that
+# `docs/audits/cf198-section-mapping.sh` compares against this file (and section 39 grades), so
+# this arm rides the last section rather than moving the census the plan binds.
+tmpd=$(mktemp -d)
+cat > "$tmpd/python-3.14" <<'EOF'
+#!/usr/bin/env bash
+if [ "$1" = "--version" ]; then
+  printf '%s\n' 'Python 3.14.9'
+  exit 0
+fi
+printf 'unexpected interpreter invocation: %s\n' "$*" >&2
+exit 1
+EOF
+chmod +x "$tmpd/python-3.14"
+
+# a. the shipped adapter names the escape hatch on the row that fails
+cf473_out=$(env HOME="$tmpd/fakeroot-a" HERMES_PYTHON_BIN="$tmpd/python-3.14" \
+  /bin/bash "$HERE/scripts/harness/install-hermes.sh" --apply 2>&1); cf473_rc=$?
+if [ "$cf473_rc" -ne 0 ] \
+  && printf '%s\n' "$cf473_out" | grep -Fq 'FAIL  python' \
+  && printf '%s\n' "$cf473_out" | grep -Fq 'HERMES_PYTHON_BIN=python3.12'; then
+  say "  PASS  a. the out-of-range python row names HERMES_PYTHON_BIN=python3.12"
+else
+  say "  FAIL  a. the out-of-range python row shipped without the remedy (exit $cf473_rc)"; fails=$((fails+1))
+  printf '%s\n' "$cf473_out" | sed 's/^/    | /'
+fi
+
+# b. red control: strip the remedy from a copy and the same assertion must fail
+mkdir -p "$tmpd/tree"
+cp -R "$HERE/scripts" "$tmpd/tree/scripts"
+rm -rf "$tmpd/tree/scripts/__pycache__"
+sed -i 's/found \$version[^"]*"/found $version"/' "$tmpd/tree/scripts/harness/install-hermes.sh"
+cf473_red=$(env HOME="$tmpd/fakeroot-b" HERMES_PYTHON_BIN="$tmpd/python-3.14" \
+  /bin/bash "$tmpd/tree/scripts/harness/install-hermes.sh" --apply 2>&1)
+if printf '%s\n' "$cf473_red" | grep -Fq 'FAIL  python' \
+  && ! printf '%s\n' "$cf473_red" | grep -Fq 'HERMES_PYTHON_BIN=python3.12'; then
+  say "  PASS  b. with the remedy stripped the FAIL row no longer names it (red control)"
+else
+  say "  FAIL  b. the red control did not strip the remedy from the row"; fails=$((fails+1))
+  printf '%s\n' "$cf473_red" | sed 's/^/    | /'
+fi
+
+# c. the README Quick start carries the same remedy, so the path is complete
+cf473_readme=$(awk '/^## Quick start/,/^## Provisioning/' "$HERE/README.md" | grep -c 'HERMES_PYTHON_BIN' || true)
+if [ "${cf473_readme:-0}" -ge 1 ] && [ "${cf473_readme:-0}" -lt 5 ]; then
+  say "  PASS  c. README Quick start names HERMES_PYTHON_BIN ($cf473_readme occurrence)"
+else
+  say "  FAIL  c. README Quick start does not name the remedy (count ${cf473_readme:-0})"; fails=$((fails+1))
+fi
+rm -rf "$tmpd"
+# END cf473-python-remedy
+
 say ""
 [ "$fails" -eq 0 ] && finish 0 || finish 1

@@ -111,7 +111,7 @@ check_python_compatibility() {
         (py_major == PYTHON_MIN_MAJOR && py_minor < PYTHON_MIN_MINOR) ||
         py_major > PYTHON_MAX_MAJOR ||
         (py_major == PYTHON_MAX_MAJOR && py_minor >= PYTHON_MAX_MINOR) )); then
-    bad "python" "hermes-agent $PIN requires python >=3.11,<3.14; found $version"
+    bad "python" "hermes-agent $PIN requires python >=3.11,<3.14; found $version — set HERMES_PYTHON_BIN to an in-range interpreter, e.g. HERMES_PYTHON_BIN=python3.12"
     return 1
   fi
   ok "python" "$version (hermes-agent $PIN requires >=3.11,<3.14)"

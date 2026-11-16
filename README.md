@@ -24,6 +24,9 @@ scripts/bunker-server-install.sh --check
 
 # 2. what does a node look like right now? (control host — a node runs the same
 #    check as ~/node-scripts/project-node.sh, the form the Status rows use)
+#    If this host's python3 is outside >=3.11,<3.14 the python row fails and names
+#    the fix it wants; the same check with an explicit interpreter passes:
+#    HERMES_PYTHON_BIN=python3.12 ./scripts/project-node.sh --check --project myproject
 ./scripts/project-node.sh --check --project myproject
 
 # 3. make one, from the control host
