@@ -364,20 +364,37 @@ Each owning module persists a local `cf.telemetry.v1` JSONL event before
 acknowledging a state-changing operation. Its required fields are `event_id:ID`,
 `operation_id:ID`, `module:M0|...|M12`, `event_type:Enum`,
 `outcome:success|failure|warning|refusal|unknown`, `reason:ID`,
-`duration_ms:UInt`, `observed_at:Time`, `measurements:{name:finite-number}` and
-`identity:FactoryIdentity`. FactoryIdentity contains `project_id`, nullable
+`duration_ms:UInt`, `observed_at:Time`, `measurements:{name:finite-number}`,
+`payload:{...}` and `identity:FactoryIdentity`. FactoryIdentity contains `project_id`, nullable
 `round_id`, `run_id`, `wave_id`, `attempt_id`, `task_id`, `dispatch_id` and
 `corr_id`. The existing M0-M6 event_type set remains `helper`, `provision`,
 `enrollment`, `readiness`, `dispatch`, `lease`, `duplicate`, `cancellation`,
 `gate`, `publication`, `projection`, `board-read`, `claim`, `repair`,
 `lifecycle`, `conformance` and `document-stage`. M7-M12 use the registered local
-names in V.10; an unregistered pair is `TELEMETRY_SCHEMA_REFUSED`. Secret values,
-prompt text, credential paths and unbounded error strings are excluded.
+names in V.10; an unregistered pair is `TELEMETRY_SCHEMA_REFUSED`.
+
+**Payload discrimination.** Numbers and identifiers do not share a channel, and a
+free-form payload is not permitted. `measurements` carries finite numbers only, keyed
+by a registered name. `payload` carries the string-bearing detail: every member is
+`Text` bounded to 128 UTF-8 characters, or an `ID`, `SHA`, `GitOID`, `GitRef`, `Enum`
+or `EvidenceRef`, and the member list is exactly the one registered for that
+`(module,event_type)` pair in V.10's local registry. A pair whose registry row declares
+members carries a non-empty `payload`; a pair with no declared members carries no
+`payload` or an empty object. An unregistered event type, an unregistered payload
+member, or a number or string placed in the wrong channel is
+`TELEMETRY_SCHEMA_REFUSED` and the event is not acknowledged. Secret values, prompt
+text, credential paths, signed URLs and unbounded error strings are excluded from both
+channels; a bounded refusal `reason` carries the code instead. The named payload
+members for the M7 credential family and the M12 inference family are published in M7
+§18 and M12 §18 against this rule, so no fourth vocabulary appendix is added.
 
 The collector projects local events to durable `factory.telemetry.v1` records
 with `schema_version`, `event_id`, `source_event_id`, `source_seq:PosInt`,
 `module`, `event_type`, `operation`, `outcome`, `reason`, `duration_ms`,
-`observed_at`, `identity`, `measurements` and nullable structured `error`. The
+`observed_at`, `identity`, `measurements`, `payload` and nullable structured
+`error`. The registered payload members survive projection unchanged: the durable
+record is what an operator drills into, so a projection that drops `payload` destroys
+the only identifier a metric label is forbidden to carry. The
 closed global operation set is `configure`, `admit`, `launch`, `deliver`,
 `renew`, `verify`, `publish`, `sync`, `reclaim`, `backup`, `restore`, `issue`,
 `revoke`, `infer`, `settle`, `capture` and `control`; global outcome is
@@ -435,6 +452,21 @@ generation, board OID, prompt or error text. The authenticated event API supplie
 that drill-down. Provider, Bunker, reason, token kind and bounded upstream code
 are permitted only in the separately named M7/M12 views registered in V.10.
 
+**Two ages, two formulas, one freshness verdict.** Source health and work activity are
+separate measurements and may not be derived from each other:
+
+| Age | Definition | Formula | Governs |
+|---|---|---|---|
+| observation age | the last successful observation of the source, including an idle poll that observed nothing new | `now - factory_observation_timestamp_seconds` | `factory_available`, `ready`, and the stale/degraded/failed verdict |
+| activity age | the last new durable source event | `now - factory_last_event_timestamp_seconds` | activity and backlog views only |
+
+A source that is reachable and idle has a fresh observation age and an old activity
+age: it is `available=1`, `ready=true` and never stale. A source that has not been
+observed inside the threshold is stale or degraded regardless of how recent its last
+event was. Activity age never sets `ready`, and observation age never creates, advances
+or impersonates an event. Read-only polls update the observation timestamp only
+(M7 §18, M12 §18).
+
 Rates use the delta of persistent counts over the trailing 300 seconds. Fewer
 than two samples or a zero denominator yields `value:null` and
 `collection_state:"insufficient_data"`. A missing source or failed network
@@ -460,26 +492,65 @@ that M7-M12 already emit the global series. [CT-23/30; V.10; CV-11-A/B.]
 
 **EvidenceRef** is the URI string `cas+sha256://<namespace>/<64-lowercase-hex>`;
 its digest names immutable raw bytes. A release artifact may instead use its Part IV
-artifact URI. **Criterion** is
-`{id:ID,text:string,verification:string,argv:string[1..64],cwd:string,
-timeout_s:UInt,expected_exit:Int,oracle_digest:SHA256}`; `common_identities.criterion`
-is the complete fixture. **staged-guard.v1** is `{task_id,claim_generation,
-staged_tree_digest:SHA,status:pass/fail/unavailable,checks:[{name,status,started_at,
-finished_at,evidence_ref:EvidenceRef}]}` and records only mechanical checks on the staged
-tree. **cf.verdict.v1** is `{run_id:ID,reviewer_id:ID,target:{change_id:ID,tree_digest:SHA},
+artifact URI.
+
+**Criterion** is exactly the canonical closed `cf.criterion.v1` object frozen in
+`docs/SYSTEM-MODEL.yaml` and `conformance/schemas/cf2a.criterion.schema.json`:
+`{id:ID,description:Text,argv:string[1..64],cwd:string,timeout_s:UInt,
+expected_exit:Int,oracle_digest:SHA256}`. `description` is the one human text field;
+`text` and `verification` are legacy projection names retained as migration evidence
+and are never executable canonical fields. `common_identities.criterion` (CV-04-A) is
+the complete fixture. There is one storage projection — this object — and one display
+projection: a reader renders `description` and never re-serializes a second name. A
+legacy `{id,text,verification}` object is accepted only by the named lossless adapter
+when it can supply executable `argv`, `cwd`, `timeout_s`, `expected_exit` and
+`oracle_digest`; otherwise the object stays evidence, the row is
+`MIGRATION_INCOMPLETE`, and no consumer may execute it. A chapter that declares its own
+criterion field list is defective.
+
+**Phase-discriminated execution records.** One family, discriminated by phase. Each
+record names the exact object it grades and no later object:
+
+| Record | Phase | Subject identity | Never carries |
+|---|---|---|---|
+| `staged-guard.v1` | staged, before commit | `{base_oid:GitOID,staged_tree_digest:SHA,index_digest:SHA}` | a commit OID for the staged tree; any future integration or closure commit |
+| `source-judgment.v1` | source, after the implementation commit | `{commit_oid:GitOID,tree_digest:SHA}` | the integration or closure commit |
+| `integrated-guard.v1` | integrated | `{commit_oid:GitOID,tree_digest:SHA}` | the closure commit |
+| `integrated-judgment.v1` | integrated | `{commit_oid:GitOID,tree_digest:SHA}` | the closure commit |
+| `publication.v1` | published | `{accepted_object:GitOID,observed_tip:GitOID,remote_tree_digest:SHA}` | a second status after headers; an inference from HTTP success |
+| `closure-validator.v1` | closure | `{closure_commit:GitOID,base_object:GitOID}` | equality of the closure tree with the published tree |
+
+`staged-guard.v1` is `{task_id,claim_generation,attempt_id,run_id,base_oid,
+staged_tree_digest,index_digest,policy_generation,checks:[CheckResult],
+verdict:pass/fail/unknown,evidence_refs:EvidenceRef[],started_at:Time,
+finished_at:Time|null}` and records only mechanical checks. Every later record carries
+`schema_version`, its subject, `verdict` or `overall`, `evidence_refs`, `actor_id`,
+`policy_generation` and its timestamps. A record whose phase and fields disagree — a
+staged record naming a commit OID, a source judgment naming the closure commit — is
+invalid and is refused rather than migrated silently.
+
+**cf.verdict.v1** is `{run_id:ID,reviewer_id:ID,target:{change_id:ID,tree_digest:SHA},
 criterion_results:[{id:ID,status:pass/fail/unknown,evidence:EvidenceRef[]}],
 overall:accept/needs_work/uncertain,claims:string[],limitations:string[],created_at:Time}`.
 It does not execute a gate or push and never converts unknown evidence to pass.
 
-**publication.v1** is `{run_id,change_id,tree_digest:SHA,remote_repository:GitURI,
-base_oid:GitOID,expected_oid:GitOID,observed_oid:GitOID|null,remote_tree_digest:SHA|null,
-status:requested/applied/failed/unknown,push_error:string|null,
+**publication.v1** is `{run_id,change_id,base_oid:GitOID,expected_oid:GitOID,
+observed_oid:GitOID|null,remote_tree_digest:SHA|null,ancestry:boolean,
+remote_repository:GitURI,status:requested/applied/failed/unknown,push_error:string|null,
 postchecks:[{name,status:pass/fail/unknown}],observed_at:Time|null,uncertainty:string|null}`.
-After an accepted verdict, an out-of-worktree publication sends the expected tree and
-accepted verdict reference to a publisher. Applied requires expected_oid=observed_oid,
-matching tree digests and all required postchecks=pass; HTTP success alone is insufficient.
-A push timeout leaves unknown and never writes failed by inference. Part IV retains the
-complete records; M3 §16 and M4 §15 own their execution and settlement.
+`expected_oid` is the accepted object and `observed_oid` is the observed tip; M3 §17.2's
+`accepted_object`/`observed_tip` name the same two values, and no chapter may require
+exact tip equality instead. After an accepted judgment, an out-of-worktree publication
+sends the expected tree and the accepted verdict reference to a publisher.
+
+**The accepted-object rule, stated once.** Applied requires both: (a) `expected_oid`
+equals `observed_oid`, or `expected_oid` is a proven ancestor of `observed_oid` with
+`ancestry=true`; and (b) `remote_tree_digest` equals the accepted object's own tree
+digest. A descendant tip's tree is not required to equal it — later commits legitimately
+sit on top — so a reader that re-derives `tree_digest` from `observed_oid` and compares
+it to the record's `tree_digest` is wrong. HTTP success alone is insufficient. A push
+timeout leaves unknown and never writes failed by inference. Part IV retains the
+complete records; M3 §16–§17 and M4 §15 own their execution and settlement.
 
 ## RED field count: 1 (Metrics §8)
 

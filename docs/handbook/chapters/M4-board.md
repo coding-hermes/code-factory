@@ -405,15 +405,22 @@ is a normalized repository-relative prefix; `.` declares repository-wide/generat
 effects. Resource is `{name:ID,mode:exclusive/shared}` with unique names.
 `created_seq` is immutable and unique within an initiative.
 
-Criterion is exactly the shared `{id:ID,text:Text,verification:Text,
-argv:string[1..64],cwd:string,timeout_s:integer[1,1800],
-expected_exit:integer[0,255],oracle_digest:SHA}`; `description` is a display alias
-for text and is not serialized. `contract-vectors.json/common_identities.criterion`
-and CV-04-A carry a complete fixture. `argv` executes directly without a shell; `cwd`
-is a safe repository-relative path; `oracle_digest` identifies the versioned assertion
-and fixture code. Criterion order is meaningful and IDs are unique within the owning
-initiative/task. A legacy `{id,text}` row without executable verification is invalid
-and is never silently converted.
+Criterion is exactly the canonical closed `cf.criterion.v1` object frozen by
+`docs/SYSTEM-MODEL.yaml` and `conformance/schemas/cf2a.criterion.schema.json`:
+`{id:ID,description:Text,argv:string[1..64],cwd:string,timeout_s:integer[1,1800],
+expected_exit:integer[0,255],oracle_digest:SHA}`. This chapter declares no local
+criterion field list and adds no serialized alias. `description` is the one human
+text field; `text` and `verification` are **legacy projection names** that survive
+only as migration evidence and are never executable canonical fields. A legacy
+`{id,text,verification}` row is read by the named lossless adapter only when it can
+supply executable `argv`, `cwd`, `timeout_s`, `expected_exit` and `oracle_digest`;
+otherwise the object remains evidence, the row is `MIGRATION_INCOMPLETE`, and no
+consumer may execute it. `argv` executes directly without a shell; `cwd` is a safe
+repository-relative path; `oracle_digest` identifies the versioned assertion and
+fixture code. Criterion order is meaningful and IDs are unique within the owning
+initiative/task. The storage projection is this object; the display projection renders
+`description` and never re-serializes a second name. The criterion round-trip is
+CV-04-A.
 Claim is `{claim_id:ID,claimant_id:ID,claim_generation:PosInt,lease_expires_at:Time,
 owner_fence:Fence}`. CancelRequest is `{requested_by:ID,reason:Text,requested_at:Time,
 quiescence_evidence_refs:EvidenceRef[]}` and is required for cancel_requested/cancelled
@@ -492,24 +499,40 @@ new row revisions, never discarded.
 
 ### 15.2 Concrete claim CAS and server-side enforcement
 
-New claims use the CV-04-D `cf.board-group-claim.v1` closed body on CT-10:
-`{schema_version:"cf.board-group-claim.v1",operation_id:ID,project_id:ID,
-board_id:ID,board_revision:{algorithm:"sha1",value:GitOID},claims:ClaimRequest[1..256],
-evidence_refs:EvidenceRef[],idempotency_key:ID,lease_expires_at:Time,
-ordering:"priority DESC, created_seq ASC, id ASC; dependencies must be settled; correction retains its original worker",
-owner_fence:Fence,transition:"claim"}`. ClaimRequest is
-`{task_id:ID,created_seq:UInt,expected_revision:PosInt,expected_status:"pending",
-claim_generation:0}`. The request's zero is the expected pre-claim generation;
-the broker allocates generation 1 in each new Claim. `operation_id` is also the
-claim_group_id. Claims follow the request's ordering string after the reducer has
-removed ineligible work. task_id is unique, and the broker-computed wave plan
-digest covers the ordered set, paths/resources, board revision and admission
-epoch. `cf.board-claim.v1` remains only for renew/release of one existing claim
-with `transition:"renew"/"release"`; it no longer creates claims. The
-owner_fence principal is the claimant and is distinct from per-task
-claim_generation. Only the broker allocates generations on group claim/reclaim;
-renewal never advances them. The result's Git OID is returned after publication,
-not embedded in its own commit.
+New claims use the one `cf.board-group-claim.v1` definition. There is exactly one
+request type, one result type and one transaction-marker type for it; M4 and CT-10
+carry the same definition and neither owns a second copy. The closed request body on
+CT-10 is `{schema_version:"cf.board-group-claim.v1",operation_id:ID,
+idempotency_key:ID,project_id:ID,board_id:ID,board_revision:GitOID,
+owner_fence:Fence,ordering:Text,claims:ClaimPrecondition[],lease_expires_at:Time,
+transition:"claim"|"renew"|"release",evidence_refs:EvidenceRef[]}`.
+`board_revision` is the normal GitOID representation, never a nested
+`{algorithm,value}` object. `ClaimPrecondition` is
+`{task_id:ID,created_seq:PosInt,expected_revision:UInt,
+expected_status:"pending"|"in_progress",claim_generation:UInt}`; it is the only
+precondition type, and its `claim_generation` is `0` for a claim that does not yet
+exist. `claims` is non-empty and its maximum length is the single bound fixed by
+`conformance/schemas/cf2a.board-claim.schema.json` (`maxItems`); this chapter declares
+no second number, and the historical 256-here / 1000-CT-10 divergence is retired — a
+longer request is `INVALID_FIELD` before any candidate is built.
+
+`ordering` is exactly `created_seq ASC, id ASC; dependencies must be settled;
+correction retains its original worker`. `TaskRow` has no priority field, so no
+priority term is permitted in an ordering string; a request whose literal ordering
+differs is `INVALID_FIELD`, and the consumer sorts by the string it was given rather
+than re-deriving an order.
+
+`transition` is the one discriminator. Group **creation** is `claim` and is the only
+transition that allocates: `operation_id` is the `claim_group_id`, the broker
+allocates one `claim_id` and generation `1` per member, and the wave plan is the
+ordered claim set. `renew` and `release` are the same closed type applied to exactly
+one existing claim: `claims` has length 1, `expected_status` is `in_progress`, and
+neither transition allocates a `claim_id` or advances a generation.
+`cf.board-claim.v1` is a retired name, not a second creating type; a reader that
+still receives that name converts the body under this same definition, and a body
+carrying a creating transition under it is refused. The owner_fence principal is the
+claimant and is distinct from per-task claim_generation. The result's Git OID is
+returned after publication, not embedded in its own commit.
 
 The broker is the only actor permitted to claim. No worker, foreman, scheduler,
 boardctl invocation or other clone may construct or submit a candidate against the
@@ -530,11 +553,17 @@ The broker serializes project effects against epoch advance (Part I §1.9.3a), t
    requested expiry accordingly, and allocates one claim_id/generation per task.
 3. Constructs one candidate Git commit with sole parent equal to the old remote OID.
    It appends exactly one TaskRow/Event pair per claimed task and adds the Part I
-   §1.9.6 marker at `.coding-hermes/board/transactions/<operation_id>.json`. A
-   registered `group_claim` marker member carries claim_group_id, wave_plan_digest,
-   ordered claim ids/generations and every row/event hash; marker hashes also cover
-   the complete resulting tasks/events bytes. The candidate OID is recorded in the
-   effect journal, not inside that marker. No worker starts yet.
+   §1.9.6 marker at `.coding-hermes/board/transactions/<operation_id>.json`. Marker
+   membership is closed: `operation_id`, `project_id`, `board_id`, `transition`,
+   `claim_group_id`, the registered `group_claim` member (ordered `task_id`,
+   `claim_id`, `claim_generation`, `new_revision`, `row_digest`, `event_digest`) and
+   `wave_plan_digest`, plus the two whole-file digests `tasks_digest` and
+   `events_digest` over the complete resulting bytes. `wave_plan_digest` is present
+   exactly for `transition:"claim"` and is absent for `renew`/`release`; its covered
+   fields are the ordered task ids with `created_seq`, the union of `paths` and
+   `resources`, the prior board revision and the admission epoch. The marker contains
+   no self digest and no signature (LCR-1 rule 3) and no candidate OID: the candidate
+   OID is recorded in the effect journal. No worker starts yet.
 4. Submits receive-pack old-OID→candidate-OID update to the protected ref. A required
    server-side pre-receive validator, or an equivalent broker-only protected repository
    service, verifies exact parent, all append-only prefixes, marker/group hashes,
@@ -581,9 +610,20 @@ Unpublished staging failure is visible only in the broker operation journal; it 
 read the last valid revision. They cannot observe or be required to stop for an
 unpublished file in another clone. Broker startup repairs/removes its incomplete
 candidate from the durable intent; no remote operation ran before the complete candidate.
-A failed CAS likewise leaves canonical state unchanged. `PARTIAL_WRITE` is reserved
-for a published malformed marker/pair (unmanaged writer, storage corruption or violated
-server validation): readers expose UNAVAILABLE and the broker records REPAIR_REQUIRED (CV-04-C).
+A failed CAS likewise leaves canonical state unchanged. Two failures that both mention
+the board are different objects and are never interchanged:
+
+| Object | Failure | Observable result | Reader effect |
+|---|---|---|---|
+| private candidate | staging or CAS failure inside the broker's own clone | `STAGING_FAILED` / `CLAIM_CONFLICT`; canonical ref unchanged; operation journal only | none — other clones read the last valid revision |
+| published canonical ref | malformed marker/pair already in the protected ref | `PARTIAL_WRITE`; `REPAIR_REQUIRED` recorded | UNAVAILABLE |
+
+A private failed candidate never makes the board unavailable, and a published
+malformed ref is never reported as a private staging failure. `PARTIAL_WRITE` is
+reserved for the published case: a malformed marker/pair from an unmanaged writer,
+storage corruption or a violated server validation, where readers expose UNAVAILABLE
+and the broker records REPAIR_REQUIRED (CV-04-C). Part VI §35.2 states the same
+distinction from the failure side.
 The recovery owner is the manager's board adapter. It preserves the bad commit as
 incident evidence, appends a corrective commit derived from the last verified parent,
 validates complete row/event correspondence and only then re-enables admission (CV-04-F).
@@ -618,20 +658,24 @@ a missing/different run, claim generation or staged tree returns
 claim_generation)` the foreman evaluates these artifacts in order:
 
 1. `staged-guard.v1` records the mechanical checks on the staged tree. `pass` permits
-   the integration/publication pipeline regardless of model-judge availability; `fail`
-   leaves completion null and starts a correction or records the task blocked with the
-   failed evidence. `unknown` never becomes pass.
+   **integration only** — candidate construction, revalidation and the integrated
+   gates; it does not authorize publication. `fail` leaves completion null and starts
+   a correction or records the task blocked with the failed evidence. `unknown` never
+   becomes pass.
 2. `source-judgment.v1`, using the shared `cf.verdict.v1` core, grades the exact source
    tree independently of those checks. `overall=needs_work` requests correction under
    the same task and claim; `uncertain` leaves the judgment unsettled while the foreman
-   reconciles the judge. Neither outcome stops the mechanical integration/publication
-   pipeline, neither publishes by itself, and unknown evidence is never rewritten as pass.
+   reconciles the judge. Neither outcome stops candidate construction, and neither
+   authorizes publication: under the M3 §17.2.1 decision table a required judgment that
+   is unavailable, `needs_work` or `uncertain` denies the protected publication effect.
+   Unknown evidence is never rewritten as pass.
 3. `integrated-judgment.v1`, using the same verdict core, targets the integrated Change
    and criterion Evidence are rebound to the same integrated tree after every merge/CAS
-   refresh. A failed integrated
-   gate or needs_work judgment requests correction; an unavailable model or harness
-   produces uncertain, leaves completion null, and does not suppress the independent
-   mechanical artifacts or an already proven remote publication.
+   refresh. A failed integrated gate or `needs_work` judgment requests correction; an
+   unavailable model or harness produces `uncertain`, leaves completion null, and does
+   not suppress the independent mechanical artifacts or an already proven remote
+   publication. A proven publication is evidence of that object; it does not authorize
+   a new protected write.
 4. `publication.v1` must be `applied`, with expected_oid equal to observed_oid (or its
    proven remote descendant), the accepted object's local_tree_digest equal to
    remote_tree_digest, and every required postcheck pass. `failed` starts the declared
@@ -646,6 +690,9 @@ claim_generation)` the foreman evaluates these artifacts in order:
 
 A fail, unverified or unknown artifact therefore cannot settle a task complete, and
 an applied push cannot repair a failed criterion or uncertain required judgment. The
+single authorization rule is M3 §17.2.1's decision table: M4 states no second
+permission rule, and no reordering of these artifacts creates a path from unavailable
+evidence to a protected write. The
 correction rules in §15.2 retain the same task id and initiative and charge a new
 attempt to the same worker; they never add a dependency from the task to its own
 correction. A late sibling result is quarantined unless its full identity matches the

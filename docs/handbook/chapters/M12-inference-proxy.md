@@ -516,10 +516,23 @@ retry.
 M12 emits Part V `factory.telemetry.v1` before acknowledgement for event_type
 `inference`, `response-lookup`, `capture`, `credential-issue`, `credential-renew` and
 `credential-revoke`, with module M12, FactoryIdentity, source_event_id/source_seq,
-duration_ms and the closed global outcome set. Payload carries request_id, project_id,
-attempt_id, nullable task_id, route, chosen/resolved/served model, upstream_id,
-token_id (never bearer), expiry_headroom_seconds, input/output/total tokens,
-cost_micro_usd, estimated, state, refusal/error code and capture_ref.
+duration_ms and the closed global outcome set. Under the M0 §16.1 channel rule numbers
+live in `measurements` and identifiers in `payload`; `measurements` carries
+`expiry_headroom_seconds`, `input_tokens`, `output_tokens`, `total_tokens`,
+`cost_micro_usd`, the 0/1 `estimated` flag, `generation` and `parent_generation`.
+`payload` members are exact per event type:
+
+| event_type | `payload` members |
+|---|---|
+| `inference` | `request_id`, `project_id`, `attempt_id`, nullable `task_id`, `route`, `chosen_model`, `resolved_model`, `served_model`, `upstream_id`, `token_id` (never the bearer), `state` (`complete`/`error`/`cancelled`), `error_code` |
+| `response-lookup` | `request_id`, `project_id`, `result_state` (`pending`/`committed`/`unknown`), `error_code` |
+| `capture` | `request_id`, `project_id`, `capture_ref`, `capture_state` (`stored`/`CAPTURE_FAILED`/`disabled`) |
+| `credential-issue` | `token_id`, `project_id`, `node_id`, `scope_digest` |
+| `credential-renew` | `token_id`, `project_id`, `node_id`, `scope_digest` |
+| `credential-revoke` | `token_id`, `project_id`, `node_id`, `revocation_state` |
+
+An unregistered member, a missing required member or a value in the wrong channel is
+`TELEMETRY_SCHEMA_REFUSED` and no acknowledgement is emitted.
 Global operations map inference→infer, response-lookup→verify, capture→capture and
 credential events→issue/renew/revoke. Base counters use exactly
 module/operation/outcome/project labels; duration histograms use exactly
@@ -531,8 +544,9 @@ module/operation/project labels. Derived views are
 Part I/provider error registry. Model, route, token_id, request/attempt/task IDs stay
 in payload, never base labels. V.10's durable module/source_event_id/source_seq cursor
 deduplicates emission, retry, scrape and restart; one request event counted twice is
-a projection defect. Read-only GETs and scrapes emit nothing and do not refresh the
-last-operation timestamp.
+a projection defect. Read-only GETs, status reads and scrapes emit no event and never
+advance the activity timestamp; a successful one updates the observation timestamp only
+(M0 §16.1).
 
 ## 19. III.M12.S1 — Management API, configuration authority and authentication (P5G-05; F12/F13)
 
@@ -572,16 +586,41 @@ uses `message_type:"config.update"` and this exact `factory.v1` body shape:
 
 `{schema_version:"factory.v1",operation_id:ID|null,idempotency_key:ID,expected_generation:UInt,scope:"factory-control"|"project:<ID>",project_id:ID|null,node_id:ID|null,desired:FactoryDocument}`
 
-`scope` is `factory-control` for a global update or `project:<project_id>` for a
-project update. `project_id` is required for project scope and null for global
-scope; `node_id` is null on a configuration update and is present only on the
-separate M12 node-token-admin operation. `operation_id` is null on a first attempt;
-when supplied on retry it must identify the already accepted operation and cannot
-create a second effect. Thus the server, not the caller, allocates the operation
-identity at the accepted commit. `expected_generation` is the one global
-configuration generation, initially zero. There is no independent project
-counter. A project editor submits the complete document with only its authorized
-project changed, so the manager can reject a cross-scope edit rather than merge it.
+`scope` is **explicit, never inferred**, and is cross-checked against `project_id`:
+`factory-control` with `project_id:null` for a global update, or `project:<project_id>`
+with `project_id` equal to that suffix for a project update. A `scope` and `project_id`
+that disagree, or a project scope with an absent `project_id`, is `422 INVALID_FIELD`
+with `field:"scope"`, decided before any decryption of `desired`. `node_id` is null on a
+configuration update and is present only on the separate M12 node-token-admin operation.
+`expected_generation` is the one global configuration generation, initially zero; there
+is no independent project counter. A project editor submits the complete document with
+only its authorized project changed, so the manager can reject a cross-scope edit rather
+than merge it.
+
+**`operation_id` is returned, not required, and is hash-exempt.** The server, not the
+caller, allocates the operation identity at the accepted commit; it is authoritative
+only in the result, the receipt and the readback. The request may carry it solely as a
+retry hint — null on a first attempt, or the previously returned value on a retry of the
+same operation. Two normative consequences follow:
+
+1. `operation_id` is excluded from `request_digest` as a declared `excluded_derived`
+   member under the LCR-1 rule in Part IV §2. A retry that adds the returned
+   `operation_id` to an otherwise byte-identical body therefore normalizes to the same
+   digest, deduplicates to the same `(principal, scope, message_type, idempotency_key)`
+   receipt, and returns the original accepted result. It does not become
+   `IDEMPOTENCY_KEY_REUSED`, and it never creates a second effect or a second generation.
+2. A supplied `operation_id` that is not the operation bound to that idempotency key is
+   `422 INVALID_FIELD` with `field:"operation_id"`. The server never rebinds a keyed
+   operation to a new identity and never allocates a second one.
+
+There is exactly one authoritative machine-readable `config.update` request and result
+schema — `conformance/schemas/cf2a.config.schema.json`, mirrored in Part V §V.0.2 — and
+this chapter, Part I §1.9.1 and CT-24 carry the identical field list rather than a
+shorter or longer variant. A chapter that lists fewer request fields, or declares a
+second success shape, is defective; where a chapter and the schema disagree, the schema
+governs. The single-writer rules are unchanged: one global generation, whole-document
+authorization per request, and the file importer and the API as one serialized writer
+under `expected_generation` CAS (§19.3).
 
 The successful result is the same typed `factory.v1` response everywhere:
 
@@ -680,6 +719,9 @@ all fields not shown are the common `cf2a.v1` fields and valid `factory.v1` valu
 | Success | `scope=factory-control`, `expected_generation=17`, `idempotency_key=k18`, digest `D18` | generation 17 | `202 accepted`, `operation_id=op-18`, `generation=18`; append one edition and active pointer; current document is D18 |
 | Stale generation | same valid request but `expected_generation=17` after the success row | generation 18 | `409 GENERATION_CONFLICT`, `current_generation=18`; no new edition, no operation, state remains D18 |
 | Duplicate idempotency | exact replay of the success row: same principal/scope/key/digest | generation 18, receipt for k18 | original `202` body with `op-18`, generation 18; append count and generation do not change |
+| Retry naming the returned operation | the success row re-sent with `operation_id="op-18"` added, otherwise byte-identical (`D18`) | generation 18, receipt for k18 bound to `op-18` | original `202` body with `op-18`, generation 18; `operation_id` is hash-exempt so the digest is still `D18`; append count and generation do not change |
+| Foreign operation id | same principal/scope/key `k18` and digest `D18`, `operation_id="op-19"` | generation 18, receipt for k18 bound to `op-18` | `422 INVALID_FIELD` with `field:"operation_id"`; no second effect, no generation change |
+| Scope disagreeing with project | `scope=project:p-blue` with `project_id="p-red"`, any generation | unchanged | `422 INVALID_FIELD` with `field:"scope"` before any decryption of `desired`; no edition, no operation |
 | Reused key | same principal/scope/key `k18`, digest `D19` | generation 18, receipt for D18 | `409 IDEMPOTENCY_KEY_REUSED`; no new edition and no generation change |
 | File/API race, API wins | file importer and API both read 17 and submit different digests with expected 17; API acquires writer first | generation 17 | API is the sole winner at 18; file receives `409 GENERATION_CONFLICT` with 18 and must re-read/produce a new proposal; no merge or last-writer-wins |
 | File/API race, file wins | same two requests, file importer acquires writer first | generation 17 | file is the sole winner at 18; API receives `409 GENERATION_CONFLICT` with 18 and retries only with a new read plus new idempotency key or the same key if its digest is unchanged |
@@ -687,8 +729,11 @@ all fields not shown are the common `cf2a.v1` fields and valid `factory.v1` valu
 For every accepted row, the check is `generation=18 ∧ active_digest=D18 ∧
 log_receipt=returned_receipt ∧ operation_state=accepted`; for every conflict,
 `generation` and active digest remain unchanged and no adapter call is allowed.
-The vector therefore checks CAS, idempotency, file/API ordering, returned
-readback and the recovery rule rather than merely checking an HTTP status.
+In particular the operation-id retry row must produce the same `request_digest` as the
+success row, which is what proves `operation_id` is hash-exempt rather than merely
+ignored. The vector therefore checks CAS, idempotency, retry normalization, file/API
+ordering, returned readback and the recovery rule rather than merely checking an HTTP
+status.
 
 Runtime implementation of this management listener, its authority service and the
 file importer remains **UNVERIFIED / TARGET-UNIMPLEMENTED**. The existing proxy

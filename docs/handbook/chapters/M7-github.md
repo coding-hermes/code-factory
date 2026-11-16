@@ -469,10 +469,22 @@ All five operations emit Part V `factory.telemetry.v1` before acknowledgement wi
 module M7, event_type `credential-issue`, `credential-check`, `credential-delivery`,
 `credential-renew` or `credential-revoke`, operation issue/verify/deliver/renew/revoke,
 the closed global outcome set, reason, duration_ms and source_event_id. The event
-identity is FactoryIdentity; the payload adds bounded provider, bunker_id, grant_id,
-request_id, expiry_headroom_seconds, mapping_generation and partial_activation_id as
-applicable. Missing task/attempt IDs are null only for control-plane
-enrollment/revocation. No token value enters telemetry.
+identity is FactoryIdentity. Following the M0 §16.1 channel rule, numbers live in
+`measurements` and identifiers in `payload`, whose members are exact per event type:
+
+| event_type | `payload` members | `measurements` members |
+|---|---|---|
+| `credential-issue` | `provider` (`github`/`gitlab`), `bunker_id` when the grant names one, `grant_id`, `request_id`, `scope_digest` | `expiry_headroom_seconds`, `mapping_generation` |
+| `credential-check` | `provider`, `grant_id`, `repository_scope`, `permission_scope`, `readback_state` (`match`/`mismatch`/`unavailable`) | `expiry_headroom_seconds` |
+| `credential-delivery` | `provider`, `bunker_id`, `grant_id`, `request_id`, `activation_receipt_ref`, nullable `partial_activation_id` (present only on a partial activation) | `expiry_headroom_seconds`, `mapping_generation` |
+| `credential-renew` | `provider`, `grant_id`, `parent_grant_id`, `request_id`, `state` | `expiry_headroom_seconds`, `mapping_generation` |
+| `credential-revoke` | `provider`, `grant_id`, `revocation_state` (`revoked`/`pending`/`unknown`), `provider_revocation_id` | none |
+
+A member outside its row, a missing required member, or a value placed in the wrong
+channel is `TELEMETRY_SCHEMA_REFUSED` and no acknowledgement is emitted. Missing
+task/attempt IDs are null only for control-plane enrollment/revocation. No token value,
+fingerprint-derived secret, signed URL or unbounded provider error body enters either
+channel; the bounded `reason` carries the code.
 
 At emission and at scrape, base counters use exactly
 `factory_operations_total{module,operation,outcome,project}` and durations use
@@ -486,9 +498,14 @@ explicit accepted custody receipt. Derived registered views are
 (0/1 gauge), and `factory_partial_activations{module,project,provider,bunker}` (current
 gauge). Provider/Bunker/reason are permitted only in those views.
 
-The collector polls every 10 s, persists module/source_event_id/source_seq checkpoints,
-deduplicates retries/restarts and derives freshness from the last new source event,
-not a successful scrape. Missing source observations are unavailable, never zero.
+The collector polls every 10 s, persists module/source_event_id/source_seq checkpoints
+and deduplicates retries and restarts. Source health is derived from **observation
+age** — the last successful observation of the provider, including a poll that observed
+no change — and never from the last new event: a reachable credential service with no
+issuance activity is fresh (`available=1`, `ready=true`) and merely idle, not stale
+(M0 §16.1). Activity and backlog views use **activity age** from the last new durable
+source event; activity age never sets readiness, and an idle poll emits no event.
+Missing source observations are unavailable, never zero.
 CV-11-A requires all five operations at emission and scrape with one duplicate event
 adding no count; CV-11-B requires missing observation to retain FactoryIdentity and
 ready=false.

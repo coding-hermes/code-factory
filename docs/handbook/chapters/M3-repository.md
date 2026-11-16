@@ -350,13 +350,18 @@ and policy generation are event fields, not unbounded metric labels.
 Change is `{id:ID,task_id:ID,claim_generation:UInt,run_id:ID,base:GitOID,
 head:GitOID,tree_digest:SHA,worktree_ref:EvidenceRef,publication_ref:EvidenceRef|null,
 created_at:Time}`. Its immutable revision binds one attempt's staged evidence; it is
-not another name for a board revision. **Criterion** is exactly the shared
-`{id:ID,text:string,verification:string,argv:string[1..64],cwd:string,timeout_s:UInt,
-expected_exit:Int,oracle_digest:SHA256}` from M0 §16.2 and
-`contract-vectors.json/common_identities.criterion`; description is only a display alias
-for text and is not serialized. A predicate accepts text, verification, an executable
-argv, bounded cwd/timeout, expected exit and a digest of the named source oracle.
-Self-authored PASS text alone is not evidence.
+not another name for a board revision. **Criterion** is exactly the canonical closed
+`cf.criterion.v1` object from M0 §16.2, `docs/SYSTEM-MODEL.yaml` and
+`conformance/schemas/cf2a.criterion.schema.json`:
+`{id:ID,description:Text,argv:string[1..64],cwd:string,timeout_s:UInt,
+expected_exit:Int,oracle_digest:SHA256}`. `description` is the one human text field;
+`text` and `verification` are legacy projection names kept only as migration evidence
+and are never executable fields, and M3 declares no local criterion field list. A
+legacy `{id,text,verification}` object is accepted only through the named lossless
+adapter when it supplies executable `argv`, `cwd`, `timeout_s`, `expected_exit` and
+`oracle_digest`; otherwise it is `MIGRATION_INCOMPLETE` and cannot be executed. A
+predicate accepts an executable argv, bounded cwd/timeout, expected exit and a digest of
+the named source oracle. Self-authored PASS text alone is not evidence.
 
 A staged-guard execution binds `{task_id,claim_generation,run_id,base,head,tree_digest}`.
 It refuses an unbound or changed staged set with `STAGED_IDENTITY_MISMATCH`, records
@@ -479,18 +484,22 @@ in a later tip. Its own tree must equal the tested integration tree; a descendan
 tree need not equal it. The receipt records both accepted_object and observed_tip plus
 fetched_at and ancestry. A stale tracking ref or unavailable fetch cannot establish
 this fact. If a new base changes tree, criteria, dependencies or gate config, every
-required integration gate runs again. [Part I §1.9.7.]
+required integration gate runs again. [Part I §1.9.7.] This is the one accepted-object
+rule: M0 §16.2's `publication.v1` carries the same two values as `expected_oid` (the
+accepted object) and `observed_oid` (the observed tip), and no chapter may require
+exact tip equality instead.
 
 ### 17.2.1 Independent mechanical, judgment and postcheck settlement (P6-08)
 
 Mechanical execution and model judgment are independent evidence channels. The
-versioned artifacts are `staged-guard.v1`, `source-judgment.v1`,
-`integrated-guard.v1`, `integrated-judgment.v1`, M7's `publication.v1` and
-`closure-validator.v1`. Every artifact carries `schema_version:string`,
-`subject:{commit_oid:GitOID,tree_digest:SHA}`, `verdict:pass|fail|unknown`,
-`evidence_refs:EvidenceRef[]`, `actor_id:ID`, `started_at:Time`,
-`finished_at:Time|null`, `policy_generation:PosInt` and `attempt_id:ID`. A guard
-artifact also carries `argv:string[]`, `cwd:Path`, `expected_exit:int`,
+versioned artifacts, their phase discrimination and their exact subjects are the single
+family defined in M0 §16.2 (`staged-guard.v1`, `source-judgment.v1`,
+`integrated-guard.v1`, `integrated-judgment.v1`, `publication.v1`,
+`closure-validator.v1`); M3 supplies the execution and settlement, not a second shape.
+A staged record names no future commit; the source judgment names the implementation
+commit and tree; the integrated records are rebound after every merge, rebase or CAS
+refresh; the closure validator names the closure commit and its published parent. A
+guard artifact additionally carries `argv:string[]`, `cwd:Path`, `expected_exit:int`,
 `actual_exit:int|null`, `stdout_ref:EvidenceRef`, `stderr_ref:EvidenceRef` and
 `timeout_s:PosInt`. A judgment artifact carries `judge_release:EvidenceRef`,
 `rubric_digest:SHA` and bounded rationale evidence references. Unknown records
@@ -498,14 +507,32 @@ unavailable or inconclusive evidence; it is not pass and not a mechanical fail.
 
 `staged-guard.v1` runs against the exact staged tree and index digest before
 integration. `integrated-guard.v1` runs against the exact post-integration tree.
-A source judgment names the source commit/tree it grades; an integrated judgment
-is rebound after every merge, rebase or CAS refresh. A staged mechanical pass
-permits integration and publication even when a model judge is unavailable. A
-source or integrated judgment of `unknown` never rewrites a mechanical pass or
-fail, never publishes by itself and never erases an already proven remote
-publication. If policy requires that judgment for closure, unknown leaves
-completion null and reconciliation open. A mechanical fail always blocks
-landing; a model pass cannot waive it.
+
+**Recording a mechanical check and granting the protected publication effect are
+separate acts.** The table below is the single publication decision rule for M3,
+M4 §15.4, F5 and VII; no chapter states a second permission rule. "Required" means the
+gate policy (§17.1) marks the artifact class as requiring an independent accepted
+judgment — that is the default and the only baseline this plan authorizes. A judgment
+that policy requires and that is unavailable, `needs_work` or `uncertain` never
+authorizes a protected write.
+
+| # | Mechanical set | Required judgment | Protected publication effect | Row state |
+|---|---|---|---|---|
+| 1 | all required checks pass | `accept` | **AUTHORIZED** | publish, verify, then close |
+| 2 | all required checks pass | `needs_work` | **DENIED** — correction under the same task and claim | completion null |
+| 3 | all required checks pass | `uncertain` | **DENIED** — reconcile the judge | completion null |
+| 4 | all required checks pass | unavailable | **DENIED** — no product-policy exception widens this row | completion null, blocked with the measured reason |
+| 5 | any required check fails | any | **DENIED** — a model pass cannot waive a mechanical fail | correction or blocked with the failed evidence |
+| 6 | any required check unknown | any | **DENIED** — unknown never becomes pass | unsettled |
+| 7 | all required checks pass | policy requires none for this artifact class | **AUTHORIZED on the mechanical set** — a scope declaration, not an unavailable judgment | publish, verify, close |
+| 8 | all required checks pass | signed owner exception per §17.1 | **AUTHORIZED_WITH_EXCEPTION**, visibly distinct from an unqualified accept | closure records the exception digest |
+| 9 | any | no applicable policy row | **DENIED** — `POLICY_UNAVAILABLE` | nothing published |
+
+A staged mechanical pass therefore permits integration and the integrated gates; it
+does not publish. A source or integrated judgment never publishes by itself and never
+erases an already proven remote publication. If policy requires that judgment for
+closure, `unknown` leaves completion null and reconciliation open. A mechanical fail
+always blocks landing; a model pass cannot waive it.
 
 Postchecks are named independently as build, test, security, policy, provider
 readback and board-closure validation. Each has its own state, retry count,
