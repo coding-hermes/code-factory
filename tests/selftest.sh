@@ -7789,5 +7789,37 @@ else
 fi
 rm -rf "$cf268"
 
+say "74. handbook spine grades the selected corpus, not a hardcoded checkout (CF-432)"
+cf432=$(mktemp -d)
+mkdir -p "$cf432/handbook/chapters"
+cp "$HERE"/docs/handbook/chapters/*.md "$cf432/handbook/chapters/"
+sed -i 's/18 contract IDs/19 contract IDs/' "$cf432/handbook/chapters/M6-documentation.md"
+out=$(cd / && python3 "$HERE/scripts/handbook_spine.py" --handbook "$cf432/handbook" 2>&1); rc=$?
+if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -q "M6-documentation: '19 contract'"; then
+  say "  PASS  CF-432 dirty fixture from / finds planted count claim (exit $rc)"
+else
+  say "  FAIL  CF-432 dirty fixture did not name planted count claim (exit $rc): $out"; fails=$((fails+1))
+fi
+sed -i 's/19 contract IDs/18 contract IDs/' "$cf432/handbook/chapters/M6-documentation.md"
+out=$(cd / && python3 "$HERE/scripts/handbook_spine.py" --handbook "$cf432/handbook" 2>&1); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -q '^findings=0'; then
+  say "  PASS  CF-432 clean fixture from / reports findings=0"
+else
+  say "  FAIL  CF-432 clean fixture was not green (exit $rc): $out"; fails=$((fails+1))
+fi
+missing="$cf432/missing"
+out=$(cd / && python3 "$HERE/scripts/handbook_spine.py" --handbook "$missing" 2>&1); rc=$?
+if [ "$rc" -eq 2 ] && printf '%s\n' "$out" | grep -q "handbook corpus directory not found: $missing"; then
+  say "  PASS  CF-432 missing corpus fails closed with a named error"
+else
+  say "  FAIL  CF-432 missing corpus was not named (exit $rc): $out"; fails=$((fails+1))
+fi
+if [ "$(grep -c 'expanduser(\"~/code-factory' "$HERE/scripts/handbook_spine.py")" -eq 0 ]; then
+  say "  PASS  CF-432 hardcoded ~/code-factory corpus path is absent"
+else
+  say "  FAIL  CF-432 hardcoded corpus path remains"; fails=$((fails+1))
+fi
+rm -rf "$cf432"
+
 say ""
 [ "$fails" -eq 0 ] && finish 0 || finish 1

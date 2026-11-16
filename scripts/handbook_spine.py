@@ -14,7 +14,7 @@ The spine is the set of facts every chapter must agree on:
   counts      the document's own totals (modules, flows, contracts) must match
               what the chapters actually contain
 
-Run: python3 scripts/handbook_spine.py [--json]
+Run: python3 scripts/handbook_spine.py [--handbook PATH] [--json]
 Exit: 0 clean, 1 findings, 2 cannot parse.
 """
 
@@ -22,14 +22,20 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import sys
 from collections import defaultdict
 from pathlib import Path
 
-HB = Path(os.path.expanduser("~/code-factory/docs/handbook"))
-CH = HB / "chapters"
+DEFAULT_HANDBOOK = Path(__file__).resolve().parent.parent / "docs" / "handbook"
+
+
+def chapters(handbook: Path) -> dict[str, str]:
+    return {
+        p.stem: p.read_text(errors="replace")
+        for p in sorted((handbook / "chapters").glob("M*.md"))
+    }
+
 
 # Canonical contract register: the 18 interfaces named in OUTLINE Part IV.
 # id -> (name, expected producer system, expected consumer system)
@@ -90,10 +96,6 @@ REF = re.compile(r"\b(?:M\d{1,2}|F\d{1,2})\b")
 COUNT_CLAIM = re.compile(
     r"\b(\d{1,3})\s+(modules?|flows?|contracts?|chapters?|submodules?)\b", re.I
 )
-
-
-def chapters() -> dict[str, str]:
-    return {p.stem: p.read_text(errors="replace") for p in sorted(CH.glob("M*.md"))}
 
 
 def section(text: str, n: int) -> str:
@@ -185,12 +187,24 @@ def func_tokens(cell: str) -> set[str]:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
+    ap.add_argument(
+        "--handbook",
+        "--root",
+        dest="handbook",
+        type=Path,
+        default=DEFAULT_HANDBOOK,
+        help="handbook corpus root (default: repo root containing this script)",
+    )
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args()
 
-    ch = chapters()
+    handbook = a.handbook.expanduser().resolve()
+    if not handbook.is_dir():
+        print(f"handbook corpus directory not found: {handbook}", file=sys.stderr)
+        return 2
+    ch = chapters(handbook)
     if not ch:
-        print("no chapters found", file=sys.stderr)
+        print(f"no chapters found in handbook corpus: {handbook}", file=sys.stderr)
         return 2
 
     findings: list[dict] = []
