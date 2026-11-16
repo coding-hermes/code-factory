@@ -198,7 +198,7 @@ ch:trace row=CF-298 spec=docs/handbook/chapters/M1-provisioning.md test=tests/te
 
 | Setting | Default | Range | Governs | What breaks if changed |
 |---|---|---|---|---|
-| `--harness` | `hermes` (`:107`, `:515`) | a harness name | the node's default harness | a wrong default changes every generated node config |
+| `--harness` | `hermes` (`:107`, `:515`) | one of the adapters this tree ships (`scripts/harness/install-*.sh`) or a name the adapter table in `specs/HARNESS.md` declares — this writer copies the flag into `HARNESS` unvalidated (`:515` → `:324`) and `bunker-provision.sh:631` forwards it to the create path, so the `--harness H` row of the `node-create.sh` table below is authoritative for how the name is judged: a typo is one named row listing the shipped set, a spec-declared adapter with no installer here is a separate row naming `specs/HARNESS.md` and CF-006, and `--help`/`-h` exit 0 with `CRIER_URL` and `BUNKER_SERVER` unset | the node's default harness — the `HARNESS` line every generated config carries | a wrong default writes a wrong `HARNESS` into every generated config; nothing here refuses it, so the name is first judged on the create path against the two sets above |
 | `--ref` | `main` (`:106`, `:516`) | a git ref | the seeded branch | a wrong ref seeds the wrong tree |
 | `--ttl` | `6h` (`:108`, `:517`) | a Go duration | config TTL | a wrong TTL expires containers early |
 | `--force` / `--check` | off / off (`:523-524`) | flags | rewrite-a-differing-config / read-only drift check | `--check` is read-only; `--force` rewrites a differing config |
