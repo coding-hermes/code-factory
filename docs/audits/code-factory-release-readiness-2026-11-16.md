@@ -121,3 +121,43 @@ must be settled by an owner-side scan before any Release object exists.
   `docs/handbook/conformance/manifest.json` (pushed to `origin/main`, hosted CI green).
 - This artifact, plus the board rows it names (pushed separately).
 - Nothing else: no tag, no Release, no branch deletion, no force-move, no dependency change.
+
+## Re-measurement — tick `code-factory-releng-2026-11-16-16-59-41` (candidate `8f05a4a9`)
+
+Decision unchanged: **NO-GO**. Zero remote tags and zero GitHub Releases still; still no release
+contract in the tree. The measurements below replace the ones above wherever they disagree.
+
+| Item | Pass 13:17 at `74c973af` | This pass at `8f05a4a9` | How |
+|---|---|---|---|
+| Candidate | `74c973af` | `8f05a4a961c8e378559af479b502c2453360a3a1` | `git ls-remote origin refs/heads/main` |
+| Hosted CI at candidate | run `43887027423` green | run `43936119176` green (jobs `secrets (gitleaks)`, `selftest` both success) | `gh run list --json databaseId,headSha,conclusion` |
+| Repo self-test | guard log at the fix tree | **PASS, exit 0 from a clean clone** — `git clone` of `origin` into a scratch dir, `bash tests/selftest.sh`, 815 log lines, final line `SELFTEST: PASS` | `git clone … && bash tests/selftest.sh; echo EXIT=$?` |
+| Tree secret scan | `gitleaks dir` at the working copy | **clean** — `gitleaks dir --redact --config .gitleaks.toml .` on the clean clone: `scanned ~4407264 bytes (4.41 MB)`, `no leaks found`, exit 0 | same |
+| Remote non-default branches | 95 | **97** (98 heads total; `origin/main` is the default) | `git ls-remote --heads` |
+| Commits unreachable from `main` | 926 | **928** | `git rev-list --count <non-main tips> --not origin/main` |
+| `origin/main..origin/master` secret history | 547 findings / 64 commits | **547 / 64, unchanged** — `sk-api-key` 509, `generic-api-key` 27, `private-key` 5, `slack-bot-token` 3, `github-pat` 3; 524 of them in `monitoring/.coding-hermes/board/tasks.jsonl` | `gitleaks git --log-opts=origin/main..origin/master --report-format json` |
+| `origin/master` anonymous reachability | lineage counted only | **confirmed 200** — `https://raw.githubusercontent.com/coding-hermes/code-factory/master/.hermes/fleet.toml` returns HTTP 200, so the internal fleet config on that ref is publicly fetchable | `curl -s -o /dev/null -w '%{http_code}'` |
+| Branch protection on `main` | absent (404) | **still absent (404)** | `gh api repos/coding-hermes/code-factory/branches/main/protection` |
+| Secret scanning / push protection | enabled / enabled | **enabled / enabled**, 0 open alerts; non-provider patterns **disabled**, validity checks **disabled**, Dependabot security updates **disabled** | `gh api repos/...` → `security_and_analysis` |
+| Remote/local tags | 0 remote, 2 local `safety-*` | **same** — `git ls-remote --tags` empty, `git tag` lists only the two unpushed `safety-*` working tags | both |
+
+### Correction to this artifact's own posture claim
+
+The table above said *"Internal endpoints in the published tree: none beyond documentation of
+`CRIER_URL`/`BUNKER_SERVER` variables; no live host, port or credential is named."* **That claim is
+false, and it was false when it was written.** `docs/handbook/appendices/units/36-scripts-verify-node-sh.md`
+publishes a live private host three times — the address `192.168.123.66` (lines 100, 101, 109) and its
+gateway port `:10800` (lines 101, 109) — and the file was already present at `74c973af`. It entered at
+`5186ee07` and `014ddca5` (the CF-050 gate fix) rewrote `/home/<user>/` paths in that same file without
+noticing the address.
+
+The tree is right and the prose was wrong. Filed as **CF-470**: the CF-050 publish gate tests
+`/home/<user>/` spellings only, so private IPv4 ranges and gateway ports pass it. That is the same
+argument CF-050 already settled for host-home paths; the pattern set simply never grew to cover them.
+
+### What this pass mutated
+
+- This appended section, and the board rows it refreshes (`CF-452`, `CF-453`) plus the new `CF-470`.
+- Nothing else: no tag, no Release, no ref deletion, no version surface, no dependency change.
+- The clean clone, the gitleaks JSON report and the selftest log live under
+  `~/.hermes/cache/scratch/cfdb-releng-20261116T165941/`, outside the published tree.
