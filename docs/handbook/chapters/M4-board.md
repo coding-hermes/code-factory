@@ -501,38 +501,62 @@ new row revisions, never discarded.
 ### 15.2 Concrete claim CAS and server-side enforcement
 
 New claims use the one `cf.board-group-claim.v1` definition. There is exactly one
-request type, one result type and one transaction-marker type for it; M4 and CT-10
-carry the same definition and neither owns a second copy. The closed request body on
-CT-10 is `{schema_version:"cf.board-group-claim.v1",operation_id:ID,
-idempotency_key:ID,project_id:ID,board_id:ID,board_revision:GitOID,
-owner_fence:Fence,ordering:Text,claims:ClaimPrecondition[],lease_expires_at:Time,
-transition:"claim"|"renew"|"release",evidence_refs:EvidenceRef[]}`.
-`board_revision` is the normal GitOID representation, never a nested
-`{algorithm,value}` object. `ClaimPrecondition` is
-`{task_id:ID,created_seq:PosInt,expected_revision:UInt,
-expected_status:"pending"|"in_progress",claim_generation:UInt}`; it is the only
-precondition type, and its `claim_generation` is `0` for a claim that does not yet
-exist. `claims` is non-empty and its maximum length is the single bound fixed by
-`conformance/schemas/cf2a.board-claim.schema.json` (`maxItems`); this chapter declares
-no second number, and the historical 256-here / 1000-CT-10 divergence is retired — a
-longer request is `INVALID_FIELD` before any candidate is built.
+claim record, one request envelope and one transaction-marker type for it, and no
+chapter owns a second copy. The **claim record** is the machine artifact
+`conformance/schemas/cf2a.board-claim.schema.json` and CT-10's field list, which must
+agree member for member:
 
-`ordering` is exactly `created_seq ASC, id ASC; dependencies must be settled;
-correction retains its original worker`. `TaskRow` has no priority field, so no
-priority term is permitted in an ordering string; a request whose literal ordering
-differs is `INVALID_FIELD`, and the consumer sorts by the string it was given rather
-than re-deriving an order.
+`{schema_version:"cf.board-group-claim.v1",claim_id:ID,claim_generation:PosInt,
+project_id:ID,claimant:{claimant_id:ID,owner_fence:Fence},
+group:{max_members:256,min_members:UInt,member_count:UInt},
+ordering:{field:"task_id",direction:"ascending",comparison:"bytewise UTF-8"},
+members:[{task_id:ID,board_row_revision:UInt,criterion_digest:SHA}][1..256],
+board:{ref:Text,base_oid:GitOID,marker_path:Text},claimed_at_seq:UInt,
+lease_expires_at:Time}`.
+
+The bound is **256**, declared once as `group.max_members` and `members.maxItems`; the
+1000 that CT-10 carried is the defect and is retired, not a second candidate. A wider
+group is a different record, not a larger claim. `board.base_oid` is the normal object
+id — 40 or 64 lowercase hex, never abbreviated and never flagged — and it is the CAS
+precondition; `board.ref` and `board.marker_path` bind the protected ref and the §1.9.6
+marker location. `owner_fence` lives inside `claimant`; there is no top-level fence and
+no nested `board_revision:{algorithm,value}` object. `claim_generation` is at least 1 on
+a persisted claim record because the broker allocates it; a `0` sentinel never appears
+in a stored record. Preconditions are carried by `members` themselves — `task_id`,
+`board_row_revision` and `criterion_digest` — so there is no separate precondition type
+and no second name for the same three values.
+
+`ordering` is that object and nothing else: `members` must be listed in task_id
+bytewise-ascending order, and a list out of that order is `INVALID_FIELD` before any
+candidate is built. The earlier free-text ordering literal is retired, and `TaskRow` has
+no priority field, so no priority term can appear in any order. Eligibility — settled
+dependencies, expected status, and the rule that a correction retains its original
+worker — is evaluated **before** the member list is fixed and is not part of the
+ordering; conflating the two is what produced the old string that no consumer could
+sort by.
+
+**One named residual.** The landed claim record has no member for the operation
+envelope: `operation_id`, `idempotency_key`, `transition` and `evidence_refs` cannot be
+represented, so a request can express group **creation** but not `renew` or `release`,
+and a retried claim has no idempotency key to dedupe on. This chapter keeps those four
+fields normative for the request envelope (§15.2's CAS retry and §15.3's readback both
+depend on them) and names the gap rather than inventing a contrary record: the
+conformance bundle must grow either a request-envelope type carrying them or a
+`transition` member on the claim record, and until it does, the machine form covers
+creation only. Everything else below describes that envelope.
 
 `transition` is the one discriminator. Group **creation** is `claim` and is the only
 transition that allocates: `operation_id` is the `claim_group_id`, the broker
 allocates one `claim_id` and generation `1` per member, and the wave plan is the
-ordered claim set. `renew` and `release` are the same closed type applied to exactly
-one existing claim: `claims` has length 1, `expected_status` is `in_progress`, and
-neither transition allocates a `claim_id` or advances a generation.
+ordered member set. `renew` and `release` are the same closed type applied to exactly
+one existing claim: `members` has length 1, the member's `board_row_revision` is the
+in-progress row's revision, and neither transition allocates a `claim_id` or advances a
+generation. Both transitions are unreachable in the machine form as landed (see the
+residual above).
 `cf.board-claim.v1` is a retired name, not a second creating type; a reader that
 still receives that name converts the body under this same definition, and a body
 carrying a creating transition under it is refused. The owner_fence principal is the
-claimant and is distinct from per-task claim_generation. The result's Git OID is
+claimant and is distinct from per-claim `claim_generation`. The result's Git OID is
 returned after publication, not embedded in its own commit.
 
 The broker is the only actor permitted to claim. No worker, foreman, scheduler,
@@ -573,7 +597,7 @@ The broker serializes project effects against epoch advance (Part I §1.9.3a), t
    can win. A forge exposing only an unchecked merge API does not satisfy this contract.
 5. Fetches the exact remote marker/rows/events and verifies every accepted claim before
    returning Result `{operation_id,claim_group_id,board_revision:GitOID,
-   lease_expires_at:Time,duplicate:boolean,claims:[{task_id,claim_id,claim_generation,
+   lease_expires_at:Time,duplicate:boolean,members:[{task_id,claim_id,claim_generation,
    new_revision,row_digest,event_digest}]}` in request order and waking Scheduler.
    Every fenced lease is valid before the first process starts. A lost push
    acknowledgement is resolved by marker lookup; identical operation/input replays

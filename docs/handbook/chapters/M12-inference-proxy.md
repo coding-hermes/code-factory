@@ -614,13 +614,26 @@ same operation. Two normative consequences follow:
    operation to a new identity and never allocates a second one.
 
 There is exactly one authoritative machine-readable `config.update` request and result
-schema — `conformance/schemas/cf2a.config.schema.json`, mirrored in Part V §V.0.2 — and
-this chapter, Part I §1.9.1 and CT-24 carry the identical field list rather than a
-shorter or longer variant. A chapter that lists fewer request fields, or declares a
-second success shape, is defective; where a chapter and the schema disagree, the schema
-governs. The single-writer rules are unchanged: one global generation, whole-document
-authorization per request, and the file importer and the API as one serialized writer
-under `expected_generation` CAS (§19.3).
+schema, and the conformance bundle's `conformance/schemas/cf2a.config.schema.json` is
+**not** it: as landed that file is `cf.config.v1`, the stored configuration *document*
+(`generation`, `project_id`, `scope ∈ {global, project, lane}`, `settings`, `enums`,
+`origins`, `updated_at`, `updated_by`). It has no `operation_id`, `idempotency_key`,
+`expected_generation` or `desired`, so it cannot serve as the request or result shape.
+Until a request/result schema lands, the authoritative field list is the one in this
+section, Part I §1.9.1 and CT-24 — identical in all three, not a shorter or longer
+variant — and a chapter that lists fewer request fields, or declares a second success
+shape, is defective.
+
+The two vocabularies are distinct and are mapped explicitly, never conflated: the
+request's `scope` token is `factory-control` or `project:<ID>`, while the stored
+document's `scope` enum is `global`, `project` or `lane`. `factory-control` stores as
+`global` with `project_id:null`; `project:<ID>` stores as `project` with
+`project_id:<ID>`; the document's `lane` value carries lane-level overrides that no
+`config.update` in this chapter creates. **Named residual:** the bundle must publish the
+request/result schema and the explicit `lane` mapping, or state that `lane` is
+unreachable through this API. The single-writer rules do not change regardless: one
+global generation, whole-document authorization per request, and the file importer and
+the API as one serialized writer under `expected_generation` CAS (§19.3).
 
 The successful result is the same typed `factory.v1` response everywhere:
 
