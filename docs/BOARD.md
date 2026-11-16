@@ -165,8 +165,12 @@ bash tests/selftest.sh | grep -E 'rows parse|^SELFTEST'
   never starts the line, because each Actions line is `<job>\t<step>\t<ISO-8601> <message>`, so an
   anchored `^[0-9]+\. ` grep finds nothing while a bare `FAIL` grep finds 64 negative-control fixtures.
   `docs/audits/cf450-ci-attribution.sh <red-run> <green-run>` now joins the two runs on verdict label:
-  against `43886556997` (red) and `43887027423` (green) it prints **574 labels each, one divergence —
-  `ATTRIBUTED publish paths (red=FAIL green=PASS)`**, and against a run compared with itself it prints
+  against `43886556997` (red) and `43887027423` (green) it prints **574 verdict labels in each run, 562
+  of them shared after the inner join, one divergence —
+  `ATTRIBUTED publish paths (red=FAIL green=PASS)`** (the 12 one-sided labels embed volatile data such
+  as tmp paths and short commit ids, so they are excluded rather than mis-attributed — a genuine
+  regression on such a label would be invisible to this instrument; filed as **CF-454**), and against a
+  run compared with itself it prints
   `NO DIVERGENCE` and exits 2, so the instrument can fail. The fix is `74c973af` (2 lines, both
   absolute host paths spelled `$HOME`), and `43887027423` at exactly that head is the first green since
   `176378c1`, with both jobs (`secrets (gitleaks)`, `selftest`) `success`. A local `bash

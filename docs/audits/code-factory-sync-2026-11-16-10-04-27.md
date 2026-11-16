@@ -72,8 +72,11 @@ NO DIVERGENCE: red and green agree on every shared label.
 (exit 2)
 ```
 
-574 labels in each run, one divergence, and the instrument exits 2 rather than inventing an
-attribution when the runs agree. **CF-450 is satisfied by re-runnable commands**: which workflow/job
+574 verdict labels in each run — **562 shared** after the inner join, one divergence — and the
+instrument exits 2 rather than inventing an attribution when the runs agree. The 12 one-sided labels
+are excluded because they embed volatile data (tmp paths, short commit ids); that is a real limit, not
+a cosmetic one: a regression confined to such a label would be invisible here (filed as **CF-454**).
+**CF-450 is satisfied by re-runnable commands**: which workflow/job
 (`selftest` / `Repo self-test gate`), exact failure output (above), a reproducible command (the script
 plus a local `bash tests/selftest.sh`), and a green run on the corrected head (`43887027423` at
 `74c973af`).
