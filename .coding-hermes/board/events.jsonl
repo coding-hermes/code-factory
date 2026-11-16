@@ -863,3 +863,4 @@
 {"id": 862, "timestamp": "2026-11-16T20:25:31Z", "event_type": "task_completed", "task_id": "CF-466", "actor": "foreman", "detail": "{\"status\":\"complete\"}"}
 {"id": 863, "timestamp": "2026-11-16T20:25:36Z", "event_type": "task_completed", "task_id": "CF-466", "actor": "foreman", "detail": "CF-466 closed: verdict 5cdc74f4 PASS at 8b9148c5 (0b300014 its ancestor), guard PASS, CI GREEN. Fix commit 0b300014 adds the III.M1.S2 anchor; prose landed via 38712c13. Tick code-factory-duckbrain-2026-11-16-16-59-41."}
 {"id": 864, "timestamp": "2026-11-16T20:27:18Z", "event_type": "task_created", "task_id": "CF-474", "actor": "foreman", "detail": "{\"id\":\"CF-474\",\"status\":\"pending\"}"}
+{"id": 865, "timestamp": "2026-11-16T20:54:40Z", "event_type": "task_completed", "task_id": "CF-438", "actor": "foreman", "detail": "CF-438 landed at 4382a38a; judge run e6d3bc5f passed (tier1 PASS, tier2 PASS, no_concerns_found)"}
