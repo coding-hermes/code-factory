@@ -543,7 +543,7 @@
     "delivered_pdf": null,
     "state": "not rebuilt for pass 7",
     "previous_build": {
-      "path": "/home/kara/code-factory-reports/handbook/code-factory-handbook-2026-11-05-r2.pdf",
+      "path": "$HOME/code-factory-reports/handbook/code-factory-handbook-2026-11-05-r2.pdf",
       "sha256": "9a8fae7b366243ffd2282fccad46d9e49463b70e18f862e0eba549c33f6aca89",
       "note": "pass-6 revision; it predates this bundle and is not evidence for it"
     },
