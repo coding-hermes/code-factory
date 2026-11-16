@@ -1,0 +1,348 @@
+{
+  "fixture_id": "cf2a.board-group-claim",
+  "fixture_version": "1.0.0",
+  "kind": "positive-with-negative-arms",
+  "schema": "cf2a.board-claim.schema.json",
+  "note": "P7-05/P7-06 group claim with its canonical criterion and the five phase-discriminated evidence records for the first member.",
+  "group_claim": {
+    "schema_version": "cf.group-claim.v1",
+    "claim_id": "claim-grp-1",
+    "claim_generation": 1,
+    "project_id": "code-factory",
+    "claimant": {
+      "claimant_id": "foreman-1",
+      "owner_fence": {
+        "authority_id": "auth-1",
+        "epoch": 7,
+        "owner_id": "manager-1",
+        "project_id": "code-factory"
+      }
+    },
+    "group": {
+      "max_members": 256,
+      "min_members": 1,
+      "member_count": 3
+    },
+    "ordering": {
+      "field": "task_id",
+      "direction": "ascending",
+      "comparison": "bytewise UTF-8"
+    },
+    "members": [
+      {
+        "task_id": "CF-1",
+        "board_row_revision": 2,
+        "criterion_digest": "4e7e486cd95ba75400b4e7faa54640d2e98a244b7d47d8ec3253c490bbab0dc4"
+      },
+      {
+        "task_id": "CF-2",
+        "board_row_revision": 1,
+        "criterion_digest": "4e7e486cd95ba75400b4e7faa54640d2e98a244b7d47d8ec3253c490bbab0dc4"
+      },
+      {
+        "task_id": "CF-3",
+        "board_row_revision": 4,
+        "criterion_digest": "4e7e486cd95ba75400b4e7faa54640d2e98a244b7d47d8ec3253c490bbab0dc4"
+      }
+    ],
+    "board": {
+      "ref": "refs/heads/main",
+      "base_oid": "1111111111111111111111111111111111111111",
+      "marker_path": ".coding-hermes/board/tasks.jsonl"
+    },
+    "claimed_at_seq": 41,
+    "lease_expires_at": "2026-11-11T19:33:00Z"
+  },
+  "group_claim_digest": "80b87a4dbf8b7ce41ad6b12d722b41701c0625c6119811eb3fa8f2afb59d5388",
+  "bounds": {
+    "max_members": 256,
+    "min_members": 1,
+    "ordering": "ascending bytewise task_id",
+    "refusal_when_exceeded": "GROUP_TOO_LARGE",
+    "refusal_on_duplicate": "DUPLICATE_MEMBER"
+  },
+  "criterion": {
+    "argv": [
+      "verify",
+      "--fixture"
+    ],
+    "cwd": ".",
+    "description": "The admitted change is verified.",
+    "expected_exit": 0,
+    "id": "AC-1",
+    "oracle_digest": "fc360a2ecbbd5eec0f5748b31a5ae732497b5c2ee81ebce4feee6a15acbd7eb8",
+    "timeout_s": 60
+  },
+  "criterion_digest": "4e7e486cd95ba75400b4e7faa54640d2e98a244b7d47d8ec3253c490bbab0dc4",
+  "criterion_projections": {
+    "storage": {
+      "fields": [
+        "id",
+        "argv",
+        "cwd",
+        "expected_exit",
+        "timeout_s",
+        "oracle_digest"
+      ],
+      "rule": "the board row stores the executable projection; a display-only field never becomes executable"
+    },
+    "display": {
+      "fields": [
+        "id",
+        "description"
+      ],
+      "rule": "prose is a projection of description only and cannot qualify a task"
+    },
+    "adapter": {
+      "from": "board row acceptance_criteria[]",
+      "to": "cf.brief-input.v1 task.acceptance_criteria[]",
+      "rule": "lossless field copy; missing argv/cwd/expected_exit is a typed refusal, not a default"
+    }
+  },
+  "evidence_chain": [
+    {
+      "schema_version": "cf.evidence.v1",
+      "evidence_id": "ev-cf1-staged-1",
+      "phase": "staged",
+      "task_id": "CF-1",
+      "claim": {
+        "claim_id": "claim-cf1-1",
+        "claim_generation": 1
+      },
+      "subject": {
+        "base_oid": "1111111111111111111111111111111111111111",
+        "commit_oid": null,
+        "tree_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "policy_ref": "cas+sha256://code-factory/policy/pre-commit-v1"
+      },
+      "criterion_results": [
+        {
+          "criterion_id": "AC-1",
+          "criterion_digest": "4e7e486cd95ba75400b4e7faa54640d2e98a244b7d47d8ec3253c490bbab0dc4",
+          "argv": [
+            "verify",
+            "--fixture"
+          ],
+          "exit_code": 0,
+          "expected_exit": 0,
+          "result": "pass"
+        }
+      ],
+      "verdict": {
+        "kind": "pass",
+        "reason": "precommit battery green on the staged tree"
+      },
+      "observed_at": "2026-11-11T19:10:00Z"
+    },
+    {
+      "schema_version": "cf.evidence.v1",
+      "evidence_id": "ev-cf1-source-1",
+      "phase": "source",
+      "task_id": "CF-1",
+      "claim": {
+        "claim_id": "claim-cf1-1",
+        "claim_generation": 1
+      },
+      "subject": {
+        "base_oid": "1111111111111111111111111111111111111111",
+        "commit_oid": "2222222222222222222222222222222222222222",
+        "tree_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "criterion_results": [
+        {
+          "criterion_id": "AC-1",
+          "criterion_digest": "4e7e486cd95ba75400b4e7faa54640d2e98a244b7d47d8ec3253c490bbab0dc4",
+          "argv": [
+            "verify",
+            "--fixture"
+          ],
+          "exit_code": 0,
+          "expected_exit": 0,
+          "result": "pass"
+        }
+      ],
+      "verdict": {
+        "kind": "pass",
+        "reason": "source judgment on the committed tree"
+      },
+      "actor": {
+        "actor_id": "judge-1",
+        "actor_kind": "gitreins-tier2"
+      },
+      "observed_at": "2026-11-11T19:20:00Z"
+    },
+    {
+      "schema_version": "cf.evidence.v1",
+      "evidence_id": "ev-cf1-integrated-1",
+      "phase": "integrated",
+      "task_id": "CF-1",
+      "claim": {
+        "claim_id": "claim-cf1-1",
+        "claim_generation": 1
+      },
+      "subject": {
+        "base_oid": "1111111111111111111111111111111111111111",
+        "commit_oid": "2222222222222222222222222222222222222222",
+        "integrated_oid": "3333333333333333333333333333333333333333",
+        "tree_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "criterion_results": [
+        {
+          "criterion_id": "AC-1",
+          "criterion_digest": "4e7e486cd95ba75400b4e7faa54640d2e98a244b7d47d8ec3253c490bbab0dc4",
+          "argv": [
+            "verify",
+            "--fixture"
+          ],
+          "exit_code": 0,
+          "expected_exit": 0,
+          "result": "pass"
+        }
+      ],
+      "verdict": {
+        "kind": "pass",
+        "reason": "post-merge re-run green at the integrated tree"
+      },
+      "actor": {
+        "actor_id": "judge-1",
+        "actor_kind": "gitreins-tier2"
+      },
+      "observed_at": "2026-11-11T19:26:00Z"
+    },
+    {
+      "schema_version": "cf.evidence.v1",
+      "evidence_id": "ev-cf1-publication-1",
+      "phase": "publication",
+      "task_id": "CF-1",
+      "claim": {
+        "claim_id": "claim-cf1-1",
+        "claim_generation": 1
+      },
+      "subject": {
+        "accepted_object": {
+          "commit_oid": "3333333333333333333333333333333333333333",
+          "tree_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        "observed_tip": "4444444444444444444444444444444444444444",
+        "ref": "refs/heads/main"
+      },
+      "ancestry": {
+        "accepted_is_ancestor_of_tip": true,
+        "judged_by": "merge-base --is-ancestor"
+      },
+      "decision": {
+        "kind": "permitted",
+        "rule": "accepted object is an ancestor of the observed tip"
+      },
+      "verdict": {
+        "kind": "pass",
+        "reason": "publication accepted; later tips do not relabel accepted bytes"
+      },
+      "observed_at": "2026-11-11T19:27:00Z"
+    },
+    {
+      "schema_version": "cf.evidence.v1",
+      "evidence_id": "ev-cf1-closure-1",
+      "phase": "closure",
+      "task_id": "CF-1",
+      "claim": {
+        "claim_id": "claim-cf1-1",
+        "claim_generation": 1
+      },
+      "subject": {
+        "accepted_object": {
+          "commit_oid": "3333333333333333333333333333333333333333",
+          "tree_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        "closure_commit": "5555555555555555555555555555555555555555"
+      },
+      "evidence_refs": [
+        "cas+sha256://code-factory/91cb72da63670de156eb6fdb12dce89d7f25a6e4e0a24b6f0df54391777e640f"
+      ],
+      "verdict": {
+        "kind": "pass",
+        "reason": "closure cites the publication record that permitted it"
+      },
+      "observed_at": "2026-11-11T19:28:00Z"
+    }
+  ],
+  "evidence_phase_rules": {
+    "staged": "commit_oid MUST be null; a precommit record never names an object that does not yet exist",
+    "source": "commit_oid names the committed tree the verdict covers",
+    "integrated": "integrated_oid names the post-merge tree that was re-run",
+    "publication": "accepted_object is bound by digest; the observed tip may advance and only ancestry is re-judged",
+    "closure": "closure cites the publication record that permitted it"
+  },
+  "negative_arms": [
+    {
+      "name": "group exceeds the bound",
+      "mutate": {
+        "pointer": "/group_claim/members",
+        "op": "repeat-to",
+        "count": 257
+      },
+      "expected": {
+        "accepted": false,
+        "refusal": "GROUP_TOO_LARGE"
+      }
+    },
+    {
+      "name": "duplicate member",
+      "mutate": {
+        "pointer": "/group_claim/members/1/task_id",
+        "value": "CF-1"
+      },
+      "expected": {
+        "accepted": false,
+        "refusal": "DUPLICATE_MEMBER"
+      }
+    },
+    {
+      "name": "members out of order",
+      "mutate": {
+        "pointer": "/group_claim/members",
+        "op": "reverse"
+      },
+      "expected": {
+        "accepted": false,
+        "refusal": "ORDER_INVALID"
+      }
+    },
+    {
+      "name": "abbreviated commit id",
+      "mutate": {
+        "pointer": "/group_claim/board/base_oid",
+        "value": "1111111"
+      },
+      "expected": {
+        "accepted": false,
+        "refusal": "GITOID_INVALID",
+        "detail": "a normal object id is 40 or 64 lowercase hex; an abbreviation or a flag is refused"
+      }
+    },
+    {
+      "name": "precommit record naming a commit",
+      "mutate": {
+        "pointer": "/evidence_chain/0/subject/commit_oid",
+        "value": "2222222222222222222222222222222222222222"
+      },
+      "expected": {
+        "accepted": false,
+        "refusal": "PHASE_INVALID",
+        "detail": "staged evidence that names a commit is a different phase record, not a staged one"
+      }
+    },
+    {
+      "name": "publication re-labels accepted bytes from a later tip",
+      "mutate": {
+        "pointer": "/evidence_chain/3/subject/accepted_object/commit_oid",
+        "value": "4444444444444444444444444444444444444444"
+      },
+      "expected": {
+        "accepted": false,
+        "refusal": "PUBLICATION_DRIFT",
+        "detail": "the accepted object is fixed by digest; only ancestry against the observed tip is judged"
+      }
+    }
+  ]
+}

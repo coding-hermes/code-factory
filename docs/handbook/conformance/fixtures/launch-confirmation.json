@@ -1,0 +1,396 @@
+{
+  "fixture_id": "cf2a.launch-confirmation",
+  "fixture_version": "1.0.0",
+  "kind": "positive",
+  "schema": "cf2a.execution.schema.json",
+  "note": "CT-05 view of the same commitment: the confirmation is the first record containing dispatch_id and execution_key, and the foreman recomputes both before dispatch.",
+  "commitment_digest": "fefb5e5d7887999e0123ebb9bbae94116150941341f2fcb0f1c751861a228b3d",
+  "confirmation": {
+    "schema_version": "cf.launch-confirmation.v1",
+    "launch_id": "l-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048",
+    "input_digest": "aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a",
+    "commitment_digest": "fefb5e5d7887999e0123ebb9bbae94116150941341f2fcb0f1c751861a228b3d",
+    "execution_key": "add6df27bfc4facef355695078b5e1171eda32325a99263c30b81b9f0fc842fc",
+    "dispatch_id": "d-2ccec62df73e9a889ec12b5c1600e4706d2311d766bfc3a6b07bac986b94fcab",
+    "derivation": {
+      "execution_key": {
+        "tag": "cf.execution-key.v1",
+        "inputs": [
+          "launch_id",
+          "input_digest"
+        ]
+      },
+      "dispatch_id": {
+        "tag": "cf.dispatch-id.v1",
+        "prefix": "d-",
+        "inputs": [
+          "launch_id",
+          "input_digest"
+        ]
+      },
+      "boundary": "neither derivation reads dispatch_id, execution_key, commitment_digest or any confirmation field"
+    },
+    "accepted_at": "2026-11-11T19:02:00Z",
+    "state": "accepted",
+    "state_version": 1,
+    "confirmation_digest": "093889a3a6f4a61ff1af28d578f1757254446a1c9b3ac15543297097812e6e74"
+  },
+  "confirmation_excluded": [
+    "confirmation_digest",
+    "signature"
+  ],
+  "recomputation": {
+    "inputs": {
+      "launch_id": "l-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048",
+      "input_digest": "aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a"
+    },
+    "execution_key": "add6df27bfc4facef355695078b5e1171eda32325a99263c30b81b9f0fc842fc",
+    "dispatch_id": "d-2ccec62df73e9a889ec12b5c1600e4706d2311d766bfc3a6b07bac986b94fcab",
+    "rule": "a reader recomputes both values once; disagreement is CONTRACT_INVALID, never a search for a fixed point"
+  },
+  "worker_dispatch": {
+    "dispatch_id": "d-2ccec62df73e9a889ec12b5c1600e4706d2311d766bfc3a6b07bac986b94fcab",
+    "execution_key": "add6df27bfc4facef355695078b5e1171eda32325a99263c30b81b9f0fc842fc",
+    "worker_id": "worker-1",
+    "rule": "CT-05 uses the same commitment and allocation order; no future worker identifier is required at admission"
+  },
+  "launch_response": {
+    "accepted_at": "2026-11-11T19:02:00Z",
+    "commitment_digest": "fefb5e5d7887999e0123ebb9bbae94116150941341f2fcb0f1c751861a228b3d",
+    "confirmation_digest": "093889a3a6f4a61ff1af28d578f1757254446a1c9b3ac15543297097812e6e74",
+    "dispatch_id": "d-2ccec62df73e9a889ec12b5c1600e4706d2311d766bfc3a6b07bac986b94fcab",
+    "error": null,
+    "execution_key": "add6df27bfc4facef355695078b5e1171eda32325a99263c30b81b9f0fc842fc",
+    "finished_at": null,
+    "heartbeat_at": null,
+    "input_digest": "aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a",
+    "launch_id": "l-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048",
+    "native_session_id": null,
+    "resolution": {
+      "kind": "none",
+      "reason": null
+    },
+    "result_digest": null,
+    "started_at": null,
+    "state": "accepted",
+    "state_version": 1
+  },
+  "launch_response_canonical_json": "{\"accepted_at\":\"2026-11-11T19:02:00Z\",\"commitment_digest\":\"fefb5e5d7887999e0123ebb9bbae94116150941341f2fcb0f1c751861a228b3d\",\"confirmation_digest\":\"093889a3a6f4a61ff1af28d578f1757254446a1c9b3ac15543297097812e6e74\",\"dispatch_id\":\"d-2ccec62df73e9a889ec12b5c1600e4706d2311d766bfc3a6b07bac986b94fcab\",\"error\":null,\"execution_key\":\"add6df27bfc4facef355695078b5e1171eda32325a99263c30b81b9f0fc842fc\",\"finished_at\":null,\"heartbeat_at\":null,\"input_digest\":\"aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a\",\"launch_id\":\"l-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048\",\"native_session_id\":null,\"resolution\":{\"kind\":\"none\",\"reason\":null},\"result_digest\":null,\"started_at\":null,\"state\":\"accepted\",\"state_version\":1}",
+  "settlements": {
+    "all_verified": {
+      "schema_version": "cf.settlement.v1",
+      "settlement_id": "set-round-r-17",
+      "scope": {
+        "kind": "round",
+        "id": "r-17"
+      },
+      "outcome": "settled_success",
+      "counts": {
+        "verified": 2,
+        "unverified": 0,
+        "failed": 0,
+        "cancelled": 0,
+        "expired": 0,
+        "unknown": 0
+      },
+      "revisions": 0,
+      "evidence_refs": [],
+      "settled_at": "2026-11-11T19:25:00Z",
+      "settlement_digest": "aeaf4e8960392f8a25856b589fda8ccc1f026468fa5e9d95da912c958fde502b"
+    },
+    "uniform_unverified": {
+      "schema_version": "cf.settlement.v1",
+      "settlement_id": "set-round-r-18",
+      "scope": {
+        "kind": "round",
+        "id": "r-18"
+      },
+      "outcome": "settled_unverified",
+      "counts": {
+        "verified": 0,
+        "unverified": 2,
+        "failed": 0,
+        "cancelled": 0,
+        "expired": 0,
+        "unknown": 0
+      },
+      "revisions": 0,
+      "evidence_refs": [],
+      "settled_at": "2026-11-11T19:25:00Z",
+      "settlement_digest": "a02fc5c496c7d83b73a5cc5eb5e6a00a1635806f67e9098fc2b24783ffff9a60"
+    },
+    "mixed_unverified": {
+      "schema_version": "cf.settlement.v1",
+      "settlement_id": "set-round-r-19",
+      "scope": {
+        "kind": "round",
+        "id": "r-19"
+      },
+      "outcome": "settled_partial",
+      "counts": {
+        "verified": 1,
+        "unverified": 1,
+        "failed": 0,
+        "cancelled": 0,
+        "expired": 0,
+        "unknown": 0
+      },
+      "revisions": 0,
+      "evidence_refs": [],
+      "settled_at": "2026-11-11T19:25:00Z",
+      "settlement_digest": "f176fb86a50877650079e9ac90c5250564fe658a3baff75ffd2ef99d4b14bb1f"
+    },
+    "zero_budget": {
+      "schema_version": "cf.settlement.v1",
+      "settlement_id": "set-round-r-20",
+      "scope": {
+        "kind": "round",
+        "id": "r-20"
+      },
+      "outcome": "settled_empty",
+      "counts": {
+        "verified": 0,
+        "unverified": 0,
+        "failed": 0,
+        "cancelled": 0,
+        "expired": 0,
+        "unknown": 0
+      },
+      "revisions": 0,
+      "evidence_refs": [],
+      "settled_at": "2026-11-11T19:25:00Z",
+      "settlement_digest": "a2b71d4c77e629196a1687c6215425bbde722a47e613acf6cc8368613749655f"
+    },
+    "cancelled": {
+      "schema_version": "cf.settlement.v1",
+      "settlement_id": "set-wave-w-2",
+      "scope": {
+        "kind": "wave",
+        "id": "w-2"
+      },
+      "outcome": "settled_cancelled",
+      "counts": {
+        "verified": 1,
+        "unverified": 0,
+        "failed": 0,
+        "cancelled": 2,
+        "expired": 0,
+        "unknown": 0
+      },
+      "revisions": 0,
+      "evidence_refs": [],
+      "settled_at": "2026-11-11T19:25:00Z",
+      "settlement_digest": "f8d943282afbb509d5713bb5cf684a270c08ae0b963223e5d66ed43424b9aefb"
+    },
+    "expired_start": {
+      "schema_version": "cf.settlement.v1",
+      "settlement_id": "set-task-CF-2",
+      "scope": {
+        "kind": "task",
+        "id": "CF-2"
+      },
+      "outcome": "settled_expired",
+      "counts": {
+        "verified": 0,
+        "unverified": 0,
+        "failed": 0,
+        "cancelled": 0,
+        "expired": 1,
+        "unknown": 0
+      },
+      "revisions": 0,
+      "evidence_refs": [],
+      "settled_at": "2026-11-11T19:25:00Z",
+      "settlement_digest": "354797bdae919bb655635815eff83e625e7d05ecf582b26370efc5c1a81be4c2"
+    },
+    "unknown_control": {
+      "schema_version": "cf.settlement.v1",
+      "settlement_id": "set-task-CF-3",
+      "scope": {
+        "kind": "task",
+        "id": "CF-3"
+      },
+      "outcome": "settled_unknown",
+      "counts": {
+        "verified": 0,
+        "unverified": 0,
+        "failed": 0,
+        "cancelled": 0,
+        "expired": 0,
+        "unknown": 1
+      },
+      "revisions": 0,
+      "evidence_refs": [],
+      "settled_at": "2026-11-11T19:25:00Z",
+      "settlement_digest": "a92b106f4bead5ad53d2b9c0793bc4539ccb9ab3c18f9f5f8dd070f64b0b8b20"
+    },
+    "late_evidence": {
+      "schema_version": "cf.settlement.v1",
+      "settlement_id": "set-task-CF-1",
+      "scope": {
+        "kind": "task",
+        "id": "CF-1"
+      },
+      "outcome": "settled_verified_then_reopened",
+      "counts": {
+        "verified": 1,
+        "unverified": 0,
+        "failed": 0,
+        "cancelled": 0,
+        "expired": 0,
+        "unknown": 0
+      },
+      "revisions": 1,
+      "evidence_refs": [
+        "cas+sha256://code-factory/e674dc5b984c1fe7f90011c1c3ae1cf3b6759b2e22450abcb3908a67c714737d"
+      ],
+      "settled_at": "2026-11-11T19:25:00Z",
+      "settlement_digest": "aa831aa6ed9a962c58cc205d85cf614071f827f0431dec332ee8389ada046baa"
+    }
+  },
+  "cancellations": {
+    "prestart": {
+      "schema_version": "cf.cancellation.v1",
+      "cancellation_id": "can-a1-prestart",
+      "launch_id": "l-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048",
+      "requested_phase": "prestart",
+      "request": {
+        "requested_at": "2026-11-11T19:02:00Z",
+        "requested_by": "manager-1",
+        "reason": "operator withdrew the launch before the start permit"
+      },
+      "applied": {
+        "applied_at": "2026-11-11T19:02:00Z",
+        "applied_phase": "prestart",
+        "journal_state_before": "RESERVED",
+        "journal_state_after": "CANCELLED",
+        "terminal_effect": "cancelled_before_start",
+        "permit_consumed": false
+      },
+      "signal": {
+        "kind": null,
+        "sent_at": null,
+        "quiescence_at": null
+      },
+      "evidence_refs": []
+    },
+    "running": {
+      "schema_version": "cf.cancellation.v1",
+      "cancellation_id": "can-a1-running",
+      "launch_id": "l-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048",
+      "requested_phase": "running",
+      "request": {
+        "requested_at": "2026-11-11T19:10:00Z",
+        "requested_by": "manager-1",
+        "reason": "round deadline reached"
+      },
+      "applied": {
+        "applied_at": "2026-11-11T19:11:30Z",
+        "applied_phase": "running",
+        "journal_state_before": "RUNNING",
+        "journal_state_after": "CANCELLED",
+        "terminal_effect": "signalled_quiesced",
+        "permit_consumed": true
+      },
+      "signal": {
+        "kind": "SIGTERM",
+        "sent_at": "2026-11-11T19:10:01Z",
+        "quiescence_at": "2026-11-11T19:11:30Z"
+      },
+      "evidence_refs": [
+        "cas+sha256://code-factory/86f6b067fe92956e41ce029cd6e54fa2ad590639940f44f55619b9bc7356ffdc"
+      ]
+    },
+    "terminal": {
+      "schema_version": "cf.cancellation.v1",
+      "cancellation_id": "can-a1-terminal",
+      "launch_id": "l-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048",
+      "requested_phase": "terminal",
+      "request": {
+        "requested_at": "2026-11-11T19:30:00Z",
+        "requested_by": "manager-1",
+        "reason": "operator clicked cancel after completion"
+      },
+      "applied": {
+        "applied_at": "2026-11-11T19:30:00Z",
+        "applied_phase": "terminal",
+        "journal_state_before": "SUCCEEDED",
+        "journal_state_after": "SUCCEEDED",
+        "terminal_effect": "already_terminal",
+        "permit_consumed": true
+      },
+      "signal": {
+        "kind": null,
+        "sent_at": null,
+        "quiescence_at": null
+      },
+      "evidence_refs": []
+    }
+  },
+  "enrollment": {
+    "request": {
+      "schema_version": "cf.enrollment-request.v1",
+      "registration_id": "reg-3c11c83a5acd1e1a15999e344ad8c6a1b6afc7f15c40235fd2c2a9ccb19a89ad",
+      "principal": {
+        "principal_id": "node-9",
+        "principal_kind": "node"
+      },
+      "project_id": "code-factory",
+      "expected_generation": 0,
+      "nonce": "a71f3c0d9b2e5486",
+      "requested_at": "2026-11-11T18:40:00Z",
+      "request_digest": "f7ec54713c68545dd6857a50a4042f9a41d38ea9a3d9335a5501f3d9bded1648"
+    },
+    "response": {
+      "schema_version": "cf.enrollment-response.v1",
+      "registration_id": "reg-3c11c83a5acd1e1a15999e344ad8c6a1b6afc7f15c40235fd2c2a9ccb19a89ad",
+      "request_digest": "f7ec54713c68545dd6857a50a4042f9a41d38ea9a3d9335a5501f3d9bded1648",
+      "node_id": "node-9",
+      "registration_generation": 1,
+      "grant_ref": "cas+sha256://code-factory/9fb3687aa7ffce4d38e78110cd5d7c73ece5af1e06b413d845c34ab45f3bb586",
+      "accepted_at": "2026-11-11T18:40:02Z"
+    },
+    "rule": "registration_id is preallocated by the controller; node_id and registration_generation are allocated by Crier and may appear in the response only, never in the request's L0 digest"
+  },
+  "projection": {
+    "table": "IV.6.1",
+    "rule": "every journal state maps to exactly one response state plus a resolution object; no state is coerced to a neighbour"
+  },
+  "negative_arms": [
+    {
+      "name": "execution_key recomputed from the wrong domain",
+      "mutate": {
+        "pointer": "/confirmation/execution_key"
+      },
+      "value_hint": "H(\"cf.dispatch-id.v1\" || launch_id || input_digest)",
+      "expected": {
+        "accepted": false,
+        "refusal": "CONTRACT_INVALID"
+      }
+    },
+    {
+      "name": "confirmation authored before the commitment digest exists",
+      "mutate": {
+        "pointer": "/confirmation/commitment_digest",
+        "op": "remove"
+      },
+      "expected": {
+        "accepted": false,
+        "refusal": "CONTRACT_INVALID",
+        "detail": "a higher layer may not exist before the lower-layer digest it names"
+      }
+    },
+    {
+      "name": "materialized input re-hashes itself",
+      "mutate": {
+        "pointer": "/l2_launch_input/input_digest",
+        "op": "recompute-over-object"
+      },
+      "expected": {
+        "accepted": false,
+        "refusal": "CONTRACT_INVALID",
+        "detail": "a reader that recomputes input_digest over the materialized object is non-conforming"
+      }
+    }
+  ]
+}

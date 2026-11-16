@@ -286,12 +286,20 @@ What each hop must be able to prove, in one line per hop:
 
 | Hop | The proof that must exist |
 |---|---|
-| file | a row with acceptance criteria someone else can re-run |
+| file | a row with acceptance criteria someone else can re-run, in the executable projection (IV §IV.5.1) |
 | admit | the tick line names admitted or deferred, never dropped (M9, FLIGHT DATA FILE) |
-| dispatch | a run id and a corr id, in the envelope and in the reply |
-| execute | a digest-verified brief, a bounded wall, a signed reply |
-| grade | a verdict with named criteria and an exit that matches its rows |
-| close | a landed commit, an evidence run id, one new event |
+| dispatch | a run id and a corr id, in the envelope and in the reply; a `dispatch_id` derived by the supervisor, not assigned by the foreman |
+| execute | a digest-verified brief, a bounded wall, a signed reply, and a launch commitment whose derived identities recompute |
+| grade | a verdict with named criteria and an exit that matches its rows, recorded against the phase it belongs to (IV §IV.5.2) |
+| close | a landed commit, an evidence run id, one new event, and a publication record whose accepted object is an ancestor of the observed tip |
+| settle | one settlement row from the total table, with six counts and no derived total (IV §IV.6.2) |
+
+A closeout that reports `settled_success` for a round whose members were never verified is
+the specific failure the total table exists to prevent. If every member is unverified the
+round settles `settled_unverified`; if the round had no budget or no members it settles
+`settled_empty`; if the control state could not be resolved it settles `settled_unknown`
+and the quarantine stays visible. None of the three is a success, and none of them is
+"nothing happened" — each is a recorded outcome with a name.
 
 > CAUTION: a hop that cannot produce its proof is a finding to file, not a prose
 > placeholder. Any RED field the row touches stays RED until a command proves it
@@ -532,7 +540,7 @@ implementation mapping follows it without pretending missing fields exist
 | `worker-brief.v1` | `round_id`, `wave_id`, `task_id`, `attempt_id`, `brief_digest`, `criteria`, `workspace` | digest mismatch or missing criteria is `BRIEF_INVALID`; brief custody is not success | `attempt_id` |
 | `worker-result.v1` | `attempt_id`, `dispatch_id`, `corr_id`, `status`, `commit`, `artifacts`, `evidence_refs`, `finished_at` | status enum `pass`, `fail`, `unverified`, `partial`, `unknown`; absent status is `INVALID_RESULT`; conflicting legacy `ok` is `RESULT_CONFLICT` | `attempt_id` |
 | `wave-result.v1` | `round_id`, `wave_id`, worker results, integration result, budget consumed/remaining | `complete`, `partial`, `failed`; partial memory sync remains visible | `(round_id, wave_id)` |
-| `round-report.v1` | `round_id`, `run_id`, `corr_id`, all wave results, stop reason, budget, memory refs | final report is `settled` only after durable memory and evidence references | `round_id` |
+| `round-report.v1` | `round_id`, `run_id`, `corr_id`, all wave results, stop reason, budget, `round_summary_digest`, `summary_memory_ref`, evidence refs | final report is `settled` only after durable memory and evidence references; the report names the summary written before it and carries no `memory_refs` array (IV §IV.5.5) | `round_id` |
 | `publication.v1` | `task_id`, `attempt_id`, exact commit/tree digest, verdict, remote proof | mismatch is `PUBLICATION_MISMATCH`; no board closeout | `(task_id, attempt_id, tree_digest)` |
 
 Every schema is carried in the outer `cf2a.v1` envelope with `message_type`,
@@ -547,11 +555,14 @@ results replay the original outcome; conflicting digests are refused. Unsupporte
 versions and unknown fields outside `extensions` are refused rather than coerced.
 
 The canonical identity creation order is: the authority/controller consumes the single-use enrollment grant; Crier allocates exactly one `node_id` and `registration_id`; the scheduler
-creates `round_id` and `run_id`; the foreman creates `wave_id` and `attempt_id`; Crier
-creates `delivery_id` and `lease_id`; the launching foreman assigns `dispatch_id`
-and `launch_id` before process creation (M11.16); and the foreman
-creates `report_digest`. Thus registration and round admission do not require future
-wave/worker/attempt identities.
+creates `round_id` and `run_id`; the foreman creates `wave_id` and `attempt_id`, and
+preallocates `launch_id` and the launch nonce before process creation (M11.16); Crier
+creates `delivery_id` and `lease_id`; the resident supervisor derives `execution_key` and
+`dispatch_id` once from the persisted launch commitment (IV §IV.2.5) — the foreman does
+not assign either, and a foreman-supplied value is refused rather than adopted; and the
+foreman creates `report_digest` after the round summary exists. Thus registration and
+round admission do not require future wave/worker/attempt identities, and no identity is
+derived from the digest of the record that stores it.
 
 Legacy mapping: `{dispatch_id, corr_id, status, ok}` becomes `worker-result.v1` only
 when `status` is in the canonical enum and the digest/evidence are present; legacy `ok`
@@ -613,17 +624,24 @@ Rules the schemas impose:
 
 ## VII.14 Memory contracts — per worker, per wave, per round
 
-Three record types (V2-Q-03, user-resolved), kept distinct and correlated; the **writer
-is the foreman unless a section specifies otherwise** — the user required that every
-worker *have* an entry, and did not require workers to hold direct memory-write
-credentials (F3 step 3: "persist … through the designated supported writer; do not assume
-all workers require direct write credentials"):
+Three record types, kept distinct and correlated (V2-Q-03, user-resolved). The shape is
+frozen in IV §IV.5.4: **one envelope, discriminated by `record_type`**, with a required
+`writer` object naming `writer_id` and `writer_role`. The **writer is the foreman unless a
+section specifies otherwise** — the user required that every worker *have* an entry, and
+did not require workers to hold direct memory-write credentials (F3 step 3: "persist …
+through the designated supported writer; do not assume all workers require direct write
+credentials").
 
-| Record | Written by | When | Carries | Idempotency key |
-|---|---|---|---|---|
-| **worker-outcome entry** | the foreman, persisting the worker's report | at each attempt's closeout | what the worker did, its typed outcome, task/round/wave/attempt ids, commit and evidence references | `(round_id, attempt_id)` |
-| **wave-summary entry** | the foreman | after each wave completes | its workers and results, integration/verification outcomes, newly eligible or remaining work, budget after the wave | `(round_id, wave_id)` |
-| **round-summary entry** | the foreman | at round stop/settlement | all waves, aggregate outcomes, budget use, stop reason, correlation to every worker and wave record | `round_id` |
+| Canonical `record_type` | Older label | Written by | When | Carries | Idempotency key |
+|---|---|---|---|---|---|
+| `worker` | worker-outcome entry | the foreman, persisting the worker's report | at each attempt's closeout | what the worker did, its typed outcome, task/round/wave/attempt ids, commit and evidence references | `(round_id, attempt_id)` |
+| `wave` | wave-summary entry | the foreman | after each wave completes | its workers and results, integration/verification outcomes, newly eligible or remaining work, budget after the wave | `(round_id, wave_id)` |
+| `round` | round-summary entry | the foreman | at round stop/settlement, before the final report exists | all waves, aggregate outcomes, budget use, stop reason, correlation to every worker and wave record | `round_id` |
+
+The older labels are labels. `docs/handbook/contract-vectors.json` carries the alias
+table (`CV-20-C`), and an importer that maps a label by dropping `writer_role` is refused:
+a record whose role is unknown cannot be projected, and guessing the role is how a
+worker's own report ends up attributed to a foreman.
 
 Rules:
 
@@ -631,16 +649,49 @@ Rules:
   attempts on one task remain distinguishable — without inventing a fourth mandatory
   record type.
 - **No weekly-rollup substitution.** The scheduler's DuckBrain sync cadence (5 minutes,
-  M9 §5) is a transport schedule; no aggregate of worker/wave records substitutes for
-  the final round entry.
+  M9 §5) is a transport schedule; no aggregate of worker/wave records substitutes for the
+  final round entry.
 - **Board-task state and audit events remain foreman-owned**; scheduler settlement is a
   separate execution record (§12). A board note that DuckBrain is unavailable is not a
   completed memory write.
+- **The round entry and the final report are two records, written in this order.** The
+  round-summary body carries the outcome, wave references, budget and evidence; it
+  excludes `report_digest` and its own memory reference. Its digest is computed first.
+  The memory record wraps that body. Only then, in the final report, may
+  `round_summary_digest` and `summary_memory_ref` appear. Writing the report first and
+  back-filling the summary is the cycle IV §IV.5.5 exists to prevent: it makes the
+  summary's digest depend on a record that depends on the summary's own digest.
+- **Null is data, absence is a defect.** A nullable body field (`stop_reason`, `commit`,
+  `error`, `rationale`, `disposition`) is present and null when it does not apply.
+  Omitting it makes "not applicable" indistinguishable from "the writer forgot", and the
+  reader has no way to tell which.
+- **The sync receipt is not part of the record's identity.** It arrives after the record
+  exists; `payload_digest` covers the record as stored, excluding the receipt and the
+  signature.
 - **Outage path (V2-Q-04):** on temporary unavailability the foreman continues useful
   work and creates durable pending entries at every level, using the local Git-backed
   namespace (supported local persistence) when the HTTP path is down; pending
   synchronization is tracked and reported (VI §30). Scheduler records and Git history
-  retain *parts* of the trail and do not substitute for the full pending entries.
+  retain *parts* of the trail and do not substitute for the full pending entries. A
+  record whose `sync.state` is `local` is a truthful record of a pending write, not a
+  failed one — and it never claims an `acked` receipt it did not receive.
+
+## VII.14.1 The worker and wave bodies
+
+The two upper bodies are small, and their whole purpose is that the round body need not
+be re-read to answer a question about one attempt:
+
+| `record_type` | Required | Nullable (present and null) |
+|---|---|---|
+| `worker` | `task_id`, `attempt_id`, `outcome` | `commit`, `error` |
+| `wave` | `wave_id`, `attempt_ids`, `outcome` | `stop_reason` |
+
+`outcome` values are the same lattice the settlement uses (`pass`, `fail`, `unverified`,
+`cancelled` for a worker; `complete`, `partial`, `failed`, `cancelled`, `unverified` for a
+wave), so a reader never has to translate between a memory body and a settlement. A
+worker entry with `outcome: unverified` and a non-null `error` is the honest record of a
+worker that died: the error is the observation, not a verdict, and the round settles it
+per IV §IV.6.2.
 
 ## VII.15 Board synchronization before eligibility
 
@@ -829,15 +880,32 @@ a correct round trip passes. These are required fixture cases, not reports of a 
 ### VII.18.1 Git memory layout and local interface
 
 Each namespace is a Git repository rooted at V.9 local_root; records live under
-`records/<record_id>/<payload_digest>.json`, immutable. payload_digest is SHA-256 of
-RFC8785 JSON of the entire record excluding payload_digest, with schema_version
-memory-record.v1, record_id,namespace,record_type,round_id,writer_identity,created_at,
-body, and scope fields. worker-outcome requires wave_id/attempt_id/task_id and body
-worker-result.v1; wave-summary requires wave_id, forbids attempt_id/task_id and has
-body `{worker_refs,integration_result,budget,remaining_tasks}`; round-summary forbids
-wave_id/attempt_id/task_id and body is round-report.v1 excluding its own memory ref.
-Ref is `{record_id,payload_digest}`. Budget is `{allowance,consumed,reserved,remaining}` integers
-satisfying M9.17. No self-referential digest is constructed.
+`records/<record_id>/<payload_digest>.json`, immutable. `payload_digest` is SHA-256 of
+RFC 8785 JCS of the entire record excluding `payload_digest`, `sync` and the signature,
+with `schema_version` `cf.memory-record.v1` and the envelope fields `record_id`,
+`record_type`, `domain`, `namespace`, `body_kind`, `writer`, `relations`, `body`,
+`created_at` and `state`. `writer` is an object (`writer_id`, `writer_role`, optional
+`writer_generation` and `owner_fence`); the flat `writer_identity` spelling of earlier
+revisions is an import alias, not a field (IV §IV.5.4).
+
+Bodies are discriminated by `record_type` and all three are closed:
+
+| `record_type` | `body_kind` | Body |
+|---|---|---|
+| `worker` | `cf.worker-outcome.v1` | `{task_id, attempt_id, outcome, commit, error, evidence_refs}`; `commit` and `error` present and null when they do not apply |
+| `wave` | `cf.wave-summary.v1` | `{wave_id, attempt_ids, outcome, stop_reason}`; forbids `attempt_id`/`task_id` at the envelope |
+| `round` | `cf.round-summary.v1` | `{round_id, state, wave_refs, budget, stop_reason, evidence_refs}`; forbids `wave_id`/`attempt_id`/`task_id` at the envelope |
+
+The round body is **not** `round-report.v1` and does not contain `report_digest` or its own
+memory reference. It is the summary written before the report exists. The final report is
+a separate record that names `round_summary_digest` and `summary_memory_ref`; a
+`cf.round-closure.v1` witness may then name both lower layers. No self-referential digest
+is constructed at any step, and the order summary → record → report → closure is the only
+conforming order (IV §IV.5.5).
+
+Ref is `{record_id,payload_digest}`. Budget is `{allowance,consumed,reserved,remaining}`
+integers satisfying M9.17 and the round-summary body; the settlement record carries the
+six outcome counts and derives its total by summing them (IV §IV.5.7).
 
 The protected local writer exposes HTTP over owner-only Unix socket
 `<local_root>/writer.sock`: POST `/v1/records` accepts the record; GET

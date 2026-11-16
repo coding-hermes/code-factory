@@ -1,0 +1,196 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spec.coding-hermes.invalid/cf2a/1.0.0/schemas/cf2a.memory.schema.json",
+  "$comment": "CF2A-01 pass-7 Wave 1 · one role-discriminated memory envelope (P7-08). The envelope is closed, role is required, and the body union is discriminated by record_type. A nullable body field must be PRESENT and null; omission is a refusal, so readers never have to guess between absent and empty. Human labels are imported by the lossless alias table, never by renaming the canonical field.",
+  "title": "cf.memory-record.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "record_id", "record_type", "domain", "namespace", "body_kind",
+               "writer", "relations", "body", "created_at", "state", "payload_digest", "sync"],
+  "properties": {
+    "schema_version": {"const": "cf.memory-record.v1"},
+    "record_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "record_type": {"enum": ["worker", "wave", "round", "resolution", "decision", "finding"]},
+    "domain": {"type": "string", "minLength": 1},
+    "namespace": {"type": "string", "minLength": 1},
+    "body_kind": {"type": "string", "minLength": 1},
+    "writer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["writer_id", "writer_role"],
+      "properties": {
+        "writer_id": {"type": "string", "minLength": 1},
+        "writer_role": {"enum": ["owner", "manager", "foreman", "worker", "judge", "reconciler"]},
+        "writer_generation": {"type": "integer", "minimum": 1},
+        "owner_fence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["authority_id", "epoch", "owner_id", "project_id"],
+          "properties": {
+            "authority_id": {"type": "string", "minLength": 1},
+            "epoch": {"type": "integer", "minimum": 0},
+            "owner_id": {"type": "string", "minLength": 1},
+            "project_id": {"type": "string", "minLength": 1}
+          }
+        }
+      }
+    },
+    "relations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "target"],
+        "properties": {
+          "kind": {"enum": ["covers", "derived_from", "supersedes", "blocks", "resolves"]},
+          "target": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "body": {"type": "object"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "state": {"enum": ["local", "synced", "rejected"]},
+    "payload_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$",
+                       "description": "SHA-256 over the JCS bytes of the record as stored, excluding payload_digest, sync and signature."},
+    "sync": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "receipt_ref", "receipt_digest"],
+      "properties": {
+        "state": {"enum": ["local", "acked", "failed"]},
+        "receipt_ref": {"type": ["string", "null"]},
+        "receipt_digest": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"}
+      },
+      "description": "The sync receipt is kept outside the payload digest: a delivery acknowledgement never changes the record's identity."
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"record_type": {"const": "worker"}}, "required": ["record_type"]},
+      "then": {"properties": {"body": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["schema_version", "task_id", "attempt_id", "outcome", "commit", "error"],
+        "properties": {
+          "schema_version": {"const": "cf.worker-outcome.v1"},
+          "task_id": {"type": "string", "minLength": 1},
+          "attempt_id": {"type": "string", "minLength": 1},
+          "outcome": {"enum": ["pass", "fail", "unverified", "cancelled"]},
+          "commit": {"type": ["string", "null"]},
+          "error": {"type": ["string", "null"]},
+          "evidence_refs": {"type": "array", "items": {"type": "string"}}
+        }
+      }}}
+    },
+    {
+      "if": {"properties": {"record_type": {"const": "wave"}}, "required": ["record_type"]},
+      "then": {"properties": {"body": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["schema_version", "wave_id", "attempt_ids", "outcome", "stop_reason"],
+        "properties": {
+          "schema_version": {"const": "cf.wave-summary.v1"},
+          "wave_id": {"type": "string", "minLength": 1},
+          "attempt_ids": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+          "outcome": {"enum": ["complete", "partial", "failed", "cancelled", "unverified"]},
+          "stop_reason": {"type": ["string", "null"]}
+        }
+      }}}
+    },
+    {
+      "if": {"properties": {"record_type": {"const": "round"}}, "required": ["record_type"]},
+      "then": {"properties": {"body": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["schema_version", "round_id", "state", "wave_refs", "budget", "stop_reason",
+                     "evidence_refs", "created_at"],
+        "properties": {
+          "schema_version": {"const": "cf.round-summary.v1"},
+          "round_id": {"type": "string", "minLength": 1},
+          "project_id": {"type": "string", "minLength": 1},
+          "run_id": {"type": "string", "minLength": 1},
+          "corr_id": {"type": "string", "minLength": 1},
+          "owner_fence": {"type": "object"},
+          "state": {"enum": ["complete", "partial", "failed", "cancelled", "unverified", "empty"]},
+          "wave_refs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["wave_id", "attempt_ids", "state"],
+              "properties": {
+                "wave_id": {"type": "string", "minLength": 1},
+                "attempt_ids": {"type": "array", "items": {"type": "string"}},
+                "state": {"type": "string", "minLength": 1}
+              }
+            }
+          },
+          "budget": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["allowance", "consumed", "reserved", "remaining"],
+            "properties": {
+              "allowance": {"type": "integer", "minimum": 0},
+              "consumed": {"type": "integer", "minimum": 0},
+              "reserved": {"type": "integer", "minimum": 0},
+              "remaining": {"type": "integer", "minimum": 0}
+            }
+          },
+          "stop_reason": {"type": ["string", "null"]},
+          "evidence_refs": {"type": "array", "items": {"type": "string"}},
+          "relations": {"type": "array"},
+          "created_at": {"type": "string", "format": "date-time"}
+        },
+        "not": {"anyOf": [
+          {"required": ["report_digest"], "$comment": "a lower layer may not include the digest of a higher layer"},
+          {"required": ["memory_ref"], "$comment": "the summary excludes its own memory reference"}
+        ]}
+      }}}
+    },
+    {
+      "if": {"properties": {"record_type": {"const": "resolution"}}, "required": ["record_type"]},
+      "then": {"properties": {"body": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["schema_version", "resolution_id", "subject", "outcome", "rationale"],
+        "properties": {
+          "schema_version": {"const": "cf.resolution.v1"},
+          "resolution_id": {"type": "string", "minLength": 1},
+          "subject": {"type": "string", "minLength": 1},
+          "outcome": {"enum": ["resolved", "unresolved", "superseded"]},
+          "rationale": {"type": ["string", "null"]}
+        }
+      }}}
+    },
+    {
+      "if": {"properties": {"record_type": {"const": "decision"}}, "required": ["record_type"]},
+      "then": {"properties": {"body": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["schema_version", "decision_id", "subject", "outcome", "rationale"],
+        "properties": {
+          "schema_version": {"const": "cf.decision.v1"},
+          "decision_id": {"type": "string", "minLength": 1},
+          "subject": {"type": "string", "minLength": 1},
+          "outcome": {"type": "string", "minLength": 1},
+          "rationale": {"type": ["string", "null"]}
+        }
+      }}}
+    },
+    {
+      "if": {"properties": {"record_type": {"const": "finding"}}, "required": ["record_type"]},
+      "then": {"properties": {"body": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["schema_version", "finding_id", "severity", "summary", "disposition"],
+        "properties": {
+          "schema_version": {"const": "cf.finding.v1"},
+          "finding_id": {"type": "string", "minLength": 1},
+          "severity": {"enum": ["critical", "high", "medium", "low"]},
+          "summary": {"type": "string", "minLength": 1},
+          "disposition": {"type": ["string", "null"]}
+        }
+      }}}
+    }
+  ]
+}

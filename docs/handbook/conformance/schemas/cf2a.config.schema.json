@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spec.coding-hermes.invalid/cf2a/1.0.0/schemas/cf2a.config.schema.json",
+  "$comment": "CF2A-01 pass-7 Wave 1 · the configuration document (P7-19 surface). Every mutable setting carries an explicit origin, so a reader can tell a default from an owner decision without reading the write path. Enumerations are closed: an unknown value is a refusal, never a silent fallback to the default.",
+  "title": "cf.config.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "generation", "project_id", "scope", "settings", "enums",
+               "origins", "updated_at", "updated_by"],
+  "properties": {
+    "schema_version": {"const": "cf.config.v1"},
+    "generation": {"type": "integer", "minimum": 1,
+                   "description": "Monotonic. A launch names the generation it observed; a stale generation is refused, not merged."},
+    "project_id": {"type": "string", "minLength": 1},
+    "scope": {"enum": ["global", "project", "lane"]},
+    "settings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_concurrent", "load_gate", "round_budget", "attempt_timeout_s",
+                   "turn_timeout_s", "credential_ttl_s", "claim_lease_s", "group_max_members"],
+      "properties": {
+        "max_concurrent": {"type": "integer", "minimum": 1, "maximum": 256},
+        "load_gate": {"type": "integer", "minimum": 0, "maximum": 4096,
+                      "description": "0 disables the gate. The gate is a ceiling, never a floor."},
+        "round_budget": {"type": "integer", "minimum": 0},
+        "attempt_timeout_s": {"type": "integer", "minimum": 1, "maximum": 86400},
+        "turn_timeout_s": {"type": "integer", "minimum": 1, "maximum": 86400},
+        "credential_ttl_s": {"type": "integer", "minimum": 1, "maximum": 86400},
+        "claim_lease_s": {"type": "integer", "minimum": 1, "maximum": 604800},
+        "group_max_members": {"type": "integer", "const": 256}
+      }
+    },
+    "enums": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["admission_mode", "lane_kind"],
+      "properties": {
+        "admission_mode": {"enum": ["tasks", "cooldown"]},
+        "lane_kind": {"enum": ["foreman", "satellite", "signals"]}
+      }
+    },
+    "origins": {
+      "type": "object",
+      "additionalProperties": {"enum": ["default", "explicit", "inherited"]},
+      "description": "Keyed by dotted setting path. Every key in `settings` has an origin; an origin for a setting that does not exist is a refusal."
+    },
+    "updated_at": {"type": "string", "format": "date-time"},
+    "updated_by": {"type": "string", "minLength": 1}
+  }
+}

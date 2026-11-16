@@ -28,7 +28,13 @@ The vector file covers every static control: SC-01 Crier's 60-second lease; SC-0
 20,000 worker-attempt allowance; SC-03 whole-record memory digests; SC-04 criterion and
 atomic group claims; SC-05 the resident supervisor request; SC-06 seq-zero inference;
 SC-07 the signed Crier read; SC-08 backup expiry; and SC-09 independent turn and attempt
-timeouts. It also covers authority transitions, terminal settlement, M7 telemetry,
+timeouts. Pass 7 adds SC-10 the LCR-1 layer contract, SC-11 the split request and replay
+domains, SC-12 the three-object custody chain, SC-13 the canonical group claim, SC-14 the
+role-discriminated memory envelope, SC-15 and SC-16 the two total projection tables,
+SC-17 phase-discriminated cancellation, SC-18 phase-discriminated evidence, SC-19
+enrolment identity allocation and SC-20 the configuration generation. SC7-01, named by
+`docs/handbook/PASS7-PLAN.md` §3.9, asserts that the launch identity graph has no cycle.
+The same file covers authority transitions, terminal settlement, M7 telemetry,
 publication-versus-judgment evidence, signed profiles and containment.
 
 The following resolutions govern every card and registry entry below:
@@ -41,24 +47,40 @@ The following resolutions govern every card and registry entry below:
   ledger state `charged` is the representation counted by `consumed`; a refused admission
   has no reservation or charge and leaves `consumed` unchanged.
 * The supervisor protocol is `supervisor.v1` at
-  `$HOME/.local/state/factory/supervisor/control.sock`; `launch_id` is the owner identity
-  derived as `l-` plus the role-tuple hash, and `execution_key` hashes
-  `{launch_id,input_digest}`. The `cf.supervisor.v1` draft is not an alternate protocol.
+  `$HOME/.local/state/factory/supervisor/control.sock`. Launch identity follows LCR-1
+  (§IV.2.5): the foreman preallocates `launch_id` and a nonce; the supervisor derives
+  `execution_key` and `dispatch_id` once from `{launch_id,input_digest}` after persisting
+  the commitment. `launch_id` is not derived from a launch digest and `dispatch_id` is
+  never an input to one. The `cf.supervisor.v1` draft is not an alternate protocol.
 * Factory custody uses signed `custody.v1` operations with a 30–300-second lease,
   60-second default, 20-second renewal and 5-second bounded renewal call. The
   `CF2A-CRIER-1` profile binds method, path, RFC3339 timestamp, `sha256:` body digest
   and audience; request ID plus idempotency key is the replay nonce. The 1–30-second
-  retrieve shorthand and unsigned/audience-free reads are retired.
+  retrieve shorthand and unsigned/audience-free reads are retired. A custody response is
+  three objects — unsigned payload, receipt, signed envelope — and the response hash never
+  covers the receipt (§IV.2.8).
+* Request identity and replay identity are separate named digests with one declared
+  excluded-field list (§IV.2.7). An operation that uses one value for both declares the
+  pairing; a consumer may not assume it.
 * Criterion uses exactly `id`, `description`, `argv`, `cwd`, `timeout_s`,
   `expected_exit` and `oracle_digest`; legacy `text`/`verification` is migration evidence,
   not an executable criterion. Group claims use one protected CAS for every row,
-  event and marker; a loser launches no partial wave.
+  event and marker; a loser launches no partial wave. A group has exactly one bound (256),
+  one ordering (ascending bytewise `task_id`) and one object-id form (§IV.5.3).
+* Evidence is phase-discriminated: `staged`, `source`, `integrated`, `publication` and
+  `closure` are different records with different subjects, and a staged record never
+  names a commit that does not exist yet (§IV.5.2).
 * Memory `payload_digest` hashes the complete `memory-record.v1` except that digest field.
   Worker, wave, round and resolution bodies are discriminated; mutable synchronization
-  receipts are separate. Body-only hashes are not the same version.
+  receipts are separate. Body-only hashes are not the same version. The round summary and
+  the final report are two records in one chain, not one record written twice (§IV.5.5).
 * Worker execution, mechanical policy, model judgment, publication and settlement are
   separate evidence classes. Uncertain judgment does not rewrite mechanical results;
-  uncertain publication blocks closeout without becoming a push failure.
+  uncertain publication blocks closeout without becoming a push failure. Settlement is
+  total over the outcome lattice — including a uniformly unverified round and a
+  zero-budget round, neither of which settles as success (§IV.6.2).
+* Cancellation is recorded in the phase where it landed, and a cancellation after the
+  terminal state changes nothing (§IV.5.6).
 * M12 inference starts at `seq = 0`, settles usage before terminal and treats `[DONE]`
   only as an end marker. Backup expiry aborts and holds writers until a fenced recovery
   decision; it never releases on local capture alone.
@@ -85,9 +107,11 @@ Identity ownership is explicit: the controller creates `registration_id` and the
 `credential_ref` at enrollment, and the Crier registrar alone admits `register.v1` and
 allocates the node identity;
 the scheduler creates `round_id` and `run_id` at admission; the foreman creates
-`wave_id` after admission and `attempt_id` immediately before worker launch; the Crier
-creates `delivery_id` and `lease_id` at custody; the foreman reserves
-`dispatch_id` before worker delivery; and the foreman creates the final `report_digest`. Enrollment and round
+`wave_id` after admission, allocates `launch_id` and the launch nonce, and creates
+`attempt_id` immediately before worker launch; the Crier
+creates `delivery_id` and `lease_id` at custody; the supervisor derives `dispatch_id` and
+`execution_key` from the persisted launch commitment (§IV.2.5), so no component reserves
+an identity it does not own; and the foreman creates the final `report_digest`. Enrollment and round
 admission therefore do not require future wave, worker or attempt identities.
 
 The following cards summarize roles, not additional wire field sets. IV.2 supplies
@@ -240,18 +264,18 @@ and Part V §V.0, not the earlier card shorthand `desired_generation` aliases.
 | CT-02 / round-admission / round-admission.v1 | round_id/run_id/corr_id:ID, task_scope:ID[1..10000] unique, total_budget:RoundAllowance integer[0,20000], config_generation:PosInt, execution:{round_deadline:Time,deadline_s:PosInt,attempt_wall_s:PosInt,turn_timeout_s:PosInt,max_turns:PosInt,concurrency:PosInt,retry_policy:RetryPolicy,launch_reserve_s/transfer_reserve_s/cleanup_reserve_s:UInt}, extensions:{project_id:ID,lane:ID,board_revision:GitOID,binding_generation:PosInt,owner_fence:Fence,lane_seed:LaneSeed} | {disposition:accepted/deferred,delivery_id:ID or null,reason:Error or null}; fixed authorization ceiling matches Part V §V.0.1 worker_budget.total, no wave/attempt IDs; one-use binding grant is separate authenticated transport authorization |
 | CT-03 / custody.retrieve / custody.v1 | common:{request_id/idempotency_key:ID,owner_fence:Fence,registration_generation:PosInt}; retrieve:{agent_id:ID,poll_id:ID,limit:integer[1,100] default 10,lease_s:integer[30,300] default 60}; renew:{delivery_id/lease_id:ID}; ack adds result_digest:SHA and result_custody_receipt:EvidenceRef | Signed method/path/timestamp/body-hash/audience transcript; (agent_id,poll_id) replays original messages and lease, renewal runs every 20 s with a 5 s bounded call, unavailable custody is CUSTODY_UNAVAILABLE rather than an empty inbox |
 | CT-04 / worker-result / worker-result.v1 | project_id/round_id/run_id/wave_id/worker_id/attempt_id/dispatch_id/corr_id:ID, owner_fence:Fence, execution_key:SHA, status:pass/fail/unverified/partial/unknown, commit:GitOID or null, artifacts:Artifact[], evidence_refs:EvidenceRef[], finished_at:Time, error:Error or null | {accepted:boolean,duplicate:boolean,result_digest:SHA}; pass requires error=null; identical body dedupes, differing body RESULT_CONFLICT; clean exit without a committed result is UNKNOWN_RESULT, not a third verdict |
-| CT-05 / worker-brief / worker-brief.v1 | project_id/round_id/run_id/wave_id/worker_id/task_id/attempt_id/dispatch_id:ID, owner_fence:Fence, claim_id:ID, claim_generation:PosInt, brief_ref:EvidenceRef, brief_digest:SHA, criteria:Criterion[1..100], workspace:Workspace, effective:EffectiveSettings | {accepted:boolean,execution_key:SHA,duplicate:boolean}; retrieves exact BriefInput and reserves M2 execution key |
+| CT-05 / worker-brief / worker-brief.v1 | project_id/round_id/run_id/wave_id/worker_id/task_id/attempt_id/dispatch_id:ID, owner_fence:Fence, claim_id:ID, claim_generation:PosInt, brief_ref:EvidenceRef, brief_digest:SHA, criteria:Criterion[1..100], workspace:Workspace, effective:EffectiveSettings, launch:{commitment_ref:EvidenceRef,commitment_digest:SHA,launch_id:ID,nonce:Text} | {accepted:boolean,execution_key:SHA,commitment_digest:SHA,duplicate:boolean}; retrieves exact BriefInput and returns the execution key the supervisor derived from the persisted launch commitment (LCR-1, §IV.2.5); a caller-supplied dispatch_id or execution_key is CONTRACT_INVALID rather than accepted |
 | CT-06 / round-settlement / round-report.v1 | round_id/run_id/corr_id:ID, report_digest:SHA, report_ref:EvidenceRef, status:pass/fail/unverified/partial/unknown, finished_at:Time | {settlement:received/awaiting_evidence/postcheck_pending/settled_success/settled_failure/settled_partial/unknown,report_digest:SHA}; this reference variant is discriminated by message_type from CT-06R's full-report variant; verifies CT-06R bytes, evidence/replication and scope before durable settlement; Part I §1.9.9 |
-| CT-06R / round-report / round-report.v1 | project_id/round_id/run_id/corr_id:ID, owner_fence:Fence, waves:[{wave_id:ID,state:complete/blocked,attempt_ids:ID[]}], task_results:[{task_id:ID,attempt_id:ID,result_ref:EvidenceRef,status:pass/fail/unverified/partial/unknown}], budget:{allowance/consumed/reserved/remaining:RoundAllowance}, stop_reason:StopReason, memory_refs:EvidenceRef[], evidence_refs:EvidenceRef[], status:pass/fail/unverified/partial/unknown, finished_at:Time, report_digest:SHA | {accepted:boolean,duplicate:boolean,report_ref:EvidenceRef}; remaining=allowance-consumed-reserved; status not inferred from process exit |
+| CT-06R / round-report / round-report.v1 | project_id/round_id/run_id/corr_id:ID, owner_fence:Fence, waves:[{wave_id:ID,state:complete/blocked,attempt_ids:ID[]}], task_results:[{task_id:ID,attempt_id:ID,result_ref:EvidenceRef,status:pass/fail/unverified/partial/unknown}], budget:{allowance/consumed/reserved/remaining:RoundAllowance}, stop_reason:StopReason, round_summary_digest:SHA, summary_memory_ref:EvidenceRef, evidence_refs:EvidenceRef[], status:pass/fail/unverified/partial/unknown, finished_at:Time, report_digest:SHA | {accepted:boolean,duplicate:boolean,report_ref:EvidenceRef}; remaining=allowance-consumed-reserved; status not inferred from process exit; the report names the round-summary digest and its memory ref and carries no memory_refs array (LCR-1, §IV.5.5) |
 | CT-07 / model.select / model-selection.v1 | project_id:ID, model:Text, provider:ID, lane:ID, policy_generation:PosInt | {model:Text,provider:ID,lane:ID,policy_generation:PosInt,selection_id:ID}; current allowlist checked before session cost |
 | CT-08 / session.deliver / session-delivery.v1 | session_id/corr_id:ID, message_ref:EvidenceRef, model:Text, selection_id:ID | {accepted:boolean,session_turn_id:ID}; same request identity on timeout, durable session before ACK |
-| CT-09 / memory.append / memory-record.v1 | record_id/project_id/namespace/round_id/writer_id:ID, wave_id/attempt_id/task_id:ID or null, record_type:worker/wave/round/resolution/decision/finding, owner_fence:Fence, local_seq:PosInt, created_at:Time, body:discriminated MemoryBody, payload_digest:SHA | MemorySyncReceipt below; local fsync then independent broker sync; digest covers the complete record except payload_digest; no lost draft on outage |
-| CT-10 / board.claim / cf.board-group-claim.v1 | operation_id/idempotency_key:ID, project_id/board_id:ID, board_revision:GitOID, owner_fence:Fence, claims:ClaimPrecondition[1..1000], lease_expires_at:Time, transition:claim/renew/release, evidence_refs:EvidenceRef[] | One protected CAS commits every row, event and operation marker or none; CLAIM_CONFLICT names current revision and changed tasks; remote readback precedes native start |
+| CT-09 / memory.append / memory-record.v1 | record_id/project_id/namespace/round_id:ID, wave_id/attempt_id/task_id:ID or null, record_type:worker/wave/round/resolution/decision/finding, writer:{writer_id:ID,writer_role:owner/manager/foreman/worker/judge/reconciler,writer_generation:PosInt,owner_fence:Fence}, local_seq:PosInt, created_at:Time, body_kind:Text, body:discriminated MemoryBody, relations:[{kind,target}], payload_digest:SHA | MemorySyncReceipt below; local fsync then independent broker sync; digest covers the complete record except payload_digest, the sync receipt and the signature; nullable body fields are present and null, never omitted (§IV.5.4) |
+| CT-10 / board.claim / cf.group-claim.v1 | claim_id:ID, claim_generation:PosInt, project_id/board_id:ID, claimant:{claimant_id:ID,owner_fence:Fence}, group:{max_members:256,min_members:UInt,member_count:UInt}, ordering:{field:task_id,direction:ascending,comparison:bytewise UTF-8}, members:[{task_id:ID,board_row_revision:UInt,criterion_digest:SHA}][1..256], board:{ref:Text,base_oid:GitOID,marker_path:Text}, claimed_at_seq:UInt, lease_expires_at:Time | One protected CAS commits every row, event and operation marker or none; CLAIM_CONFLICT names current revision and changed tasks; remote readback precedes native start; a claimed group is at most 256 members and never partial (§IV.5.3) |
 | CT-11 / turn.record / turn-record.v1 | session_id/turn_id:ID, model:Text, input_tokens/output_tokens/cached_tokens:UInt, cost_microusd:UInt or null, cost_basis:list-price/provider-reported/unknown, observed_at:Time | {turn_id:ID,durable_seq:PosInt}; unique session/turn, changed usage is TURN_CONFLICT, unknown cost is null not zero |
 | CT-12 / gate.run / cf.gate-request.v1 | run_id:ID, candidate:GitOID, tree_digest:SHA, policy_ref:EvidenceRef, criteria:Criterion[1..100] | M3 §17.1 Verdict; no optional missing required gate |
 | CT-13 / board.close / cf.board-close.v1 | operation_id/project_id/board_id/task_id/claim_id:ID, claim_generation:PosInt, owner_fence:Fence, expected_revision:UInt, board_revision:GitOID, completion:Completion | {new_revision:PosInt,board_revision:GitOID,closure_receipt_ref:EvidenceRef}; M4 Completion + M3 §17.3 parent certification |
 | CT-14 / board.mutate / cf.board-mutation.v1 | operation_id/project_id/board_id/task_id:ID, expected_revision:UInt, board_revision:GitOID, owner_fence:Fence, row:TaskRow, event:Event | {new_revision:PosInt,board_revision:GitOID}; M4 state transition/CAS; actor may not spoof authenticated principal |
-| CT-15 / memory.append / memory-record.v1 | same CT-09, record_type=decision/finding/wave/round/resolution | same MemorySyncReceipt; foreman is writer, not transport worker |
+| CT-15 / memory.append / memory-record.v1 | same CT-09, record_type=decision/finding/wave/round/resolution, same writer object | same MemorySyncReceipt; foreman is writer, not transport worker; the round body carries no report_digest and no memory_ref (§IV.5.5) |
 | CT-16 / handbook.build / cf.handbook-build.v1 | M6 §16 build request/receipt schemas | M6 build receipt; no owner decision occurs on this edge |
 | CT-17 / harness.qualify / cf.harness-conformance.v1 | M5 §16.4 complete report | {support_state:SUPPORTED/UNSUPPORTED/UNVERIFIED,report_ref:EvidenceRef,expires_at:Time}; exact required union, live/fixture separation |
 | CT-18 / handbook.decide / cf.handbook-decision.v1 | M6 §16.3 decision fields | {decision_ref:EvidenceRef,artifact_digest:SHA,state:accepted/rejected/withheld}; authenticated human action |
@@ -338,8 +362,11 @@ is excluded only when named by its type. report_digest hashes CT-06R's entire bo
 except report_digest, including its schema/idempotency key, evidence and timestamps;
 outer request transport fields are excluded. Replay input digest hashes message_type
 plus body, omitting only the idempotency_key itself; outer fresh nonce/time/request_id
-do not cause a conflicting same-operation retry. Signature framing is M1 §17.1,
-not a digest of arbitrary pretty-printed JSON.
+do not cause a conflicting same-operation retry. Since pass 7 the two values are named
+separately — `request_digest` covers the reduced body, `replay_digest` covers
+`message_type` plus that body, both omitting the same declared excluded list (§IV.2.7);
+the single-value form survives only where an operation declares the pairing.
+Signature framing is M1 §17.1, not a digest of arbitrary pretty-printed JSON.
 
 Git tree_digest is SHA-256 of JCS of a path-byte-sorted array of objects
 `{path_b64:string,mode:"100644"/"100755"/"120000"/"160000",type:blob/symlink/gitlink,
@@ -396,6 +423,180 @@ chapter edges and generated figures together before qualification. This wave cha
 only its assigned chapters/register; older out-of-scope projections remain explicitly
 unqualified until the consuming checker is updated. Absence of that implementation
 is not a claim that the schema itself remains undecided.
+
+### IV.2.5 LCR-1: the layered commitment rule
+
+Pass 7 found four record families that name a value inside the hash domain which is
+derived from the digest of that same record. The launch family was the sharpest:
+`dispatch_id` was derived from `execution_key`, `execution_key` from
+`{launch_id,input_digest}`, and the launch record's `input_digest` covered a body that
+already contained `dispatch_id`. Every reader that recomputed the chain had to iterate
+to a fixed point, and two conforming readers could disagree about which fixed point was
+authoritative.
+
+One rule replaces the four local exceptions. It is normative for every record family in
+this register, not only the launch:
+
+1. Every hash domain is a closed field list plus an explicit `excluded_derived` list.
+   A field is either covered or excluded. No domain covers its own output.
+2. Every identity is allocated by the component that owns it, durably and idempotently,
+   before it is hashed. A derived identifier is never an input to the digest that
+   produces it.
+3. Records are constructed in layers. A layer may include the digest of a lower layer.
+   A lower layer may not include the digest of a higher layer, and no record includes
+   its own digest or signature.
+4. The construction order `content → record → envelope` is normative. Readers recompute
+   in the same order and reject a record whose lower-layer digest changes when a
+   higher-layer field changes.
+5. Derived identifiers are validated by recomputation, never by iteration. A mismatch is
+   a `CONTRACT_INVALID` refusal; searching for a fixed point is never an allowed recovery.
+
+| Layer | Contents | Excluded from its own hash | May include |
+|---|---|---|---|
+| L0 content | immutable caller payload, preallocated owning identity and nonce | every derived identity, every digest, every signature, every mutable lifecycle field | nothing derived |
+| L1 record | L0 content, L0 digest, record identity, role and version | the record's own digest and signature, any higher-layer reference | L0 digest and lower-layer digests |
+| L2 envelope | L1 record, L1 digest, audience and transport metadata | the envelope signature, the envelope's own digest when one is defined | L1 digest and lower-layer digests |
+
+The bootstrap identity table is part of the contract. An identity that is not in this
+table has no allocation order and cannot appear in a hashed field:
+
+| Identity | Allocator | First durable use | Hash-exempt rule |
+|---|---|---|---|
+| `launch_id` | launching foreman, before admission | CT-02 and the launch commitment | preallocated; may appear in L0 content; never derived from a launch digest |
+| `dispatch_id` | supervisor, from the launch commitment | launch confirmation and CT-05 | derived once; excluded from L0 `input_digest` |
+| `execution_key` | supervisor, from `launch_id` and L0 `input_digest` | launch confirmation and execution journal | derived once; excluded from L0 `input_digest` |
+| `registration_id` | controller, before the enrolment request | enrolment grant and request | preallocated; never allocated by Crier |
+| `node_id`, `registration_generation` | Crier, from the accepted grant | enrolment response and readback | allocated by Crier; may appear in the response, never in the request's L0 digest |
+| `task_id`, `wave_id`, `claim_id` | board, before claim construction | CT-10 and the board record | preallocated; ordering fields are not derived from the record digest |
+| `receipt_digest` | Crier, after the unsigned response payload | custody receipt | excludes itself and the signature; covers only the unsigned payload digest |
+| `report_digest` | reporter, after the final report body | final report | excludes itself and its signature; may include the round-summary digest |
+
+This retires the reading in IV.0 and IV.1 that the foreman reserves `dispatch_id` before
+worker delivery. The foreman allocates `launch_id` and the nonce; the supervisor derives
+`dispatch_id` and `execution_key` from the persisted commitment. A foreman-supplied
+`dispatch_id` is refused with `CONTRACT_INVALID`, because accepting it would restore the
+cycle the rule exists to remove.
+
+The cold-launch sequence is finite and single-pass:
+
+1. The foreman allocates `launch_id` and a nonce.
+2. The foreman builds `cf.launch-commitment.v1` from the immutable BriefInput, the
+   preallocated `launch_id`, the nonce and the owning supervisor identity.
+   `input_digest` covers L0 only; `dispatch_id`, `execution_key`, `input_digest` itself
+   and every signature are excluded.
+3. The foreman submits the commitment. The supervisor validates the commitment digest
+   and persists it before deriving anything.
+4. The supervisor derives
+   `execution_key = H("cf.execution-key.v1" || launch_id || input_digest)` and
+   `dispatch_id = "d-" || H("cf.dispatch-id.v1" || launch_id || input_digest)`.
+   Neither derivation reads `dispatch_id`, `execution_key` or a commitment digest.
+5. The supervisor writes `cf.launch-confirmation.v1` containing the commitment digest,
+   both derived identities and the confirmation digest. The confirmation is the first
+   record that contains the derived values.
+6. The foreman materializes `cf.launch-input.v1` from the commitment, `dispatch_id` and
+   `execution_key`. `input_digest` is the commitment's value, carried forward. A reader
+   that recomputes it over the materialized object is non-conforming, because the
+   materialized object contains the derived identities the digest must not cover.
+7. CT-05 for a worker uses the same commitment and the same allocation order. No future
+   worker identifier is required at admission.
+
+The frozen values for the fixture launch are:
+
+```
+launch_id        l-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048
+input_digest     aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a
+execution_key    add6df27bfc4facef355695078b5e1171eda32325a99263c30b81b9f0fc842fc
+dispatch_id      d-2ccec62df73e9a889ec12b5c1600e4706d2311d766bfc3a6b07bac986b94fcab
+commitment       fefb5e5d7887999e0123ebb9bbae94116150941341f2fcb0f1c751861a228b3d
+confirmation     093889a3a6f4a61ff1af28d578f1757254446a1c9b3ac15543297097812e6e74
+```
+
+`CV-16-A` publishes the whole chain as canonical bytes; `CV-16-B` is the changed-derived-
+identifier refusal. `SC7-01` asserts the graph has no cycle and that the cold
+construction completes in one pass. `CV-02-A` carries the same commitment in the
+`supervisor.v1` request body, so the request and the confirmation cannot drift.
+
+### IV.2.6 Digest-domain registry
+
+One framing convention, stated once: a **record digest** is SHA-256 over the JCS bytes
+of the record with its own digest and signature absent. A **layer-crossing digest** — a
+value that binds a lower layer into a higher one — is SHA-256 over an ASCII domain tag
+concatenated with the canonical bytes named in the table. Every part is either fixed
+width or a canonical JSON string, so no separator is needed and none may be added.
+
+| Digest | Domain tag | Covers | Excludes |
+|---|---|---|---|
+| `input_digest` | none | JCS of the L0 BriefInput | every derived identity, every digest, every signature |
+| `commitment_digest` | none | JCS of `cf.launch-commitment.v1` | `commitment_digest`, `signature`, `dispatch_id`, `execution_key`, `confirmation_digest` |
+| `confirmation_digest` | none | JCS of `cf.launch-confirmation.v1` | `confirmation_digest`, `signature` |
+| `execution_key` | `cf.execution-key.v1` | tag then `launch_id` then `input_digest` | everything else; the tag is not part of any record |
+| `dispatch_id` | `cf.dispatch-id.v1` | `d-` then tag then `launch_id` then `input_digest` | everything else |
+| `request_digest` | none | JCS of the request body minus the excluded list | `request_digest`, `replay_digest`, `idempotency_key`, every signature |
+| `replay_digest` | none | `message_type` then JCS of the same reduced body | the same list |
+| `response_body_digest` | `cf.crier.response-body.v1` | tag then JCS of the unsigned payload | the receipt, `receipt_digest`, every signature |
+| `receipt_digest` | `cf.crier.receipt.v1` | tag then JCS of the receipt body | `receipt_digest`, `signature` |
+| `payload_digest` (memory) | none | JCS of `cf.memory-record.v1` | `payload_digest`, `sync`, `signature` |
+| `round_summary_digest` | none | JCS of the round-summary body | `round_summary_digest`, `report_digest`, its own memory ref, `signature` |
+| `report_digest` | none | JCS of the final report body | `report_digest`, `signature`, `closure_ref` |
+| `group_claim_digest` | none | JCS of `cf.group-claim.v1` | `group_claim_digest` |
+| `config_digest` | none | JCS of `cf.config.v1` | `config_digest` |
+| `settlement_digest` | none | JCS of `cf.settlement.v1` | `settlement_digest` |
+
+Two consequences follow, and both are checked by the bundle rather than trusted:
+
+* A digest that is not in this table is not comparable to one that is. The bundle's
+  self-check refuses a vector whose declared digest does not recompute under the row it
+  names, and refuses a record digest that only recomputes when a field outside its
+  `excluded_derived` list is dropped.
+* `input_digest` is the only digest in the launch family that covers content. Every
+  other launch digest covers a record that already contains it. That is what makes the
+  chain acyclic rather than merely ordered.
+
+### IV.2.7 Request identity, replay identity and the excluded list
+
+`request_digest` and `replay_digest` are separate named domains. Both are computed over
+the canonical request body with `request_digest`, `replay_digest`, `idempotency_key`
+where the operation defines one, and every signature removed. `replay_digest` additionally
+covers `message_type`, so the same body sent as a different operation is a different
+replay identity.
+
+An operation that needs one value for both names the formula it uses and records the
+pairing; every consumer then reads the pairing, and no consumer may assume a split that
+the operation did not declare. `CV-17-C` is the declared-shared case. The default stays
+two named values with an explicit mapping.
+
+Readback and deduplication records store both digests and the excluded-field list they
+were computed under. A record that stores a digest without the list is not comparable to
+one that stores the list, so a receiver refuses it rather than guessing: the same bytes
+hashed under a different list produce a different value, and the receiver cannot tell
+which one it holds. `CV-17-B` shows the failure this prevents — a retry under the same
+`idempotency_key` whose body was edited no longer matches its stored `replay_digest`.
+
+### IV.2.8 The custody chain: payload, receipt, envelope
+
+A custody response is three objects, not one:
+
+1. The unsigned payload holds the operation result and nothing else. It excludes the
+   receipt, `receipt_digest` and the signature.
+2. `response_body_digest = H("cf.crier.response-body.v1" || canonical(unsigned payload))`.
+3. The receipt body holds `response_body_digest`, lease identity, principal, nonce and
+   timestamps. `receipt_digest = H("cf.crier.receipt.v1" || canonical(receipt body))`,
+   excluding `receipt_digest` and the signature.
+4. The signed envelope holds the unsigned payload, the receipt and `receipt_digest`. Its
+   signature covers `receipt_digest` and the envelope metadata (audience, transport,
+   signing key). The response hash never covers the embedded receipt or its digest.
+
+A client accepts a response in one fixed order: verify the envelope signature;
+recompute `receipt_digest` from the receipt body; recompute `response_body_digest` from
+the unsigned payload; compare the receipt's `response_body_digest` to the recomputed
+value; compare the audience to its own node identity and generation; only then accept
+the credential reference. Accepting on the envelope signature alone would let a validly
+signed envelope carry a payload the receipt never covered.
+
+The fixture chain is `CV-18-A`; the rewritten-payload refusal is `CV-18-B`. The fixture
+ships a deterministic ed25519 test key derived from a published seed string. It signs
+this transcript and nothing else, authorizes nothing, and is labelled as such in the
+bundle; the credential itself never appears in any fixture, only its CAS reference.
 
 ## IV.3 Complete protocol examples
 
@@ -556,6 +757,243 @@ below are implementation coverage, not the contracts.
 | CT-29 | manager → recovery actors | incident, fence and replacement recovery | durable, idempotent | TARGET-UNIMPLEMENTED |
 | CT-30 | manager → subscribers/operators | versioned event delivery and independent metric readout | durable cursor / read-only API | TARGET-UNIMPLEMENTED |
 
+## IV.5 Canonical record families
+
+These are the records every other part references. Each has one closed shape, published
+as a JSON Schema in `docs/handbook/conformance/schemas/`, and a fixture in
+`docs/handbook/conformance/fixtures/`. A reader that needs a different shape versions the
+record; it does not extend this one.
+
+| Record version | Family | Owner | Fixture | Vectors |
+|---|---|---|---|---|
+| `cf.launch-commitment.v1` | execution | launching foreman | `launch-commitment.json` | `CV-16-A`, `CV-02-A` |
+| `cf.launch-confirmation.v1` | execution | resident supervisor | `launch-confirmation.json` | `CV-16-A` |
+| `cf.launch-input.v1` | execution | launching foreman | `launch-commitment.json` | `CV-16-A` |
+| `cf.launch-response.v1` | execution | resident supervisor | `launch-confirmation.json` | `CV-21-A` |
+| `cf.settlement.v1` | settlement | resident supervisor | `launch-confirmation.json` | `CV-21-B` |
+| `cf.cancellation.v1` | execution | resident supervisor | `launch-confirmation.json` | `CV-22-A` |
+| `cf.criterion.v1` | board | board row | `board-group-claim.json` | `CV-19-A` |
+| `cf.evidence.v1` | evidence | judge / board | `board-group-claim.json` | `CV-25-A`, `CV-25-B` |
+| `cf.group-claim.v1` | board | claimant | `board-group-claim.json` | `CV-19-A`, `CV-19-B` |
+| `cf.memory-record.v1` | memory | foreman / judge | `memory-round-summary.json` | `CV-20-A`–`CV-20-C` |
+| `cf.round-summary.v1` | memory | foreman | `memory-round-summary.json` | `CV-20-A` |
+| `cf.round-report.v1` | memory | foreman | `memory-round-summary.json` | `CV-01-C`, `CV-20-A` |
+| `cf.round-closure.v1` | memory | foreman | `memory-round-summary.json` | `CV-20-A` |
+| `cf.config.v1` | configuration | owner / manager | `launch-commitment.json` | `CV-24-A` |
+| `cf.crier.request.v1` `cf.crier.response-payload.v1` `cf.crier.receipt.v1` `cf.crier.envelope.v1` | custody | Crier | `custody-request-response.json` | `CV-17-A`, `CV-17-C`, `CV-18-A`, `CV-18-B` |
+| `cf.enrollment-request.v1` `cf.enrollment-response.v1` | enrollment | controller / Crier | `launch-confirmation.json` | `CV-23-A` |
+
+### IV.5.1 The executable criterion
+
+A criterion has exactly three projections, and only the first can qualify a task:
+
+| Projection | Fields | Rule |
+|---|---|---|
+| executable | `id`, `argv`, `cwd`, `expected_exit`, `timeout_s`, `oracle_digest` | `argv` is the program and its arguments, never a shell string; an empty `argv` is refused |
+| storage | the same six fields as board-row columns | the board row stores the executable projection verbatim |
+| display | `id`, `description` | prose is a projection of `description` only |
+
+The board-to-brief adapter copies the six executable fields losslessly. A missing
+`argv`, `cwd` or `expected_exit` is a typed refusal, not a default: a criterion that
+silently acquires `cwd: "."` or `expected_exit: 0` from a fallback is a criterion nobody
+wrote. Legacy `text` and `verification` fields remain migration evidence and cannot be
+executed. `CV-19-A` carries the canonical instance; the empty-`argv` refusal is a bundle
+negative arm.
+
+### IV.5.2 Phase-discriminated evidence
+
+One record, five phases, five non-interchangeable subjects. A record may not borrow a
+later phase's subject to look complete, and a later phase may not rewrite an earlier
+record.
+
+| Phase | Subject | Proves |
+|---|---|---|
+| `staged` | `base_oid`, `commit_oid` (must be null), `tree_digest`, `policy_ref` | the pre-commit battery ran on the staged tree |
+| `source` | `base_oid`, `commit_oid`, `tree_digest` | the committed tree carries the verdict |
+| `integrated` | `base_oid`, `commit_oid`, `integrated_oid`, `tree_digest` | the post-merge tree was re-run |
+| `publication` | `accepted_object {commit_oid, tree_digest}`, `observed_tip`, `ref` | the accepted object reached the remote; a later tip does not relabel it |
+| `closure` | `accepted_object`, `closure_commit` | closure cites the publication record that permitted it |
+
+A `staged` record names `commit_oid: null` because the object does not exist yet. An
+implementation that wants to record a commit it already made is writing a `source`
+record, not a staged one. Phases other than `publication` carry no `ancestry` and no
+`decision` field at all; the schema refuses them rather than ignoring them.
+
+Publication binds the accepted object by digest. The observed tip may advance, and the
+only thing re-judged is ancestry: the accepted object must remain an ancestor of the
+observed tip. A publication record whose `accepted_object` is rewritten to the new tip
+is refused with `PUBLICATION_DRIFT` — the bytes that were accepted do not become
+acceptable bytes by being superseded. `CV-25-A` publishes the five-phase chain for one
+task; `CV-25-B` is the staged-names-a-commit refusal.
+
+### IV.5.3 The canonical group claim
+
+A group claim has one bound, one ordering and one object-id form:
+
+* `group.max_members` is the literal `256`. A wider group is a different record, not a
+  larger claim; `CV-19-B` is the refusal, and the schema cannot represent 257.
+* Members are ordered ascending by `task_id`, compared bytewise over UTF-8. The ordering
+  is data, not a convention a reader may infer from array position. A repeated member is
+  `DUPLICATE_MEMBER`; a reversed list is `ORDER_INVALID`.
+* `board.base_oid` is a normal object id: 40 or 64 lowercase hex. No abbreviation, no
+  algorithm flag, no `^{commit}` suffix. An abbreviated id is `GITOID_INVALID`.
+* One protected CAS covers every row, event and marker of the group. A loser launches no
+  partial wave, so a partially claimed group cannot exist.
+
+`member_count` must equal the number of members; the bundle self-check asserts it, and a
+claim that disagrees with itself is refused.
+
+### IV.5.4 One memory envelope, discriminated by role
+
+There is one memory record shape. The role is required, and the body is discriminated by
+`record_type`:
+
+| `record_type` | Required body fields | Nullable (present and null, never omitted) |
+|---|---|---|
+| `worker` | `task_id`, `attempt_id`, `outcome` | `commit`, `error` |
+| `wave` | `wave_id`, `attempt_ids`, `outcome` | `stop_reason` |
+| `round` | `round_id`, `state`, `wave_refs`, `budget` | `stop_reason` |
+| `resolution` | `resolution_id`, `subject`, `outcome` | `rationale` |
+| `decision` | `decision_id`, `subject`, `outcome` | `rationale` |
+| `finding` | `finding_id`, `severity`, `summary` | `disposition` |
+
+`writer` carries `writer_id`, `writer_role` and an optional `writer_generation` and
+`owner_fence`. Earlier revisions wrote `writer_identity` and hyphenated body labels
+(`worker-outcome`, `wave-summary`, `round-summary`). Those are labels, not fields: the
+alias table maps each one onto the canonical name, and an importer that loses
+`writer_role` while doing so is refused rather than trusted. `CV-20-C` is the lossless
+import; `CV-20-B` is the lower-layer-names-a-higher-layer refusal.
+
+The sync receipt stays outside `payload_digest`. A delivery acknowledgement arrives after
+the record exists; letting it into the digest would mean a record's identity changes when
+someone else confirms receipt of it.
+
+### IV.5.5 The round summary, the report and the closure witness
+
+The round summary and the final report are two records in one commitment chain, not one
+record written twice:
+
+1. The round-summary body carries the round outcome, wave references, budget and
+   evidence references. It excludes `report_digest` and its own memory reference.
+2. `round_summary_digest` is SHA-256 over that body.
+3. The memory record wraps the body; `payload_digest` covers the record as stored.
+4. The final report body may name `round_summary_digest` and `summary_memory_ref`.
+   `report_digest` covers the report body excluding itself and its signature.
+5. `cf.round-closure.v1` is an optional L2 witness naming both lower layers. It is
+   referenced by neither, which is what keeps the chain acyclic.
+
+No lower-layer summary digest includes `report_digest`; no final-report digest includes
+its own memory reference. `CV-20-A` publishes the four records and their digests for one
+round; `CV-20-B` refuses the summary that names the report.
+
+### IV.5.6 Phase-discriminated cancellation
+
+Cancellation is recorded where it landed, not where it was requested:
+
+| Applied phase | Journal before → after | Terminal effect | Permit |
+|---|---|---|---|
+| `pre_admission` | none (no launch row) | `refused_no_launch` | never consumed |
+| `prestart` | `RESERVED` → `CANCELLED` | `cancelled_before_start` | never consumed |
+| `running` | `RUNNING` → `CANCELLED` | `signalled_quiesced` | already consumed |
+| `terminal` | unchanged | `already_terminal` | no change |
+
+A cancellation in the `running` phase is not complete when the signal is sent; it is
+complete at quiescence, and the record carries both timestamps. A repeated cancellation
+in the same phase is idempotent and produces the same `cancellation_digest`. A
+cancellation after the terminal state changes nothing and is recorded with
+`already_terminal` rather than being rejected silently — an operator who pressed cancel
+after completion is owed a truthful record, not an error. A cancelled launch is never
+counted as a success. `CV-22-A` carries all four phases.
+
+### IV.5.7 The settlement record
+
+A settlement carries six disjoint counts — `verified`, `unverified`, `failed`,
+`cancelled`, `expired`, `unknown` — and no `total` field. The total is their sum, so a
+settlement cannot disagree with itself. `revisions` counts late evidence revisions that
+arrived after the settlement was written; it does not rewrite the settlement, and it is
+what makes `settled_verified_then_reopened` a truthful outcome instead of a silent
+retro-edit.
+
+## IV.6 Total projection tables
+
+The tables below are total: every input row maps to exactly one output row, and no row
+is missing. "Total" is the property that makes a projection testable — a partial table
+leaves the remaining states to be inferred by whoever writes the implementation, and two
+implementations infer differently.
+
+### IV.6.1 Journal state to launch response
+
+| Journal state | Response `state` | `resolution` |
+|---|---|---|
+| `RESERVED` (admitted, permit not consumed) | `accepted` | `none` |
+| `START_INTENT` persisted with no native proof | `unknown` | `quarantined`, reason `START_UNKNOWN` |
+| `STARTED` with boot id, process instance and native session | `running` | `none` |
+| `RUNNING` with a live heartbeat | `running` | `none` |
+| terminal success with a `result_digest` | `succeeded` | `none` |
+| terminal failure | `failed` | `none` |
+| terminal cancelled before start | `cancelled` | `none` |
+| terminal cancelled after quiescence | `cancelled` | `none` |
+| `EXPIRED` at the admission deadline | `expired` | `none` |
+| unreadable or conflicting journal record | `unknown` | `quarantined` |
+
+The response state set is the seven values in the right-hand column. `unknown` is a real
+state with a real cause, not a placeholder for a missing one: an ambiguity the control
+plane cannot resolve is reported as ambiguity, and consumers are expected to handle it.
+Coercing `START_UNKNOWN` into `failed` would report an execution failure that nobody
+observed; coercing it into `running` would report liveness that nobody proved.
+
+### IV.6.2 Outcome to settlement
+
+| Outcome | Condition | Settlement |
+|---|---|---|
+| `settled_success` | every member verified | one success per verified member |
+| `settled_failure` | any member failed | failure recorded; verified members keep their evidence |
+| `settled_partial` | verified and unverified members together | `settled_partial`; the unverified members are named |
+| `settled_unverified` | every member unverified | `settled_unverified`, no success counter |
+| `settled_empty` | zero members or zero budget | `settled_empty`, budget consumed 0 |
+| `settled_cancelled` | cancellation applied before terminal | `settled_cancelled`; cancelled members never counted as failed |
+| `settled_expired` | admission deadline passed unstarted | `settled_expired` |
+| `settled_unknown` | control state unresolvable | `settled_unknown`; quarantine retained, no settlement of the work |
+| `settled_verified_then_reopened` | late evidence revision after settlement | settlement stands; `revisions` increments; closure re-opens |
+
+Three rules follow from the table and are not negotiable:
+
+* A uniformly unverified round settles as `settled_unverified`. It never settles as
+  success because no member failed, and it never triggers a fresh execution as a
+  consolation — re-running work to obtain a verdict is a new attempt with a new budget,
+  not a repair of the old one.
+* A zero-budget or zero-member round settles as `settled_empty`. It is not a success and
+  not a failure; it is the honest record of a round that had nothing to spend.
+* Late evidence does not edit history. The settlement that was true when it was written
+  stays on the record, the revision counter moves, and closure re-opens.
+
+`CV-21-A` and `CV-21-B` publish both tables as data with their counts.
+
+## IV.7 The conformance bundle
+
+`docs/handbook/conformance/` is the companion bundle required by P7-13. It holds the
+machine-readable schemas, the non-secret fixture bytes and a manifest that pins the
+digests of the model, the vector file, every schema and every fixture. The vector file
+remains the single normative source of executable cases; the bundle points at it and does
+not restate it.
+
+The bundle exists because a specification that can only be understood by reading a
+repository checkout is not a specification. Everything needed to check a record is in the
+bundle: the schema for its shape, the fixture for its bytes, the manifest for its digest,
+and one command to run.
+
+Read it in this order: `manifest.json` for what is pinned and what each case asserts;
+`schemas/` for the closed shapes; `fixtures/` for the bytes those schemas must accept and
+reject; then `contract-vectors.json` for the digest arithmetic and the refusal outcomes.
+`README.md` gives the single command that checks all of it and states what a pass means.
+
+Two honesty rules apply to the bundle. A shape-only example is labelled shape-only in the
+manifest and cannot be counted as a positive qualification — it proves the encoder and
+decoder agree on structure, not that a deployment implements the contract. And the bundle
+names its relation to the PDF bytes rather than implying it: the manifest records which
+artifact the bundle was frozen against, and a reissued PDF whose digest differs is a
+bundle that must be re-frozen.
+
 ## Contracts in detail
 
 ### CT-01 — owner → scheduler
@@ -572,6 +1010,11 @@ below are implementation coverage, not the contracts.
 ### CT-02 — scheduler → crier
 
 - **Carries:** envelope: run_id, corr_id, lane, board, text_b64
+- **Identity boundary (pass 7):** admission carries no launch identity. `launch_id`, the
+  nonce, `dispatch_id` and `execution_key` are created later by the foreman and the
+  supervisor under LCR-1 (§IV.2.5); the cold sequence `allocate → commit → derive →
+  confirm` completes without any identity this edge would have had to predict.
+  `CV-16-A` is the cold pass, `CV-16-B` the changed-identifier refusal.
 - **Mode:** async, bearer + signature
 - **State:** UNVERIFIED — historical source coverage is not target-version runtime proof
 - **Sends because:** Whose turn it is; lane admission (tasks vs cooldown); per-lane cadence, weight, pin; settlement of every dispatch
@@ -609,11 +1052,20 @@ below are implementation coverage, not the contracts.
 ### CT-05 — foreman → worker
 
 - **Carries:** the complete worker-brief.v1 from §IV.2.1; immutable BriefInput ref,
-  execution identities, claim/fence, criteria, workspace and enforced limits.
+  execution identities, claim/fence, criteria, workspace and enforced limits, plus the
+  launch block: the persisted `cf.launch-commitment.v1` ref, its digest, the preallocated
+  `launch_id` and the nonce.
 - **Mode:** authenticated Crier custody to the resident supervisor.
 - **State:** TARGET-UNIMPLEMENTED — no version-bound target fixture/live receipt is cited.
-- **Sender guarantee:** foreman reserves attempt identity and exact brief before delivery (M2 §15).
-- **Receiver requirement:** M5 §16.1 validates/retrieves the brief and deduplicates before start.
+- **Sender guarantee:** the foreman allocates `launch_id` and the nonce and persists the
+  commitment before delivery; it does not supply `dispatch_id` or `execution_key` (LCR-1,
+  §IV.2.5). It reserves attempt identity and the exact brief before delivery (M2 §15).
+- **Receiver requirement:** M5 §16.1 validates the commitment digest, derives
+  `execution_key` and `dispatch_id` once from `{launch_id,input_digest}`, writes the
+  confirmation and deduplicates before start. A request that carries its own derived
+  identifiers is refused with `CONTRACT_INVALID`.
+- **Vector:** `CV-16-A` (cold chain), `CV-16-B` (changed derived identifier),
+  `CV-02-A` (the supervisor request carrying the same commitment).
 - **Historical reclassification:** load_lane_config.py → buildForemanPrompt belongs to
   CT-01 lane_seed configuration, not this worker-launch edge.
 - **To qualify:** run valid/invalid brief, duplicate delivery and crash-window cases
@@ -657,6 +1109,12 @@ below are implementation coverage, not the contracts.
 ### CT-09 — node → duckbrain
 
 - **Carries:** R1 run record, R2 fleet index
+- **Record frozen (pass 7):** `cf.memory-record.v1` with a required `writer` object
+  (`writer_id`, `writer_role`, generation, fence), a body discriminated by `record_type`,
+  nullable body fields present and null, and the sync receipt outside `payload_digest`
+  (§IV.5.4). The round body carries no `report_digest` and no `memory_ref`; the report
+  names the summary digest and the summary memory ref instead (§IV.5.5). Vectors
+  `CV-20-A`, `CV-20-B`, `CV-20-C`.
 - **Mode:** http, x-api-key
 - **State:** MISSING
 - **Sends because:** One project per node; repo clone, seeded prompts/skills, env, identity, bus worker (M2 §2)
@@ -669,6 +1127,12 @@ below are implementation coverage, not the contracts.
 ### CT-10 — node → board
 
 - **Carries:** row event with run_id and outcome
+- **Record frozen (pass 7):** `cf.group-claim.v1` — at most 256 members, ordered
+  ascending by bytewise `task_id`, normal-object-id only, one protected CAS for rows
+  events and marker (§IV.5.3), plus the phase-discriminated evidence chain
+  `staged → source → integrated → publication → closure` with a null `commit_oid` at
+  `staged` and an accepted object bound by digest at `publication` (§IV.5.2). Vectors
+  `CV-19-A`, `CV-19-B`, `CV-25-A`, `CV-25-B`.
 - **Mode:** append
 - **State:** BROKEN
 - **Sends because:** One project per node; repo clone, seeded prompts/skills, env, identity, bus worker (M2 §2)

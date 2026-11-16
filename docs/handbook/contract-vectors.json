@@ -51,6 +51,122 @@
       "id": "AC-1",
       "oracle_digest": "fc360a2ecbbd5eec0f5748b31a5ae732497b5c2ee81ebce4feee6a15acbd7eb8",
       "timeout_s": 60
+    },
+    "launch_identity": {
+      "rule": "LCR-1: content then record then envelope; every identity is allocated before it is hashed; a derived identifier is validated by recomputation only",
+      "layer_contract": {
+        "L0": {
+          "contents": "immutable caller payload, preallocated owning identity and nonce",
+          "excluded_from_own_hash": [
+            "every derived identity",
+            "every digest",
+            "every signature",
+            "every mutable lifecycle field"
+          ],
+          "may_include": "nothing derived"
+        },
+        "L1": {
+          "contents": "L0 content, L0 digest, record identity, role and version",
+          "excluded_from_own_hash": [
+            "the record's own digest",
+            "its signature",
+            "any higher-layer reference"
+          ],
+          "may_include": "L0 digest and lower-layer digests"
+        },
+        "L2": {
+          "contents": "L1 record, L1 digest, audience and transport metadata",
+          "excluded_from_own_hash": [
+            "the envelope signature",
+            "the envelope's own digest when defined"
+          ],
+          "may_include": "L1 digest and lower-layer digests"
+        }
+      },
+      "bootstrap_identities": [
+        {
+          "identity": "launch_id",
+          "allocator": "launching foreman, before admission",
+          "first_durable_use": "CT-02 and the launch commitment",
+          "hash_exempt_rule": "preallocated; may appear in L0 content; never derived from a launch digest",
+          "value": "l-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048"
+        },
+        {
+          "identity": "dispatch_id",
+          "allocator": "supervisor, from the launch commitment",
+          "first_durable_use": "launch confirmation and CT-05",
+          "hash_exempt_rule": "derived once; excluded from L0 input_digest",
+          "value": "d-2ccec62df73e9a889ec12b5c1600e4706d2311d766bfc3a6b07bac986b94fcab"
+        },
+        {
+          "identity": "execution_key",
+          "allocator": "supervisor, from launch_id and L0 input_digest",
+          "first_durable_use": "launch confirmation and execution journal",
+          "hash_exempt_rule": "derived once; excluded from L0 input_digest",
+          "value": "add6df27bfc4facef355695078b5e1171eda32325a99263c30b81b9f0fc842fc"
+        },
+        {
+          "identity": "registration_id",
+          "allocator": "controller, before the enrolment request",
+          "first_durable_use": "enrolment grant and request",
+          "hash_exempt_rule": "preallocated; never allocated by Crier"
+        },
+        {
+          "identity": "node_id, registration_generation",
+          "allocator": "Crier, from the accepted grant",
+          "first_durable_use": "enrolment response and readback",
+          "hash_exempt_rule": "allocated by Crier; may appear in the response, never in the request's L0 digest"
+        },
+        {
+          "identity": "task_id, wave_id, claim_id",
+          "allocator": "board, before claim construction",
+          "first_durable_use": "CT-10 and the board record",
+          "hash_exempt_rule": "preallocated; ordering fields are not derived from the record digest"
+        },
+        {
+          "identity": "receipt_digest",
+          "allocator": "Crier, after the unsigned response payload",
+          "first_durable_use": "custody receipt",
+          "hash_exempt_rule": "excludes itself and the signature; covers only the unsigned payload digest"
+        },
+        {
+          "identity": "report_digest",
+          "allocator": "reporter, after the final report body",
+          "first_durable_use": "final report",
+          "hash_exempt_rule": "excludes itself and its signature; may include the round-summary digest"
+        }
+      ],
+      "derivation_formulas": {
+        "execution_key": "H(\"cf.execution-key.v1\" || launch_id || input_digest)",
+        "dispatch_id": "d- || H(\"cf.dispatch-id.v1\" || launch_id || input_digest)",
+        "input_digest": "sha256 over the L0 canonical bytes only",
+        "response_body_digest": "H(\"cf.crier.response-body.v1\" || canonical(unsigned payload))",
+        "receipt_digest": "H(\"cf.crier.receipt.v1\" || canonical(receipt body))",
+        "commitment_digest": "sha256 over JCS(commitment) excluding commitment_digest and every higher-layer field",
+        "confirmation_digest": "sha256 over JCS(confirmation) excluding confirmation_digest",
+        "round_summary_digest": "sha256 over JCS(round summary body)",
+        "report_digest": "sha256 over JCS(final report body) excluding report_digest and the signature"
+      },
+      "construction_order": [
+        "allocate launch_id and nonce",
+        "build the commitment and persist it",
+        "derive execution_key and dispatch_id exactly once",
+        "write the confirmation, the first record containing the derived values",
+        "materialize the launch input, carrying the commitment's input_digest rather than recomputing it",
+        "submit CT-02/CT-05"
+      ],
+      "recomputation_rule": "a reader recomputes every derived value once from the published formula; a mismatch is CONTRACT_INVALID and no fixed-point search is permitted",
+      "values": {
+        "input_digest": "aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a",
+        "execution_key": "add6df27bfc4facef355695078b5e1171eda32325a99263c30b81b9f0fc842fc",
+        "dispatch_id": "d-2ccec62df73e9a889ec12b5c1600e4706d2311d766bfc3a6b07bac986b94fcab",
+        "commitment_digest": "fefb5e5d7887999e0123ebb9bbae94116150941341f2fcb0f1c751861a228b3d",
+        "confirmation_digest": "093889a3a6f4a61ff1af28d578f1757254446a1c9b3ac15543297097812e6e74",
+        "round_summary_digest": "8307e064c4773afc4e1c08f1271a9612e4e47e055ff53628dd80af8b0239803a",
+        "report_digest": "e989fd1f6b5b40f04f40a50e0900f3f5a7a2e2a25b93a7bcd487e6b70402d554",
+        "response_body_digest": "5df30f1a177f1a97d690a3a8bcc134afda949b5c7893288231139d7748cf5de5",
+        "receipt_digest": "6d58935d1a6b9ef1815cc59309e074778ab0f528b3780a57f63ba2f0e984cb08"
+      }
     }
   },
   "vectors": [
@@ -80,8 +196,8 @@
       "id": "CV-01-B",
       "kind": "positive",
       "name": "immutable worker brief",
-      "canonical_json": "{\"attempt_id\":\"a-1\",\"brief_digest\":\"aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a\",\"brief_ref\":\"cas+sha256://code-factory/aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a\",\"claim_generation\":1,\"claim_id\":\"claim-cf1-1\",\"criteria\":[{\"argv\":[\"verify\",\"--fixture\"],\"cwd\":\".\",\"description\":\"The admitted change is verified.\",\"expected_exit\":0,\"id\":\"AC-1\",\"oracle_digest\":\"fc360a2ecbbd5eec0f5748b31a5ae732497b5c2ee81ebce4feee6a15acbd7eb8\",\"timeout_s\":60}],\"dispatch_id\":\"d-822015bf1408f7af9fd74d147b7fe6765aa4003730bd514d7264c01ea210055f\",\"effective\":{\"attempt_timeout_s\":1800,\"base_url\":\"https://proxy.example.invalid\",\"cpu_millis\":1000,\"credential_ref\":\"proxy-credential-1\",\"lane\":\"code-factory\",\"max_output_bytes\":10485760,\"max_turns\":40,\"memory_bytes\":4294967296,\"model\":\"fixture-model\",\"namespace\":\"code-factory\",\"network_policy_digest\":\"19cad144fbdff3476ace4b2a10084b5594a3c44e4b07863f6b6ef0c394d5f2cd\",\"provider\":\"fixture-provider\",\"release_lock_digest\":\"be4bd8d671d581f1a49eb9e6ca8fb764ecb6d6ce288f84b16f93f83abb0c8410\",\"run_id\":\"run-17\",\"skills_digest\":\"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\",\"turn_timeout_s\":300},\"idempotency_key\":\"brief-a1\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"project_id\":\"code-factory\",\"round_id\":\"r-17\",\"run_id\":\"run-17\",\"schema_version\":\"worker-brief.v1\",\"task_id\":\"CF-1\",\"wave_id\":\"w-1\",\"worker_id\":\"worker-1\",\"workspace\":{\"base\":{\"algorithm\":\"sha1\",\"value\":\"1111111111111111111111111111111111111111\"},\"relative_path\":\"code-factory/worker-1\",\"repository\":{\"commit\":{\"algorithm\":\"sha1\",\"value\":\"1111111111111111111111111111111111111111\"},\"forge\":\"github\",\"host\":\"github.com\",\"owner\":\"coding-hermes\",\"ref\":\"refs/heads/main\",\"repo\":\"code-factory\"}}}",
-      "canonical_sha256": "a7e71410c5b4083381f3b723852f9484e706f0d33b9dece0e70abcdb8c6993c2",
+      "canonical_json": "{\"attempt_id\":\"a-1\",\"brief_digest\":\"aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a\",\"brief_ref\":\"cas+sha256://code-factory/aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a\",\"claim_generation\":1,\"claim_id\":\"claim-cf1-1\",\"criteria\":[{\"argv\":[\"verify\",\"--fixture\"],\"cwd\":\".\",\"description\":\"The admitted change is verified.\",\"expected_exit\":0,\"id\":\"AC-1\",\"oracle_digest\":\"fc360a2ecbbd5eec0f5748b31a5ae732497b5c2ee81ebce4feee6a15acbd7eb8\",\"timeout_s\":60}],\"dispatch_id\":\"d-2ccec62df73e9a889ec12b5c1600e4706d2311d766bfc3a6b07bac986b94fcab\",\"effective\":{\"attempt_timeout_s\":1800,\"base_url\":\"https://proxy.example.invalid\",\"cpu_millis\":1000,\"credential_ref\":\"proxy-credential-1\",\"lane\":\"code-factory\",\"max_output_bytes\":10485760,\"max_turns\":40,\"memory_bytes\":4294967296,\"model\":\"fixture-model\",\"namespace\":\"code-factory\",\"network_policy_digest\":\"19cad144fbdff3476ace4b2a10084b5594a3c44e4b07863f6b6ef0c394d5f2cd\",\"provider\":\"fixture-provider\",\"release_lock_digest\":\"be4bd8d671d581f1a49eb9e6ca8fb764ecb6d6ce288f84b16f93f83abb0c8410\",\"run_id\":\"run-17\",\"skills_digest\":\"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\",\"turn_timeout_s\":300},\"idempotency_key\":\"brief-a1\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"project_id\":\"code-factory\",\"round_id\":\"r-17\",\"run_id\":\"run-17\",\"schema_version\":\"worker-brief.v1\",\"task_id\":\"CF-1\",\"wave_id\":\"w-1\",\"worker_id\":\"worker-1\",\"workspace\":{\"base\":{\"algorithm\":\"sha1\",\"value\":\"1111111111111111111111111111111111111111\"},\"relative_path\":\"code-factory/worker-1\",\"repository\":{\"commit\":{\"algorithm\":\"sha1\",\"value\":\"1111111111111111111111111111111111111111\"},\"forge\":\"github\",\"host\":\"github.com\",\"owner\":\"coding-hermes\",\"ref\":\"refs/heads/main\",\"repo\":\"code-factory\"}}}",
+      "canonical_sha256": "6924c5256796b01852f45cc6fc723549a7623764d085d70b98a7c5fc67ef4582",
       "related_objects": {
         "brief_input_canonical_json": "{\"attachments\":[],\"criteria\":[{\"argv\":[\"verify\",\"--fixture\"],\"cwd\":\".\",\"description\":\"The admitted change is verified.\",\"expected_exit\":0,\"id\":\"AC-1\",\"oracle_digest\":\"fc360a2ecbbd5eec0f5748b31a5ae732497b5c2ee81ebce4feee6a15acbd7eb8\",\"timeout_s\":60}],\"directive\":\"Complete the admitted board tasks and return evidence.\",\"schema_version\":\"cf.brief-input.v1\",\"skills\":[],\"task\":{\"acceptance_criteria\":[{\"argv\":[\"verify\",\"--fixture\"],\"cwd\":\".\",\"description\":\"The admitted change is verified.\",\"expected_exit\":0,\"id\":\"AC-1\",\"oracle_digest\":\"fc360a2ecbbd5eec0f5748b31a5ae732497b5c2ee81ebce4feee6a15acbd7eb8\",\"timeout_s\":60}],\"cancel_request\":null,\"claim\":{\"claim_generation\":1,\"claim_id\":\"claim-cf1-1\",\"claimant_id\":\"foreman-1\",\"lease_expires_at\":\"2026-11-11T19:03:00Z\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"}},\"completion\":null,\"complexity\":3,\"created_at\":\"2026-11-11T18:00:00Z\",\"created_seq\":1,\"deferral\":null,\"depends_on\":[],\"fixture\":false,\"id\":\"CF-1\",\"initiative_id\":\"initiative-1\",\"kind\":\"task\",\"operation_id\":\"op-claim-cf1\",\"paths\":[\".\"],\"reasoning\":\"A complete vector is required before implementation.\",\"resources\":[],\"revision\":2,\"schema_version\":\"cf.board-task.v1\",\"status\":\"in_progress\",\"title\":\"Prove the execution contract\",\"updated_at\":\"2026-11-11T19:01:00Z\"}}",
         "brief_input_sha256": "aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a",
@@ -110,7 +226,7 @@
       },
       "expected": {
         "accepted": true,
-        "execution_key": "822015bf1408f7af9fd74d147b7fe6765aa4003730bd514d7264c01ea210055f",
+        "execution_key": "add6df27bfc4facef355695078b5e1171eda32325a99263c30b81b9f0fc842fc",
         "turn_timeout_s": 300,
         "attempt_timeout_s": 1800
       },
@@ -154,19 +270,22 @@
       "id": "CV-01-C",
       "kind": "positive",
       "name": "worker result and report digest chain",
-      "worker_result_canonical_json": "{\"artifacts\":[],\"attempt_id\":\"a-1\",\"commit\":{\"algorithm\":\"sha1\",\"value\":\"2222222222222222222222222222222222222222\"},\"corr_id\":\"c-17\",\"dispatch_id\":\"d-822015bf1408f7af9fd74d147b7fe6765aa4003730bd514d7264c01ea210055f\",\"error\":null,\"evidence_refs\":[\"cas+sha256://code-factory/86f6b067fe92956e41ce029cd6e54fa2ad590639940f44f55619b9bc7356ffdc\"],\"execution_key\":\"822015bf1408f7af9fd74d147b7fe6765aa4003730bd514d7264c01ea210055f\",\"finished_at\":\"2026-11-11T19:20:00Z\",\"idempotency_key\":\"result-a1\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"project_id\":\"code-factory\",\"round_id\":\"r-17\",\"run_id\":\"run-17\",\"schema_version\":\"worker-result.v1\",\"status\":\"pass\",\"wave_id\":\"w-1\",\"worker_id\":\"worker-1\"}",
-      "worker_result_sha256": "9355b932d6fc0797669ec12f14eb3c3d1b61ec10cc2813ebdd1ebec9e4e1fdea",
-      "round_report_canonical_json": "{\"budget\":{\"allowance\":20000,\"consumed\":1,\"remaining\":19999,\"reserved\":0},\"corr_id\":\"c-17\",\"evidence_refs\":[\"cas+sha256://code-factory/9355b932d6fc0797669ec12f14eb3c3d1b61ec10cc2813ebdd1ebec9e4e1fdea\"],\"finished_at\":\"2026-11-11T19:25:00Z\",\"idempotency_key\":\"report-r17\",\"memory_refs\":[\"cas+sha256://code-factory/b3d87d8d873e664f2228d8ee945083265437e414884a3356d400599c66a1c5cf\",\"cas+sha256://code-factory/6f21de9d0d7aa01b1680e326b60c26002aa9c1e57e283dd68da996cd2adebc1b\"],\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"project_id\":\"code-factory\",\"report_digest\":\"0575fbc0316802dcb6a59af3a8eb7de3b49cbecd93f2cff817e044f905262cc1\",\"round_id\":\"r-17\",\"run_id\":\"run-17\",\"schema_version\":\"round-report.v1\",\"status\":\"pass\",\"stop_reason\":\"no_useful_work\",\"task_results\":[{\"attempt_id\":\"a-1\",\"result_ref\":\"cas+sha256://code-factory/9355b932d6fc0797669ec12f14eb3c3d1b61ec10cc2813ebdd1ebec9e4e1fdea\",\"status\":\"pass\",\"task_id\":\"CF-1\"}],\"waves\":[{\"attempt_ids\":[\"a-1\"],\"state\":\"complete\",\"wave_id\":\"w-1\"}]}",
-      "round_report_sha256": "0575fbc0316802dcb6a59af3a8eb7de3b49cbecd93f2cff817e044f905262cc1",
-      "digest_rule": "round_report_sha256 excludes only report_digest; worker_result_sha256 covers the complete WorkerResult body.",
+      "worker_result_canonical_json": "{\"artifacts\":[],\"attempt_id\":\"a-1\",\"commit\":{\"algorithm\":\"sha1\",\"value\":\"2222222222222222222222222222222222222222\"},\"corr_id\":\"c-17\",\"dispatch_id\":\"d-2ccec62df73e9a889ec12b5c1600e4706d2311d766bfc3a6b07bac986b94fcab\",\"error\":null,\"evidence_refs\":[\"cas+sha256://code-factory/86f6b067fe92956e41ce029cd6e54fa2ad590639940f44f55619b9bc7356ffdc\"],\"execution_key\":\"add6df27bfc4facef355695078b5e1171eda32325a99263c30b81b9f0fc842fc\",\"finished_at\":\"2026-11-11T19:20:00Z\",\"idempotency_key\":\"result-a1\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"project_id\":\"code-factory\",\"round_id\":\"r-17\",\"run_id\":\"run-17\",\"schema_version\":\"worker-result.v1\",\"status\":\"pass\",\"wave_id\":\"w-1\",\"worker_id\":\"worker-1\"}",
+      "worker_result_sha256": "ac02e2270feefb35649d9eb0d054f72088c2245561e4eb9b55c491a4090bca99",
+      "round_report_canonical_json": "{\"budget\":{\"allowance\":20000,\"consumed\":1,\"remaining\":19999,\"reserved\":0},\"corr_id\":\"c-17\",\"evidence_refs\":[\"cas+sha256://code-factory/ac02e2270feefb35649d9eb0d054f72088c2245561e4eb9b55c491a4090bca99\"],\"finished_at\":\"2026-11-11T19:25:00Z\",\"idempotency_key\":\"report-r17\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"project_id\":\"code-factory\",\"report_digest\":\"e989fd1f6b5b40f04f40a50e0900f3f5a7a2e2a25b93a7bcd487e6b70402d554\",\"round_id\":\"r-17\",\"round_summary_digest\":\"8307e064c4773afc4e1c08f1271a9612e4e47e055ff53628dd80af8b0239803a\",\"run_id\":\"run-17\",\"schema_version\":\"round-report.v1\",\"status\":\"pass\",\"stop_reason\":\"no_useful_work\",\"summary_memory_ref\":\"cas+sha256://code-factory/0956384d160d52cbac30f25fb91c11bac662c715ad3601c20cf6ae95339ff04d\",\"task_results\":[{\"attempt_id\":\"a-1\",\"result_ref\":\"cas+sha256://code-factory/ac02e2270feefb35649d9eb0d054f72088c2245561e4eb9b55c491a4090bca99\",\"status\":\"pass\",\"task_id\":\"CF-1\"}],\"waves\":[{\"attempt_ids\":[\"a-1\"],\"state\":\"complete\",\"wave_id\":\"w-1\"}]}",
+      "round_report_sha256": "e989fd1f6b5b40f04f40a50e0900f3f5a7a2e2a25b93a7bcd487e6b70402d554",
+      "digest_rule": "worker_result_sha256 covers the complete WorkerResult body. round_report_sha256 excludes only report_digest. The report names round_summary_digest and summary_memory_ref, both computed before the report exists; it carries no memory_refs array.",
       "expected": {
         "budget_remaining": 19999,
         "stop_reason": "no_useful_work",
-        "report_ref": "cas+sha256://code-factory/0575fbc0316802dcb6a59af3a8eb7de3b49cbecd93f2cff817e044f905262cc1"
+        "report_ref": "cas+sha256://code-factory/e989fd1f6b5b40f04f40a50e0900f3f5a7a2e2a25b93a7bcd487e6b70402d554",
+        "round_summary_digest": "8307e064c4773afc4e1c08f1271a9612e4e47e055ff53628dd80af8b0239803a",
+        "summary_memory_ref": "cas+sha256://code-factory/0956384d160d52cbac30f25fb91c11bac662c715ad3601c20cf6ae95339ff04d"
       },
       "domain": "execution",
       "static_controls": [
-        "SC-02"
+        "SC-02",
+        "SC-14"
       ]
     },
     {
@@ -191,7 +310,7 @@
       "id": "CV-01-E",
       "kind": "negative",
       "name": "missing worker status is not success",
-      "base_worker_result": "{\"artifacts\":[],\"attempt_id\":\"a-1\",\"commit\":{\"algorithm\":\"sha1\",\"value\":\"2222222222222222222222222222222222222222\"},\"corr_id\":\"c-17\",\"dispatch_id\":\"d-822015bf1408f7af9fd74d147b7fe6765aa4003730bd514d7264c01ea210055f\",\"error\":null,\"evidence_refs\":[\"cas+sha256://code-factory/86f6b067fe92956e41ce029cd6e54fa2ad590639940f44f55619b9bc7356ffdc\"],\"execution_key\":\"822015bf1408f7af9fd74d147b7fe6765aa4003730bd514d7264c01ea210055f\",\"finished_at\":\"2026-11-11T19:20:00Z\",\"idempotency_key\":\"result-a1\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"project_id\":\"code-factory\",\"round_id\":\"r-17\",\"run_id\":\"run-17\",\"schema_version\":\"worker-result.v1\",\"status\":\"pass\",\"wave_id\":\"w-1\",\"worker_id\":\"worker-1\"}",
+      "base_worker_result": "{\"artifacts\":[],\"attempt_id\":\"a-1\",\"commit\":{\"algorithm\":\"sha1\",\"value\":\"2222222222222222222222222222222222222222\"},\"corr_id\":\"c-17\",\"dispatch_id\":\"d-2ccec62df73e9a889ec12b5c1600e4706d2311d766bfc3a6b07bac986b94fcab\",\"error\":null,\"evidence_refs\":[\"cas+sha256://code-factory/86f6b067fe92956e41ce029cd6e54fa2ad590639940f44f55619b9bc7356ffdc\"],\"execution_key\":\"add6df27bfc4facef355695078b5e1171eda32325a99263c30b81b9f0fc842fc\",\"finished_at\":\"2026-11-11T19:20:00Z\",\"idempotency_key\":\"result-a1\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"project_id\":\"code-factory\",\"round_id\":\"r-17\",\"run_id\":\"run-17\",\"schema_version\":\"worker-result.v1\",\"status\":\"pass\",\"wave_id\":\"w-1\",\"worker_id\":\"worker-1\"}",
       "remove": [
         "/status"
       ],
@@ -223,18 +342,23 @@
       "id": "CV-02-A",
       "kind": "positive",
       "name": "resident supervisor PUT launch",
-      "canonical_json": "{\"body\":{\"attempt_id\":\"a-1\",\"deadline\":\"2026-11-11T21:00:00Z\",\"dispatch_id\":\"d-822015bf1408f7af9fd74d147b7fe6765aa4003730bd514d7264c01ea210055f\",\"input_digest\":\"aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a\",\"input_ref\":\"cas+sha256://code-factory/aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a\",\"kind\":\"worker\",\"limits\":{\"cpu_millis\":1000,\"memory_bytes\":4294967296,\"pids\":256},\"round_id\":\"r-17\",\"runtime_digest\":\"be4bd8d671d581f1a49eb9e6ca8fb764ecb6d6ce288f84b16f93f83abb0c8410\",\"task_id\":\"CF-1\",\"wave_id\":\"w-1\",\"worker_id\":\"worker-1\",\"workspace_ref\":\"cas+sha256://code-factory/85edc4b2f340931dd4b873f4d06edb8252fee8ade465c7e2f95ac49995742c11\"},\"idempotency_key\":\"launch-a1-key\",\"method\":\"PUT\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"path\":\"/v1/launches/l-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048\",\"project_id\":\"code-factory\",\"request_id\":\"supervise-a1\",\"schema_version\":\"supervisor.v1\"}",
-      "canonical_sha256": "4efbb63d7754b45a4e5168d747919a707a32770d162cd516724f31a3b4921612",
-      "response_canonical_json": "{\"accepted_at\":\"2026-11-11T19:02:00Z\",\"error\":null,\"execution_key\":\"822015bf1408f7af9fd74d147b7fe6765aa4003730bd514d7264c01ea210055f\",\"finished_at\":null,\"heartbeat_at\":null,\"input_digest\":\"aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a\",\"launch_id\":\"l-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048\",\"native_session_id\":null,\"result_digest\":null,\"started_at\":null,\"state\":\"accepted\",\"state_version\":1}",
+      "canonical_json": "{\"body\":{\"attempt_id\":\"a-1\",\"commitment\":{\"attempt_id\":\"a-1\",\"brief_ref\":\"cas+sha256://code-factory/aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a\",\"commitment_digest\":\"fefb5e5d7887999e0123ebb9bbae94116150941341f2fcb0f1c751861a228b3d\",\"committed_at\":\"2026-11-11T19:01:00Z\",\"input_digest\":\"aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a\",\"input_ref\":\"cas+sha256://code-factory/aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a\",\"kind\":\"worker\",\"launch_id\":\"l-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048\",\"limits\":{\"cpu_millis\":1000,\"memory_bytes\":4294967296,\"pids\":256},\"nonce\":\"6b1f0c9a2d4e7385\",\"project_id\":\"code-factory\",\"round_id\":\"r-17\",\"runtime_digest\":\"be4bd8d671d581f1a49eb9e6ca8fb764ecb6d6ce288f84b16f93f83abb0c8410\",\"schema_version\":\"cf.launch-commitment.v1\",\"supervisor\":{\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"supervisor_id\":\"sup-1\",\"supervisor_kind\":\"resident-foreman\"},\"task_id\":\"CF-1\",\"wave_id\":\"w-1\",\"workspace_ref\":\"cas+sha256://code-factory/85edc4b2f340931dd4b873f4d06edb8252fee8ade465c7e2f95ac49995742c11\"},\"deadline\":\"2026-11-11T21:00:00Z\",\"dispatch_id\":\"d-2ccec62df73e9a889ec12b5c1600e4706d2311d766bfc3a6b07bac986b94fcab\",\"execution_key\":\"add6df27bfc4facef355695078b5e1171eda32325a99263c30b81b9f0fc842fc\",\"input_digest\":\"aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a\",\"input_ref\":\"cas+sha256://code-factory/aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a\",\"kind\":\"worker\",\"launch_id\":\"l-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048\",\"limits\":{\"cpu_millis\":1000,\"memory_bytes\":4294967296,\"pids\":256},\"round_id\":\"r-17\",\"runtime_digest\":\"be4bd8d671d581f1a49eb9e6ca8fb764ecb6d6ce288f84b16f93f83abb0c8410\",\"task_id\":\"CF-1\",\"wave_id\":\"w-1\",\"worker_id\":\"worker-1\",\"workspace_ref\":\"cas+sha256://code-factory/85edc4b2f340931dd4b873f4d06edb8252fee8ade465c7e2f95ac49995742c11\"},\"idempotency_key\":\"launch-a1-key\",\"method\":\"PUT\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"path\":\"/v1/launches/l-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048\",\"project_id\":\"code-factory\",\"request_id\":\"supervise-a1\",\"schema_version\":\"supervisor.v1\"}",
+      "canonical_sha256": "4d8124138ab8507bac885805409e845bcb5f8adc91d15ebc6f8b3dc3249e817a",
+      "response_canonical_json": "{\"accepted_at\":\"2026-11-11T19:02:00Z\",\"commitment_digest\":\"fefb5e5d7887999e0123ebb9bbae94116150941341f2fcb0f1c751861a228b3d\",\"confirmation_digest\":\"093889a3a6f4a61ff1af28d578f1757254446a1c9b3ac15543297097812e6e74\",\"dispatch_id\":\"d-2ccec62df73e9a889ec12b5c1600e4706d2311d766bfc3a6b07bac986b94fcab\",\"error\":null,\"execution_key\":\"add6df27bfc4facef355695078b5e1171eda32325a99263c30b81b9f0fc842fc\",\"finished_at\":null,\"heartbeat_at\":null,\"input_digest\":\"aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a\",\"launch_id\":\"l-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048\",\"native_session_id\":null,\"resolution\":{\"kind\":\"none\",\"reason\":null},\"result_digest\":null,\"started_at\":null,\"state\":\"accepted\",\"state_version\":1}",
       "expected": {
         "http": 201,
-        "execution_key": "822015bf1408f7af9fd74d147b7fe6765aa4003730bd514d7264c01ea210055f",
+        "execution_key": "add6df27bfc4facef355695078b5e1171eda32325a99263c30b81b9f0fc842fc",
+        "dispatch_id": "d-2ccec62df73e9a889ec12b5c1600e4706d2311d766bfc3a6b07bac986b94fcab",
+        "commitment_digest": "fefb5e5d7887999e0123ebb9bbae94116150941341f2fcb0f1c751861a228b3d",
+        "confirmation_digest": "093889a3a6f4a61ff1af28d578f1757254446a1c9b3ac15543297097812e6e74",
         "socket": "$HOME/.local/state/factory/supervisor/control.sock"
       },
-      "persistence": "Launch row and exclusive job directory are durable before the start permit.",
+      "persistence": "Launch commitment, confirmation and the exclusive job directory are durable before the start permit; the confirmation is the first record containing the derived identities.",
       "domain": "supervisor",
       "static_controls": [
-        "SC-05"
+        "SC-05",
+        "SC7-01",
+        "SC-10"
       ]
     },
     {
@@ -909,7 +1033,7 @@
             "wave_id": "w-1",
             "attempt_id": "a-1",
             "task_id": "CF-1",
-            "dispatch_id": "d-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048",
+            "dispatch_id": "d-2ccec62df73e9a889ec12b5c1600e4706d2311d766bfc3a6b07bac986b94fcab",
             "corr_id": "c-17"
           },
           "measurements": {
@@ -936,7 +1060,7 @@
             "wave_id": "w-1",
             "attempt_id": "a-1",
             "task_id": "CF-1",
-            "dispatch_id": "d-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048",
+            "dispatch_id": "d-2ccec62df73e9a889ec12b5c1600e4706d2311d766bfc3a6b07bac986b94fcab",
             "corr_id": "c-17"
           },
           "measurements": {
@@ -963,7 +1087,7 @@
             "wave_id": "w-1",
             "attempt_id": "a-1",
             "task_id": "CF-1",
-            "dispatch_id": "d-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048",
+            "dispatch_id": "d-2ccec62df73e9a889ec12b5c1600e4706d2311d766bfc3a6b07bac986b94fcab",
             "corr_id": "c-17"
           },
           "measurements": {
@@ -990,7 +1114,7 @@
             "wave_id": "w-1",
             "attempt_id": "a-1",
             "task_id": "CF-1",
-            "dispatch_id": "d-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048",
+            "dispatch_id": "d-2ccec62df73e9a889ec12b5c1600e4706d2311d766bfc3a6b07bac986b94fcab",
             "corr_id": "c-17"
           },
           "measurements": {
@@ -1017,7 +1141,7 @@
             "wave_id": "w-1",
             "attempt_id": "a-1",
             "task_id": "CF-1",
-            "dispatch_id": "d-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048",
+            "dispatch_id": "d-2ccec62df73e9a889ec12b5c1600e4706d2311d766bfc3a6b07bac986b94fcab",
             "corr_id": "c-17"
           },
           "measurements": {
@@ -1057,7 +1181,7 @@
         "wave_id": "w-1",
         "attempt_id": "a-1",
         "task_id": "CF-1",
-        "dispatch_id": "d-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048",
+        "dispatch_id": "d-2ccec62df73e9a889ec12b5c1600e4706d2311d766bfc3a6b07bac986b94fcab",
         "corr_id": "c-17"
       },
       "source_observed_at": null,
@@ -1848,6 +1972,1452 @@
       "invariant": "remaining = allowance - consumed - reserved; refusal before admission does not increment consumed.",
       "accounting_mode": "charge-on-start",
       "trace_marker": "ch:trace row=P5G-36 spec=docs/handbook/OUTLINE.md#f11-scheduling-admission wave=none:serial-worker test=docs/handbook/contract-vectors.json::P5G-36-accounting-vector doc=docs/handbook/parts/V-settings.md evidence=docs/handbook/contract-vectors.json witness=none:repository-specification-only verdict=none:foreman-judge commit=none:not-yet-published memory=none:foreman-writes\nSTATUS: complete\nTIER: T1\nEVIDENCE: docs/handbook/contract-vectors.json"
+    },
+    {
+      "id": "CV-16-A",
+      "domain": "supervisor",
+      "static_controls": [
+        "SC7-01",
+        "SC-10"
+      ],
+      "kind": "positive",
+      "name": "LCR-1 cold launch: commitment then confirmation, one pass",
+      "layers": {
+        "l0": {
+          "canonical_json": "{\"attachments\":[],\"criteria\":[{\"argv\":[\"verify\",\"--fixture\"],\"cwd\":\".\",\"description\":\"The admitted change is verified.\",\"expected_exit\":0,\"id\":\"AC-1\",\"oracle_digest\":\"fc360a2ecbbd5eec0f5748b31a5ae732497b5c2ee81ebce4feee6a15acbd7eb8\",\"timeout_s\":60}],\"directive\":\"Complete the admitted board tasks and return evidence.\",\"schema_version\":\"cf.brief-input.v1\",\"skills\":[],\"task\":{\"acceptance_criteria\":[{\"argv\":[\"verify\",\"--fixture\"],\"cwd\":\".\",\"description\":\"The admitted change is verified.\",\"expected_exit\":0,\"id\":\"AC-1\",\"oracle_digest\":\"fc360a2ecbbd5eec0f5748b31a5ae732497b5c2ee81ebce4feee6a15acbd7eb8\",\"timeout_s\":60}],\"cancel_request\":null,\"claim\":{\"claim_generation\":1,\"claim_id\":\"claim-cf1-1\",\"claimant_id\":\"foreman-1\",\"lease_expires_at\":\"2026-11-11T19:03:00Z\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"}},\"completion\":null,\"complexity\":3,\"created_at\":\"2026-11-11T18:00:00Z\",\"created_seq\":1,\"deferral\":null,\"depends_on\":[],\"fixture\":false,\"id\":\"CF-1\",\"initiative_id\":\"initiative-1\",\"kind\":\"task\",\"operation_id\":\"op-claim-cf1\",\"paths\":[\".\"],\"reasoning\":\"A complete vector is required before implementation.\",\"resources\":[],\"revision\":2,\"schema_version\":\"cf.board-task.v1\",\"status\":\"in_progress\",\"title\":\"Prove the execution contract\",\"updated_at\":\"2026-11-11T19:01:00Z\"}}",
+          "input_digest": "aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a",
+          "excluded_derived": [
+            "dispatch_id",
+            "execution_key",
+            "input_digest",
+            "commitment_digest",
+            "confirmation_digest",
+            "signature"
+          ]
+        },
+        "l1_commitment": {
+          "schema_version": "cf.launch-commitment.v1",
+          "launch_id": "l-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048",
+          "nonce": "6b1f0c9a2d4e7385",
+          "project_id": "code-factory",
+          "kind": "worker",
+          "task_id": "CF-1",
+          "wave_id": "w-1",
+          "round_id": "r-17",
+          "attempt_id": "a-1",
+          "supervisor": {
+            "supervisor_id": "sup-1",
+            "supervisor_kind": "resident-foreman",
+            "owner_fence": {
+              "authority_id": "auth-1",
+              "epoch": 7,
+              "owner_id": "manager-1",
+              "project_id": "code-factory"
+            }
+          },
+          "brief_ref": "cas+sha256://code-factory/aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a",
+          "input_digest": "aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a",
+          "input_ref": "cas+sha256://code-factory/aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a",
+          "limits": {
+            "cpu_millis": 1000,
+            "memory_bytes": 4294967296,
+            "pids": 256
+          },
+          "runtime_digest": "be4bd8d671d581f1a49eb9e6ca8fb764ecb6d6ce288f84b16f93f83abb0c8410",
+          "workspace_ref": "cas+sha256://code-factory/85edc4b2f340931dd4b873f4d06edb8252fee8ade465c7e2f95ac49995742c11",
+          "committed_at": "2026-11-11T19:01:00Z",
+          "commitment_digest": "fefb5e5d7887999e0123ebb9bbae94116150941341f2fcb0f1c751861a228b3d"
+        },
+        "l1_commitment_excluded": [
+          "commitment_digest",
+          "signature",
+          "dispatch_id",
+          "execution_key",
+          "confirmation_digest",
+          "launch_input_digest"
+        ],
+        "l1b_confirmation": {
+          "schema_version": "cf.launch-confirmation.v1",
+          "launch_id": "l-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048",
+          "input_digest": "aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a",
+          "commitment_digest": "fefb5e5d7887999e0123ebb9bbae94116150941341f2fcb0f1c751861a228b3d",
+          "execution_key": "add6df27bfc4facef355695078b5e1171eda32325a99263c30b81b9f0fc842fc",
+          "dispatch_id": "d-2ccec62df73e9a889ec12b5c1600e4706d2311d766bfc3a6b07bac986b94fcab",
+          "derivation": {
+            "execution_key": {
+              "tag": "cf.execution-key.v1",
+              "inputs": [
+                "launch_id",
+                "input_digest"
+              ]
+            },
+            "dispatch_id": {
+              "tag": "cf.dispatch-id.v1",
+              "prefix": "d-",
+              "inputs": [
+                "launch_id",
+                "input_digest"
+              ]
+            },
+            "boundary": "neither derivation reads dispatch_id, execution_key, commitment_digest or any confirmation field"
+          },
+          "accepted_at": "2026-11-11T19:02:00Z",
+          "state": "accepted",
+          "state_version": 1,
+          "confirmation_digest": "093889a3a6f4a61ff1af28d578f1757254446a1c9b3ac15543297097812e6e74"
+        },
+        "l1b_confirmation_excluded": [
+          "confirmation_digest",
+          "signature"
+        ],
+        "l2_launch_input": {
+          "schema_version": "cf.launch-input.v1",
+          "launch_id": "l-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048",
+          "commitment": {
+            "schema_version": "cf.launch-commitment.v1",
+            "launch_id": "l-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048",
+            "nonce": "6b1f0c9a2d4e7385",
+            "project_id": "code-factory",
+            "kind": "worker",
+            "task_id": "CF-1",
+            "wave_id": "w-1",
+            "round_id": "r-17",
+            "attempt_id": "a-1",
+            "supervisor": {
+              "supervisor_id": "sup-1",
+              "supervisor_kind": "resident-foreman",
+              "owner_fence": {
+                "authority_id": "auth-1",
+                "epoch": 7,
+                "owner_id": "manager-1",
+                "project_id": "code-factory"
+              }
+            },
+            "brief_ref": "cas+sha256://code-factory/aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a",
+            "input_digest": "aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a",
+            "input_ref": "cas+sha256://code-factory/aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a",
+            "limits": {
+              "cpu_millis": 1000,
+              "memory_bytes": 4294967296,
+              "pids": 256
+            },
+            "runtime_digest": "be4bd8d671d581f1a49eb9e6ca8fb764ecb6d6ce288f84b16f93f83abb0c8410",
+            "workspace_ref": "cas+sha256://code-factory/85edc4b2f340931dd4b873f4d06edb8252fee8ade465c7e2f95ac49995742c11",
+            "committed_at": "2026-11-11T19:01:00Z",
+            "commitment_digest": "fefb5e5d7887999e0123ebb9bbae94116150941341f2fcb0f1c751861a228b3d"
+          },
+          "commitment_digest": "fefb5e5d7887999e0123ebb9bbae94116150941341f2fcb0f1c751861a228b3d",
+          "confirmation_digest": "093889a3a6f4a61ff1af28d578f1757254446a1c9b3ac15543297097812e6e74",
+          "dispatch_id": "d-2ccec62df73e9a889ec12b5c1600e4706d2311d766bfc3a6b07bac986b94fcab",
+          "execution_key": "add6df27bfc4facef355695078b5e1171eda32325a99263c30b81b9f0fc842fc",
+          "input_digest": "aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a",
+          "input_digest_rule": "carried from the commitment; never recomputed over this materialized object",
+          "materialized_at": "2026-11-11T19:02:01Z"
+        }
+      },
+      "derivation": {
+        "execution_key": {
+          "tag": "cf.execution-key.v1",
+          "formula": "H(\"cf.execution-key.v1\" || launch_id || input_digest)",
+          "value": "add6df27bfc4facef355695078b5e1171eda32325a99263c30b81b9f0fc842fc"
+        },
+        "dispatch_id": {
+          "tag": "cf.dispatch-id.v1",
+          "formula": "d- || H(\"cf.dispatch-id.v1\" || launch_id || input_digest)",
+          "value": "d-2ccec62df73e9a889ec12b5c1600e4706d2311d766bfc3a6b07bac986b94fcab"
+        },
+        "reads": [
+          "launch_id",
+          "input_digest"
+        ],
+        "never_reads": [
+          "dispatch_id",
+          "execution_key",
+          "commitment_digest",
+          "confirmation_digest"
+        ]
+      },
+      "expected": {
+        "accepted": true,
+        "commitment_digest": "fefb5e5d7887999e0123ebb9bbae94116150941341f2fcb0f1c751861a228b3d",
+        "confirmation_digest": "093889a3a6f4a61ff1af28d578f1757254446a1c9b3ac15543297097812e6e74",
+        "input_digest": "aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a",
+        "execution_key": "add6df27bfc4facef355695078b5e1171eda32325a99263c30b81b9f0fc842fc",
+        "dispatch_id": "d-2ccec62df73e9a889ec12b5c1600e4706d2311d766bfc3a6b07bac986b94fcab",
+        "cold_passes": 1,
+        "cycle": "none: input_digest covers L0 only and no layer hashes itself"
+      }
+    },
+    {
+      "id": "CV-16-B",
+      "domain": "supervisor",
+      "static_controls": [
+        "SC7-01",
+        "SC-10"
+      ],
+      "kind": "negative",
+      "name": "a changed derived identifier refuses by recomputation, never by rehashing",
+      "base": "CV-16-A",
+      "mutate": {
+        "pointer": "/layers/l1b_confirmation/dispatch_id",
+        "value": "d-0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "expected": {
+        "accepted": false,
+        "refusal": "CONTRACT_INVALID",
+        "detail": "dispatch_id recomputed from launch_id and input_digest differs",
+        "retry_permitted": false,
+        "no_fixed_point_search": "an implementation that recomputes input_digest to match the supplied dispatch_id is non-conforming"
+      }
+    },
+    {
+      "id": "CV-17-A",
+      "domain": "authority",
+      "static_controls": [
+        "SC-11"
+      ],
+      "kind": "positive",
+      "name": "request and replay digests are separate domains",
+      "request": {
+        "schema_version": "cf.crier.request.v1",
+        "message_type": "custody.claim",
+        "request_id": "req-custody-1",
+        "idempotency_key": "custody-lease-1-gen3",
+        "principal": {
+          "principal_id": "node-1",
+          "principal_kind": "node"
+        },
+        "lease": {
+          "lease_id": "lease-1",
+          "node_id": "node-1",
+          "generation": 3
+        },
+        "project_id": "code-factory",
+        "owner_fence": {
+          "authority_id": "auth-1",
+          "epoch": 7,
+          "owner_id": "manager-1",
+          "project_id": "code-factory"
+        },
+        "nonce": "5d0c4a7e91b3f628",
+        "body": {
+          "operation": "claim",
+          "lease": {
+            "lease_id": "lease-1",
+            "node_id": "node-1",
+            "generation": 3
+          }
+        },
+        "issued_at": "2026-11-11T19:05:00Z",
+        "request_digest": "bbf5250d9a7985f9dbf6280f12a0ebcb038e50170d9089898f10aec8a1d736cc",
+        "replay_digest": "7905bb36b85bf1cf6e28e6e042ab80747659a53422f80a3f211a6fe7e42592ce"
+      },
+      "request_excluded": [
+        "request_digest",
+        "replay_digest",
+        "idempotency_key",
+        "signature"
+      ],
+      "request_digest": "bbf5250d9a7985f9dbf6280f12a0ebcb038e50170d9089898f10aec8a1d736cc",
+      "replay_digest": "7905bb36b85bf1cf6e28e6e042ab80747659a53422f80a3f211a6fe7e42592ce",
+      "formulas": {
+        "request_digest": "sha256(JCS(request body without the excluded fields))",
+        "replay_digest": "sha256(message_type || JCS(request body without the excluded fields))"
+      },
+      "expected": {
+        "accepted": true,
+        "request_digest": "bbf5250d9a7985f9dbf6280f12a0ebcb038e50170d9089898f10aec8a1d736cc",
+        "replay_digest": "7905bb36b85bf1cf6e28e6e042ab80747659a53422f80a3f211a6fe7e42592ce",
+        "distinct": true,
+        "readback_records_both": true
+      }
+    },
+    {
+      "id": "CV-17-B",
+      "domain": "authority",
+      "static_controls": [
+        "SC-11"
+      ],
+      "kind": "negative",
+      "name": "a body change under the same idempotency key refuses",
+      "base": "CV-17-A",
+      "mutate": {
+        "pointer": "/request/body/lease/generation",
+        "value": 4
+      },
+      "expected": {
+        "accepted": false,
+        "refusal": "DIGEST_MISMATCH",
+        "detail": "replay_digest recomputed over the changed body differs; the idempotency key does not authorize a different body",
+        "stored_digests_unchanged": true
+      }
+    },
+    {
+      "id": "CV-18-A",
+      "domain": "custody",
+      "static_controls": [
+        "SC-12"
+      ],
+      "kind": "positive",
+      "name": "custody response, receipt and envelope chain",
+      "payload": {
+        "schema_version": "cf.crier.response-payload.v1",
+        "message_type": "custody.claim",
+        "request_id": "req-custody-1",
+        "request_digest": "bbf5250d9a7985f9dbf6280f12a0ebcb038e50170d9089898f10aec8a1d736cc",
+        "replay_digest": "7905bb36b85bf1cf6e28e6e042ab80747659a53422f80a3f211a6fe7e42592ce",
+        "result": {
+          "outcome": "granted",
+          "credential_ref": "cas+sha256://code-factory/9c1e4f0b7d2a6358",
+          "expires_at": "2026-11-11T19:10:00Z",
+          "usage": "single-delivery"
+        }
+      },
+      "response_body_digest": "5df30f1a177f1a97d690a3a8bcc134afda949b5c7893288231139d7748cf5de5",
+      "receipt": {
+        "schema_version": "cf.crier.receipt.v1",
+        "message_type": "custody.claim",
+        "response_body_digest": "5df30f1a177f1a97d690a3a8bcc134afda949b5c7893288231139d7748cf5de5",
+        "lease": {
+          "lease_id": "lease-1",
+          "node_id": "node-1",
+          "generation": 3
+        },
+        "principal": {
+          "principal_id": "node-1",
+          "principal_kind": "node"
+        },
+        "nonce": "5d0c4a7e91b3f628",
+        "delivered_at": "2026-11-11T19:05:01Z",
+        "expires_at": "2026-11-11T19:05:31Z",
+        "ttl_seconds": 30
+      },
+      "receipt_excluded": [
+        "receipt_digest",
+        "signature"
+      ],
+      "receipt_digest": "6d58935d1a6b9ef1815cc59309e074778ab0f528b3780a57f63ba2f0e984cb08",
+      "envelope": {
+        "schema_version": "cf.crier.envelope.v1",
+        "audience": {
+          "node_id": "node-1",
+          "generation": 3,
+          "project_id": "code-factory"
+        },
+        "transport": {
+          "kind": "mtls",
+          "session_id": "sess-7f21"
+        },
+        "signer": {
+          "key_id": "conformance-test-key-1",
+          "public_key_hex": "08ee59b4d1351ee363eb8a0f5cfcdb8fda1bc01dcc94e5f0b5114084d2b754f2",
+          "alg": "ed25519"
+        },
+        "payload": {
+          "schema_version": "cf.crier.response-payload.v1",
+          "message_type": "custody.claim",
+          "request_id": "req-custody-1",
+          "request_digest": "bbf5250d9a7985f9dbf6280f12a0ebcb038e50170d9089898f10aec8a1d736cc",
+          "replay_digest": "7905bb36b85bf1cf6e28e6e042ab80747659a53422f80a3f211a6fe7e42592ce",
+          "result": {
+            "outcome": "granted",
+            "credential_ref": "cas+sha256://code-factory/9c1e4f0b7d2a6358",
+            "expires_at": "2026-11-11T19:10:00Z",
+            "usage": "single-delivery"
+          }
+        },
+        "receipt": {
+          "schema_version": "cf.crier.receipt.v1",
+          "message_type": "custody.claim",
+          "response_body_digest": "5df30f1a177f1a97d690a3a8bcc134afda949b5c7893288231139d7748cf5de5",
+          "lease": {
+            "lease_id": "lease-1",
+            "node_id": "node-1",
+            "generation": 3
+          },
+          "principal": {
+            "principal_id": "node-1",
+            "principal_kind": "node"
+          },
+          "nonce": "5d0c4a7e91b3f628",
+          "delivered_at": "2026-11-11T19:05:01Z",
+          "expires_at": "2026-11-11T19:05:31Z",
+          "ttl_seconds": 30
+        },
+        "receipt_digest": "6d58935d1a6b9ef1815cc59309e074778ab0f528b3780a57f63ba2f0e984cb08",
+        "response_body_digest": "5df30f1a177f1a97d690a3a8bcc134afda949b5c7893288231139d7748cf5de5",
+        "signature": {
+          "alg": "ed25519",
+          "key_id": "conformance-test-key-1",
+          "sig_hex": "290364148da7f8912df14d3905f69d1ea67bd640f48a21707d05ffac9c708431b34deee9175143e156e54be4c0680616eb402ef23d5de26375af90a3b1fd1809",
+          "transcript_sha256": "d6384cef0d6b95375871e39f8b7788c1b4510e0bca45e4bf006bcb83f46bfa13"
+        }
+      },
+      "signature": {
+        "alg": "ed25519",
+        "public_key_hex": "08ee59b4d1351ee363eb8a0f5cfcdb8fda1bc01dcc94e5f0b5114084d2b754f2",
+        "transcript": "{\"audience\":{\"generation\":3,\"node_id\":\"node-1\",\"project_id\":\"code-factory\"},\"receipt_digest\":\"6d58935d1a6b9ef1815cc59309e074778ab0f528b3780a57f63ba2f0e984cb08\",\"response_body_digest\":\"5df30f1a177f1a97d690a3a8bcc134afda949b5c7893288231139d7748cf5de5\",\"schema_version\":\"cf.crier.envelope-signature.v1\",\"transport\":{\"kind\":\"mtls\",\"session_id\":\"sess-7f21\"}}",
+        "transcript_sha256": "d6384cef0d6b95375871e39f8b7788c1b4510e0bca45e4bf006bcb83f46bfa13"
+      },
+      "expected": {
+        "accepted": true,
+        "response_body_digest": "5df30f1a177f1a97d690a3a8bcc134afda949b5c7893288231139d7748cf5de5",
+        "receipt_digest": "6d58935d1a6b9ef1815cc59309e074778ab0f528b3780a57f63ba2f0e984cb08",
+        "signature_valid": true,
+        "response_hash_covers_receipt": false,
+        "credential_value_present": false
+      }
+    },
+    {
+      "id": "CV-18-B",
+      "domain": "custody",
+      "static_controls": [
+        "SC-12"
+      ],
+      "kind": "negative",
+      "name": "a payload mutated after the receipt refuses",
+      "base": "CV-18-A",
+      "mutate": {
+        "pointer": "/payload/result/expires_at",
+        "value": "2026-11-11T19:11:00Z"
+      },
+      "expected": {
+        "accepted": false,
+        "refusal": "DIGEST_MISMATCH",
+        "detail": "recomputed response_body_digest differs from receipt.response_body_digest",
+        "credential_delivered": false
+      }
+    },
+    {
+      "id": "CV-19-A",
+      "domain": "board",
+      "static_controls": [
+        "SC-13"
+      ],
+      "kind": "positive",
+      "name": "canonical group claim with bound and ordering",
+      "group_claim": {
+        "schema_version": "cf.group-claim.v1",
+        "claim_id": "claim-grp-1",
+        "claim_generation": 1,
+        "project_id": "code-factory",
+        "claimant": {
+          "claimant_id": "foreman-1",
+          "owner_fence": {
+            "authority_id": "auth-1",
+            "epoch": 7,
+            "owner_id": "manager-1",
+            "project_id": "code-factory"
+          }
+        },
+        "group": {
+          "max_members": 256,
+          "min_members": 1,
+          "member_count": 3
+        },
+        "ordering": {
+          "field": "task_id",
+          "direction": "ascending",
+          "comparison": "bytewise UTF-8"
+        },
+        "members": [
+          {
+            "task_id": "CF-1",
+            "board_row_revision": 2,
+            "criterion_digest": "4e7e486cd95ba75400b4e7faa54640d2e98a244b7d47d8ec3253c490bbab0dc4"
+          },
+          {
+            "task_id": "CF-2",
+            "board_row_revision": 1,
+            "criterion_digest": "4e7e486cd95ba75400b4e7faa54640d2e98a244b7d47d8ec3253c490bbab0dc4"
+          },
+          {
+            "task_id": "CF-3",
+            "board_row_revision": 4,
+            "criterion_digest": "4e7e486cd95ba75400b4e7faa54640d2e98a244b7d47d8ec3253c490bbab0dc4"
+          }
+        ],
+        "board": {
+          "ref": "refs/heads/main",
+          "base_oid": "1111111111111111111111111111111111111111",
+          "marker_path": ".coding-hermes/board/tasks.jsonl"
+        },
+        "claimed_at_seq": 41,
+        "lease_expires_at": "2026-11-11T19:33:00Z"
+      },
+      "group_claim_digest": "80b87a4dbf8b7ce41ad6b12d722b41701c0625c6119811eb3fa8f2afb59d5388",
+      "expected": {
+        "accepted": true,
+        "member_count": 3,
+        "max_members": 256,
+        "ordering": "ascending bytewise task_id",
+        "gitoid_form": "normal 40-hex, no flag, no abbreviation",
+        "group_claim_digest": "80b87a4dbf8b7ce41ad6b12d722b41701c0625c6119811eb3fa8f2afb59d5388"
+      }
+    },
+    {
+      "id": "CV-19-B",
+      "domain": "board",
+      "static_controls": [
+        "SC-13"
+      ],
+      "kind": "negative",
+      "name": "a 257-member group refuses at the bound",
+      "base": "CV-19-A",
+      "mutate": {
+        "pointer": "/group_claim/members",
+        "op": "repeat-to",
+        "count": 257
+      },
+      "expected": {
+        "accepted": false,
+        "refusal": "GROUP_TOO_LARGE",
+        "detail": "the bound is one value; a wider group is a different record",
+        "claims_written": 0
+      }
+    },
+    {
+      "id": "CV-20-A",
+      "domain": "memory",
+      "static_controls": [
+        "SC-14"
+      ],
+      "kind": "positive",
+      "name": "round summary, memory record, final report and closure form one chain",
+      "round_summary_body": {
+        "schema_version": "cf.round-summary.v1",
+        "project_id": "code-factory",
+        "round_id": "r-17",
+        "run_id": "run-17",
+        "corr_id": "c-17",
+        "owner_fence": {
+          "authority_id": "auth-1",
+          "epoch": 7,
+          "owner_id": "manager-1",
+          "project_id": "code-factory"
+        },
+        "state": "complete",
+        "wave_refs": [
+          {
+            "wave_id": "w-1",
+            "attempt_ids": [
+              "a-1"
+            ],
+            "state": "complete"
+          }
+        ],
+        "budget": {
+          "allowance": 20000,
+          "consumed": 1,
+          "reserved": 0,
+          "remaining": 19999
+        },
+        "stop_reason": "no_useful_work",
+        "evidence_refs": [
+          "cas+sha256://code-factory/ac02e2270feefb35649d9eb0d054f72088c2245561e4eb9b55c491a4090bca99"
+        ],
+        "relations": [
+          {
+            "kind": "covers",
+            "target": "wave:w-1"
+          }
+        ],
+        "created_at": "2026-11-11T19:24:00Z"
+      },
+      "round_summary_excluded": [
+        "round_summary_digest",
+        "memory_ref",
+        "report_digest",
+        "signature"
+      ],
+      "round_summary_digest": "8307e064c4773afc4e1c08f1271a9612e4e47e055ff53628dd80af8b0239803a",
+      "memory_record": {
+        "schema_version": "cf.memory-record.v1",
+        "record_id": "mem-r17-round",
+        "record_type": "round",
+        "domain": "code-factory",
+        "namespace": "factory/code-factory/rounds/r-17",
+        "body_kind": "cf.round-summary.v1",
+        "writer": {
+          "writer_id": "foreman-1",
+          "writer_role": "foreman",
+          "writer_generation": 3,
+          "owner_fence": {
+            "authority_id": "auth-1",
+            "epoch": 7,
+            "owner_id": "manager-1",
+            "project_id": "code-factory"
+          }
+        },
+        "relations": [
+          {
+            "kind": "covers",
+            "target": "wave:w-1"
+          }
+        ],
+        "body": {
+          "schema_version": "cf.round-summary.v1",
+          "project_id": "code-factory",
+          "round_id": "r-17",
+          "run_id": "run-17",
+          "corr_id": "c-17",
+          "owner_fence": {
+            "authority_id": "auth-1",
+            "epoch": 7,
+            "owner_id": "manager-1",
+            "project_id": "code-factory"
+          },
+          "state": "complete",
+          "wave_refs": [
+            {
+              "wave_id": "w-1",
+              "attempt_ids": [
+                "a-1"
+              ],
+              "state": "complete"
+            }
+          ],
+          "budget": {
+            "allowance": 20000,
+            "consumed": 1,
+            "reserved": 0,
+            "remaining": 19999
+          },
+          "stop_reason": "no_useful_work",
+          "evidence_refs": [
+            "cas+sha256://code-factory/ac02e2270feefb35649d9eb0d054f72088c2245561e4eb9b55c491a4090bca99"
+          ],
+          "relations": [
+            {
+              "kind": "covers",
+              "target": "wave:w-1"
+            }
+          ],
+          "created_at": "2026-11-11T19:24:00Z"
+        },
+        "created_at": "2026-11-11T19:24:00Z",
+        "state": "local",
+        "payload_digest": "0956384d160d52cbac30f25fb91c11bac662c715ad3601c20cf6ae95339ff04d",
+        "sync": {
+          "state": "local",
+          "receipt_ref": null,
+          "receipt_digest": null
+        }
+      },
+      "memory_record_excluded": [
+        "payload_digest",
+        "sync",
+        "signature"
+      ],
+      "memory_payload_digest": "0956384d160d52cbac30f25fb91c11bac662c715ad3601c20cf6ae95339ff04d",
+      "final_report": {
+        "budget": {
+          "allowance": 20000,
+          "consumed": 1,
+          "remaining": 19999,
+          "reserved": 0
+        },
+        "corr_id": "c-17",
+        "evidence_refs": [
+          "cas+sha256://code-factory/ac02e2270feefb35649d9eb0d054f72088c2245561e4eb9b55c491a4090bca99"
+        ],
+        "finished_at": "2026-11-11T19:25:00Z",
+        "idempotency_key": "report-r17",
+        "owner_fence": {
+          "authority_id": "auth-1",
+          "epoch": 7,
+          "owner_id": "manager-1",
+          "project_id": "code-factory"
+        },
+        "project_id": "code-factory",
+        "report_digest": "e989fd1f6b5b40f04f40a50e0900f3f5a7a2e2a25b93a7bcd487e6b70402d554",
+        "round_id": "r-17",
+        "round_summary_digest": "8307e064c4773afc4e1c08f1271a9612e4e47e055ff53628dd80af8b0239803a",
+        "run_id": "run-17",
+        "schema_version": "round-report.v1",
+        "status": "pass",
+        "stop_reason": "no_useful_work",
+        "summary_memory_ref": "cas+sha256://code-factory/0956384d160d52cbac30f25fb91c11bac662c715ad3601c20cf6ae95339ff04d",
+        "task_results": [
+          {
+            "attempt_id": "a-1",
+            "result_ref": "cas+sha256://code-factory/ac02e2270feefb35649d9eb0d054f72088c2245561e4eb9b55c491a4090bca99",
+            "status": "pass",
+            "task_id": "CF-1"
+          }
+        ],
+        "waves": [
+          {
+            "attempt_ids": [
+              "a-1"
+            ],
+            "state": "complete",
+            "wave_id": "w-1"
+          }
+        ]
+      },
+      "closure": {
+        "schema_version": "cf.round-closure.v1",
+        "round_id": "r-17",
+        "run_id": "run-17",
+        "report_digest": "e989fd1f6b5b40f04f40a50e0900f3f5a7a2e2a25b93a7bcd487e6b70402d554",
+        "report_ref": "cas+sha256://code-factory/e989fd1f6b5b40f04f40a50e0900f3f5a7a2e2a25b93a7bcd487e6b70402d554",
+        "round_summary_digest": "8307e064c4773afc4e1c08f1271a9612e4e47e055ff53628dd80af8b0239803a",
+        "summary_memory_ref": "cas+sha256://code-factory/0956384d160d52cbac30f25fb91c11bac662c715ad3601c20cf6ae95339ff04d",
+        "closed_at": "2026-11-11T19:25:30Z",
+        "note": "L2 convergence witness: references both lower layers, is referenced by neither"
+      },
+      "expected": {
+        "accepted": true,
+        "round_summary_digest": "8307e064c4773afc4e1c08f1271a9612e4e47e055ff53628dd80af8b0239803a",
+        "memory_payload_digest": "0956384d160d52cbac30f25fb91c11bac662c715ad3601c20cf6ae95339ff04d",
+        "report_digest": "e989fd1f6b5b40f04f40a50e0900f3f5a7a2e2a25b93a7bcd487e6b70402d554",
+        "summary_contains_report_digest": false,
+        "summary_contains_own_memory_ref": false,
+        "report_contains_summary_digest": true
+      }
+    },
+    {
+      "id": "CV-20-B",
+      "domain": "memory",
+      "static_controls": [
+        "SC-14"
+      ],
+      "kind": "negative",
+      "name": "a round summary naming the final report refuses",
+      "base": "CV-20-A",
+      "mutate": {
+        "pointer": "/round_summary_body/report_digest",
+        "value": "e989fd1f6b5b40f04f40a50e0900f3f5a7a2e2a25b93a7bcd487e6b70402d554"
+      },
+      "expected": {
+        "accepted": false,
+        "refusal": "CONTRACT_INVALID",
+        "detail": "a lower layer may not include the digest of a higher layer",
+        "memory_written": false
+      }
+    },
+    {
+      "id": "CV-20-C",
+      "domain": "memory",
+      "static_controls": [
+        "SC-14"
+      ],
+      "kind": "positive",
+      "name": "human labels import losslessly into the canonical envelope",
+      "labels": {
+        "writer_identity": "writer.writer_id",
+        "worker-outcome": "record_type=worker",
+        "wave-summary": "record_type=wave",
+        "round-summary": "record_type=round"
+      },
+      "record": {
+        "schema_version": "cf.memory-record.v1",
+        "record_id": "mem-r17-round",
+        "record_type": "round",
+        "domain": "code-factory",
+        "namespace": "factory/code-factory/rounds/r-17",
+        "body_kind": "cf.round-summary.v1",
+        "writer": {
+          "writer_id": "foreman-1",
+          "writer_role": "foreman",
+          "writer_generation": 3,
+          "owner_fence": {
+            "authority_id": "auth-1",
+            "epoch": 7,
+            "owner_id": "manager-1",
+            "project_id": "code-factory"
+          }
+        },
+        "relations": [
+          {
+            "kind": "covers",
+            "target": "wave:w-1"
+          }
+        ],
+        "body": {
+          "schema_version": "cf.round-summary.v1",
+          "project_id": "code-factory",
+          "round_id": "r-17",
+          "run_id": "run-17",
+          "corr_id": "c-17",
+          "owner_fence": {
+            "authority_id": "auth-1",
+            "epoch": 7,
+            "owner_id": "manager-1",
+            "project_id": "code-factory"
+          },
+          "state": "complete",
+          "wave_refs": [
+            {
+              "wave_id": "w-1",
+              "attempt_ids": [
+                "a-1"
+              ],
+              "state": "complete"
+            }
+          ],
+          "budget": {
+            "allowance": 20000,
+            "consumed": 1,
+            "reserved": 0,
+            "remaining": 19999
+          },
+          "stop_reason": "no_useful_work",
+          "evidence_refs": [
+            "cas+sha256://code-factory/ac02e2270feefb35649d9eb0d054f72088c2245561e4eb9b55c491a4090bca99"
+          ],
+          "relations": [
+            {
+              "kind": "covers",
+              "target": "wave:w-1"
+            }
+          ],
+          "created_at": "2026-11-11T19:24:00Z"
+        },
+        "created_at": "2026-11-11T19:24:00Z",
+        "state": "local",
+        "payload_digest": "0956384d160d52cbac30f25fb91c11bac662c715ad3601c20cf6ae95339ff04d",
+        "sync": {
+          "state": "local",
+          "receipt_ref": null,
+          "receipt_digest": null
+        }
+      },
+      "expected": {
+        "accepted": true,
+        "record_type": "round",
+        "writer_role": "foreman",
+        "lossless": true,
+        "canonical_field_renamed": false
+      }
+    },
+    {
+      "id": "CV-21-A",
+      "domain": "settlement",
+      "static_controls": [
+        "SC-15"
+      ],
+      "kind": "positive",
+      "name": "every launch journal state projects to exactly one response state",
+      "table": [
+        {
+          "journal": "RESERVED",
+          "response_state": "accepted",
+          "resolution": "none"
+        },
+        {
+          "journal": "START_INTENT without native proof",
+          "response_state": "unknown",
+          "resolution": "quarantined"
+        },
+        {
+          "journal": "STARTED",
+          "response_state": "running",
+          "resolution": "none"
+        },
+        {
+          "journal": "RUNNING",
+          "response_state": "running",
+          "resolution": "none"
+        },
+        {
+          "journal": "TERMINAL succeeded with result_digest",
+          "response_state": "succeeded",
+          "resolution": "none"
+        },
+        {
+          "journal": "TERMINAL failed",
+          "response_state": "failed",
+          "resolution": "none"
+        },
+        {
+          "journal": "TERMINAL cancelled before start",
+          "response_state": "cancelled",
+          "resolution": "none"
+        },
+        {
+          "journal": "TERMINAL cancelled after quiescence",
+          "response_state": "cancelled",
+          "resolution": "none"
+        },
+        {
+          "journal": "EXPIRED at the admission deadline",
+          "response_state": "expired",
+          "resolution": "none"
+        },
+        {
+          "journal": "unreadable or conflicting journal",
+          "response_state": "unknown",
+          "resolution": "quarantined"
+        }
+      ],
+      "expected": {
+        "accepted": true,
+        "rows": 10,
+        "unmapped_journal_states": 0,
+        "coerced_to_neighbour": 0,
+        "states": [
+          "accepted",
+          "running",
+          "succeeded",
+          "failed",
+          "cancelled",
+          "expired",
+          "unknown"
+        ]
+      }
+    },
+    {
+      "id": "CV-21-B",
+      "domain": "settlement",
+      "static_controls": [
+        "SC-16"
+      ],
+      "kind": "positive",
+      "name": "the outcome lattice is total over task, wave and round outcomes",
+      "rows": [
+        {
+          "outcome": "settled_success",
+          "condition": "all members verified",
+          "counts": {
+            "verified": 2,
+            "unverified": 0,
+            "failed": 0,
+            "cancelled": 0,
+            "expired": 0,
+            "unknown": 0
+          }
+        },
+        {
+          "outcome": "settled_failure",
+          "condition": "any member failed",
+          "counts": {
+            "verified": 1,
+            "unverified": 0,
+            "failed": 1,
+            "cancelled": 0,
+            "expired": 0,
+            "unknown": 0
+          }
+        },
+        {
+          "outcome": "settled_partial",
+          "condition": "verified and unverified members together",
+          "counts": {
+            "verified": 1,
+            "unverified": 1,
+            "failed": 0,
+            "cancelled": 0,
+            "expired": 0,
+            "unknown": 0
+          }
+        },
+        {
+          "outcome": "settled_unverified",
+          "condition": "every member unverified",
+          "counts": {
+            "verified": 0,
+            "unverified": 2,
+            "failed": 0,
+            "cancelled": 0,
+            "expired": 0,
+            "unknown": 0
+          }
+        },
+        {
+          "outcome": "settled_empty",
+          "condition": "zero members or zero budget",
+          "counts": {
+            "verified": 0,
+            "unverified": 0,
+            "failed": 0,
+            "cancelled": 0,
+            "expired": 0,
+            "unknown": 0
+          }
+        },
+        {
+          "outcome": "settled_cancelled",
+          "condition": "cancellation applied before terminal",
+          "counts": {
+            "verified": 1,
+            "unverified": 0,
+            "failed": 0,
+            "cancelled": 2,
+            "expired": 0,
+            "unknown": 0
+          }
+        },
+        {
+          "outcome": "settled_expired",
+          "condition": "admission deadline passed unstarted",
+          "counts": {
+            "verified": 0,
+            "unverified": 0,
+            "failed": 0,
+            "cancelled": 0,
+            "expired": 1,
+            "unknown": 0
+          }
+        },
+        {
+          "outcome": "settled_unknown",
+          "condition": "control state unresolvable",
+          "counts": {
+            "verified": 0,
+            "unverified": 0,
+            "failed": 0,
+            "cancelled": 0,
+            "expired": 0,
+            "unknown": 1
+          }
+        },
+        {
+          "outcome": "settled_verified_then_reopened",
+          "condition": "late evidence revision arrives after settlement",
+          "counts": {
+            "verified": 1,
+            "unverified": 0,
+            "failed": 0,
+            "cancelled": 0,
+            "expired": 0,
+            "unknown": 0
+          }
+        }
+      ],
+      "expected": {
+        "accepted": true,
+        "rows": 9,
+        "gaps": 0,
+        "success_counter_without_verified_evidence": 0,
+        "fresh_execution_for_unverified": false,
+        "settlement_immutable_under_late_evidence": true
+      }
+    },
+    {
+      "id": "CV-22-A",
+      "domain": "execution",
+      "static_controls": [
+        "SC-17"
+      ],
+      "kind": "positive",
+      "name": "cancellation is phase-discriminated and idempotent",
+      "phases": {
+        "prestart": {
+          "schema_version": "cf.cancellation.v1",
+          "cancellation_id": "can-a1-prestart",
+          "launch_id": "l-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048",
+          "requested_phase": "prestart",
+          "request": {
+            "requested_at": "2026-11-11T19:02:00Z",
+            "requested_by": "manager-1",
+            "reason": "operator withdrew the launch before the start permit"
+          },
+          "applied": {
+            "applied_at": "2026-11-11T19:02:00Z",
+            "applied_phase": "prestart",
+            "journal_state_before": "RESERVED",
+            "journal_state_after": "CANCELLED",
+            "terminal_effect": "cancelled_before_start",
+            "permit_consumed": false
+          },
+          "signal": {
+            "kind": null,
+            "sent_at": null,
+            "quiescence_at": null
+          },
+          "evidence_refs": []
+        },
+        "running": {
+          "schema_version": "cf.cancellation.v1",
+          "cancellation_id": "can-a1-running",
+          "launch_id": "l-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048",
+          "requested_phase": "running",
+          "request": {
+            "requested_at": "2026-11-11T19:10:00Z",
+            "requested_by": "manager-1",
+            "reason": "round deadline reached"
+          },
+          "applied": {
+            "applied_at": "2026-11-11T19:11:30Z",
+            "applied_phase": "running",
+            "journal_state_before": "RUNNING",
+            "journal_state_after": "CANCELLED",
+            "terminal_effect": "signalled_quiesced",
+            "permit_consumed": true
+          },
+          "signal": {
+            "kind": "SIGTERM",
+            "sent_at": "2026-11-11T19:10:01Z",
+            "quiescence_at": "2026-11-11T19:11:30Z"
+          },
+          "evidence_refs": [
+            "cas+sha256://code-factory/86f6b067fe92956e41ce029cd6e54fa2ad590639940f44f55619b9bc7356ffdc"
+          ]
+        },
+        "terminal": {
+          "schema_version": "cf.cancellation.v1",
+          "cancellation_id": "can-a1-terminal",
+          "launch_id": "l-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048",
+          "requested_phase": "terminal",
+          "request": {
+            "requested_at": "2026-11-11T19:30:00Z",
+            "requested_by": "manager-1",
+            "reason": "operator clicked cancel after completion"
+          },
+          "applied": {
+            "applied_at": "2026-11-11T19:30:00Z",
+            "applied_phase": "terminal",
+            "journal_state_before": "SUCCEEDED",
+            "journal_state_after": "SUCCEEDED",
+            "terminal_effect": "already_terminal",
+            "permit_consumed": true
+          },
+          "signal": {
+            "kind": null,
+            "sent_at": null,
+            "quiescence_at": null
+          },
+          "evidence_refs": []
+        }
+      },
+      "expected": {
+        "accepted": true,
+        "phases": [
+          "pre_admission",
+          "prestart",
+          "running",
+          "terminal"
+        ],
+        "terminal_effect_by_phase": {
+          "pre_admission": "refused_no_launch",
+          "prestart": "cancelled_before_start",
+          "running": "signalled_quiesced",
+          "terminal": "already_terminal"
+        },
+        "repeat_in_same_phase": "idempotent, same cancellation_digest",
+        "state_change_after_terminal": false,
+        "success_recorded_for_cancelled_launch": false
+      }
+    },
+    {
+      "id": "CV-23-A",
+      "domain": "enrollment",
+      "static_controls": [
+        "SC-19"
+      ],
+      "kind": "positive",
+      "name": "enrollment request identity exists before crier allocates the node",
+      "request": {
+        "schema_version": "cf.enrollment-request.v1",
+        "registration_id": "reg-3c11c83a5acd1e1a15999e344ad8c6a1b6afc7f15c40235fd2c2a9ccb19a89ad",
+        "principal": {
+          "principal_id": "node-9",
+          "principal_kind": "node"
+        },
+        "project_id": "code-factory",
+        "expected_generation": 0,
+        "nonce": "a71f3c0d9b2e5486",
+        "requested_at": "2026-11-11T18:40:00Z",
+        "request_digest": "f7ec54713c68545dd6857a50a4042f9a41d38ea9a3d9335a5501f3d9bded1648"
+      },
+      "response": {
+        "schema_version": "cf.enrollment-response.v1",
+        "registration_id": "reg-3c11c83a5acd1e1a15999e344ad8c6a1b6afc7f15c40235fd2c2a9ccb19a89ad",
+        "request_digest": "f7ec54713c68545dd6857a50a4042f9a41d38ea9a3d9335a5501f3d9bded1648",
+        "node_id": "node-9",
+        "registration_generation": 1,
+        "grant_ref": "cas+sha256://code-factory/9fb3687aa7ffce4d38e78110cd5d7c73ece5af1e06b413d845c34ab45f3bb586",
+        "accepted_at": "2026-11-11T18:40:02Z"
+      },
+      "expected": {
+        "accepted": true,
+        "registration_id_preallocated": true,
+        "node_id_in_request_digest": false,
+        "duplicate_before_cas": "same registration_id and request_digest returns the same grant",
+        "replay": "expected_generation 0 replayed returns the original response, not a second grant"
+      }
+    },
+    {
+      "id": "CV-24-A",
+      "domain": "configuration",
+      "static_controls": [
+        "SC-20"
+      ],
+      "kind": "positive",
+      "name": "configuration generation with explicit origins",
+      "document": {
+        "schema_version": "cf.config.v1",
+        "generation": 17,
+        "project_id": "code-factory",
+        "scope": "project",
+        "settings": {
+          "max_concurrent": 4,
+          "load_gate": 12,
+          "round_budget": 20000,
+          "attempt_timeout_s": 1800,
+          "turn_timeout_s": 300,
+          "credential_ttl_s": 300,
+          "claim_lease_s": 1800,
+          "group_max_members": 256
+        },
+        "enums": {
+          "admission_mode": "tasks",
+          "lane_kind": "foreman"
+        },
+        "origins": {
+          "settings.max_concurrent": "explicit",
+          "settings.load_gate": "explicit",
+          "settings.group_max_members": "default"
+        },
+        "updated_at": "2026-11-11T18:30:00Z",
+        "updated_by": "owner-1"
+      },
+      "config_digest": "67e64205bd31b8d38eaae619e7299551dd85d1f93eadec32ac80bbb96e23ea8d",
+      "expected": {
+        "accepted": true,
+        "generation": 17,
+        "settings_without_origin": 0,
+        "unknown_enum_falls_back_to_default": false,
+        "config_digest": "67e64205bd31b8d38eaae619e7299551dd85d1f93eadec32ac80bbb96e23ea8d"
+      }
+    },
+    {
+      "id": "CV-25-A",
+      "domain": "evidence",
+      "static_controls": [
+        "SC-13",
+        "SC-18"
+      ],
+      "kind": "positive",
+      "name": "phase-discriminated evidence chain",
+      "chain": [
+        {
+          "schema_version": "cf.evidence.v1",
+          "evidence_id": "ev-cf1-staged-1",
+          "phase": "staged",
+          "task_id": "CF-1",
+          "claim": {
+            "claim_id": "claim-cf1-1",
+            "claim_generation": 1
+          },
+          "subject": {
+            "base_oid": "1111111111111111111111111111111111111111",
+            "commit_oid": null,
+            "tree_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+            "policy_ref": "cas+sha256://code-factory/policy/pre-commit-v1"
+          },
+          "criterion_results": [
+            {
+              "criterion_id": "AC-1",
+              "criterion_digest": "4e7e486cd95ba75400b4e7faa54640d2e98a244b7d47d8ec3253c490bbab0dc4",
+              "argv": [
+                "verify",
+                "--fixture"
+              ],
+              "exit_code": 0,
+              "expected_exit": 0,
+              "result": "pass"
+            }
+          ],
+          "verdict": {
+            "kind": "pass",
+            "reason": "precommit battery green on the staged tree"
+          },
+          "observed_at": "2026-11-11T19:10:00Z"
+        },
+        {
+          "schema_version": "cf.evidence.v1",
+          "evidence_id": "ev-cf1-source-1",
+          "phase": "source",
+          "task_id": "CF-1",
+          "claim": {
+            "claim_id": "claim-cf1-1",
+            "claim_generation": 1
+          },
+          "subject": {
+            "base_oid": "1111111111111111111111111111111111111111",
+            "commit_oid": "2222222222222222222222222222222222222222",
+            "tree_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "criterion_results": [
+            {
+              "criterion_id": "AC-1",
+              "criterion_digest": "4e7e486cd95ba75400b4e7faa54640d2e98a244b7d47d8ec3253c490bbab0dc4",
+              "argv": [
+                "verify",
+                "--fixture"
+              ],
+              "exit_code": 0,
+              "expected_exit": 0,
+              "result": "pass"
+            }
+          ],
+          "verdict": {
+            "kind": "pass",
+            "reason": "source judgment on the committed tree"
+          },
+          "actor": {
+            "actor_id": "judge-1",
+            "actor_kind": "gitreins-tier2"
+          },
+          "observed_at": "2026-11-11T19:20:00Z"
+        },
+        {
+          "schema_version": "cf.evidence.v1",
+          "evidence_id": "ev-cf1-integrated-1",
+          "phase": "integrated",
+          "task_id": "CF-1",
+          "claim": {
+            "claim_id": "claim-cf1-1",
+            "claim_generation": 1
+          },
+          "subject": {
+            "base_oid": "1111111111111111111111111111111111111111",
+            "commit_oid": "2222222222222222222222222222222222222222",
+            "integrated_oid": "3333333333333333333333333333333333333333",
+            "tree_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "criterion_results": [
+            {
+              "criterion_id": "AC-1",
+              "criterion_digest": "4e7e486cd95ba75400b4e7faa54640d2e98a244b7d47d8ec3253c490bbab0dc4",
+              "argv": [
+                "verify",
+                "--fixture"
+              ],
+              "exit_code": 0,
+              "expected_exit": 0,
+              "result": "pass"
+            }
+          ],
+          "verdict": {
+            "kind": "pass",
+            "reason": "post-merge re-run green at the integrated tree"
+          },
+          "actor": {
+            "actor_id": "judge-1",
+            "actor_kind": "gitreins-tier2"
+          },
+          "observed_at": "2026-11-11T19:26:00Z"
+        },
+        {
+          "schema_version": "cf.evidence.v1",
+          "evidence_id": "ev-cf1-publication-1",
+          "phase": "publication",
+          "task_id": "CF-1",
+          "claim": {
+            "claim_id": "claim-cf1-1",
+            "claim_generation": 1
+          },
+          "subject": {
+            "accepted_object": {
+              "commit_oid": "3333333333333333333333333333333333333333",
+              "tree_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+            },
+            "observed_tip": "4444444444444444444444444444444444444444",
+            "ref": "refs/heads/main"
+          },
+          "ancestry": {
+            "accepted_is_ancestor_of_tip": true,
+            "judged_by": "merge-base --is-ancestor"
+          },
+          "decision": {
+            "kind": "permitted",
+            "rule": "accepted object is an ancestor of the observed tip"
+          },
+          "verdict": {
+            "kind": "pass",
+            "reason": "publication accepted; later tips do not relabel accepted bytes"
+          },
+          "observed_at": "2026-11-11T19:27:00Z"
+        },
+        {
+          "schema_version": "cf.evidence.v1",
+          "evidence_id": "ev-cf1-closure-1",
+          "phase": "closure",
+          "task_id": "CF-1",
+          "claim": {
+            "claim_id": "claim-cf1-1",
+            "claim_generation": 1
+          },
+          "subject": {
+            "accepted_object": {
+              "commit_oid": "3333333333333333333333333333333333333333",
+              "tree_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+            },
+            "closure_commit": "5555555555555555555555555555555555555555"
+          },
+          "evidence_refs": [
+            "cas+sha256://code-factory/91cb72da63670de156eb6fdb12dce89d7f25a6e4e0a24b6f0df54391777e640f"
+          ],
+          "verdict": {
+            "kind": "pass",
+            "reason": "closure cites the publication record that permitted it"
+          },
+          "observed_at": "2026-11-11T19:28:00Z"
+        }
+      ],
+      "expected": {
+        "accepted": true,
+        "phases": [
+          "staged",
+          "source",
+          "integrated",
+          "publication",
+          "closure"
+        ],
+        "staged_names_commit": false,
+        "publication_binds_accepted_object": true,
+        "tip_advance_relabels_accepted_bytes": false,
+        "closure_cites_publication": true
+      }
+    },
+    {
+      "id": "CV-25-B",
+      "domain": "evidence",
+      "static_controls": [
+        "SC-18"
+      ],
+      "kind": "negative",
+      "name": "a staged record naming a commit refuses",
+      "base": "CV-25-A",
+      "mutate": {
+        "pointer": "/chain/0/subject/commit_oid",
+        "value": "2222222222222222222222222222222222222222"
+      },
+      "expected": {
+        "accepted": false,
+        "refusal": "PHASE_INVALID",
+        "detail": "staged evidence that names a commit is a different phase record",
+        "written_records": 0
+      }
+    },
+    {
+      "id": "CV-17-C",
+      "domain": "authority",
+      "static_controls": [
+        "SC-11"
+      ],
+      "kind": "positive",
+      "name": "one named formula may serve both digests when it is declared",
+      "pairing": {
+        "kind": "shared",
+        "formula": "cf.request-digest.v1",
+        "covers": [
+          "request_digest",
+          "replay_digest"
+        ],
+        "rule": "an operation that uses one value for both names the formula and every consumer records the pairing; the default remains two named values"
+      },
+      "request_digest": "bbf5250d9a7985f9dbf6280f12a0ebcb038e50170d9089898f10aec8a1d736cc",
+      "replay_digest": "bbf5250d9a7985f9dbf6280f12a0ebcb038e50170d9089898f10aec8a1d736cc",
+      "expected": {
+        "accepted": true,
+        "pairing_recorded": true,
+        "consumer_may_assume_split": false
+      }
     }
   ],
   "fault_matrix": [
@@ -2146,6 +3716,125 @@
         "CV-09-A"
       ],
       "status": "pass"
+    },
+    "SC-10": {
+      "case": "LCR-1 layer contract: every domain declares its excluded derived fields and no record hashes itself",
+      "positive_vector": "CV-16-A",
+      "vector_ids": [
+        "CV-16-A",
+        "CV-16-B"
+      ],
+      "status": "pass",
+      "added_by": "CF2A-01 pass-7 wave 1"
+    },
+    "SC-11": {
+      "case": "Request and replay digests are separate named domains with one excluded-field list",
+      "positive_vector": "CV-17-A",
+      "vector_ids": [
+        "CV-17-A",
+        "CV-17-B",
+        "CV-17-C"
+      ],
+      "status": "pass",
+      "added_by": "CF2A-01 pass-7 wave 1"
+    },
+    "SC-12": {
+      "case": "Custody payload, receipt and envelope are three objects with three digests",
+      "positive_vector": "CV-18-A",
+      "vector_ids": [
+        "CV-18-A",
+        "CV-18-B"
+      ],
+      "status": "pass",
+      "added_by": "CF2A-01 pass-7 wave 1"
+    },
+    "SC-13": {
+      "case": "Group claim has one member bound, one ordering and one GitOID form",
+      "positive_vector": "CV-19-A",
+      "vector_ids": [
+        "CV-19-A",
+        "CV-19-B",
+        "CV-25-A"
+      ],
+      "status": "pass",
+      "added_by": "CF2A-01 pass-7 wave 1"
+    },
+    "SC-14": {
+      "case": "One role-discriminated memory envelope; labels import losslessly",
+      "positive_vector": "CV-20-A",
+      "vector_ids": [
+        "CV-20-A",
+        "CV-20-B",
+        "CV-20-C"
+      ],
+      "status": "pass",
+      "added_by": "CF2A-01 pass-7 wave 1"
+    },
+    "SC-15": {
+      "case": "Every launch journal state projects to exactly one response state",
+      "positive_vector": "CV-21-A",
+      "vector_ids": [
+        "CV-21-A"
+      ],
+      "status": "pass",
+      "added_by": "CF2A-01 pass-7 wave 1"
+    },
+    "SC-16": {
+      "case": "The settlement lattice is total, including uniformly unverified and zero-budget rounds",
+      "positive_vector": "CV-21-B",
+      "vector_ids": [
+        "CV-21-B"
+      ],
+      "status": "pass",
+      "added_by": "CF2A-01 pass-7 wave 1"
+    },
+    "SC-17": {
+      "case": "Cancellation is phase-discriminated, idempotent and terminal-safe",
+      "positive_vector": "CV-22-A",
+      "vector_ids": [
+        "CV-22-A"
+      ],
+      "status": "pass",
+      "added_by": "CF2A-01 pass-7 wave 1"
+    },
+    "SC-18": {
+      "case": "Evidence records carry one phase discriminator and a phase-specific subject",
+      "positive_vector": "CV-25-A",
+      "vector_ids": [
+        "CV-25-A",
+        "CV-25-B"
+      ],
+      "status": "pass",
+      "added_by": "CF2A-01 pass-7 wave 1"
+    },
+    "SC-19": {
+      "case": "Enrolment identities are allocated before the request digest exists",
+      "positive_vector": "CV-23-A",
+      "vector_ids": [
+        "CV-23-A"
+      ],
+      "status": "pass",
+      "added_by": "CF2A-01 pass-7 wave 1"
+    },
+    "SC-20": {
+      "case": "Configuration documents carry a generation and an explicit origin per setting",
+      "positive_vector": "CV-24-A",
+      "vector_ids": [
+        "CV-24-A"
+      ],
+      "status": "pass",
+      "added_by": "CF2A-01 pass-7 wave 1"
+    },
+    "SC7-01": {
+      "case": "The launch identity graph is acyclic: cold CT-02 then CT-05 completes in one pass",
+      "positive_vector": "CV-16-A",
+      "vector_ids": [
+        "CV-16-A",
+        "CV-16-B",
+        "CV-02-A"
+      ],
+      "status": "pass",
+      "source": "PASS7-PLAN.md 3.9"
     }
   },
   "finding_coverage": {
@@ -2281,4 +3970,38 @@
       "non_applicability": "Wave 4 binds the commit, build and readback evidence; a fixture cannot supply those future artifacts."
     }
   }
-}
+,
+  "conformance_bundle": {
+    "path": "docs/handbook/conformance/manifest.json",
+    "bundle_version": "1.0.0",
+    "rule": "the bundle points at this file and does not restate it; this file names the bundle path and version but never its digest, so the manifest can pin this file without a cycle",
+    "schemas": "docs/handbook/conformance/schemas/",
+    "fixtures": "docs/handbook/conformance/fixtures/",
+    "vectors_added_by_wave_1": [
+      "CV-16-A",
+      "CV-16-B",
+      "CV-17-A",
+      "CV-17-B",
+      "CV-17-C",
+      "CV-18-A",
+      "CV-18-B",
+      "CV-19-A",
+      "CV-19-B",
+      "CV-20-A",
+      "CV-20-B",
+      "CV-20-C",
+      "CV-21-A",
+      "CV-21-B",
+      "CV-22-A",
+      "CV-23-A",
+      "CV-24-A",
+      "CV-25-A",
+      "CV-25-B"
+    ],
+    "self_check": {
+      "runner": "python3 - <this file's runner program>",
+      "documented_in": "docs/handbook/conformance/README.md",
+      "note": "no scripts/validate_contracts.py exists in this repository; the check the plan asks for is published as executable cases in the bundle manifest"
+    }
+  }}
+

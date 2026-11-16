@@ -1815,26 +1815,59 @@ execution_contracts:
         completion: Completion-or-null
       ordering: ascending (created_seq,id) after dependency and correction eligibility; lane priority is not a task field.
       correction: A correction retains the same task, claim and original worker until terminal disposition; it never waits behind its own new claim.
-    GroupClaimRequest:
-      schema_version: cf.board-group-claim.v1
-      writer: foreman
+    GroupClaim:
+      schema_version: cf.group-claim.v1
+      writer: claimant
       fields:
-        operation_id: ID
-        idempotency_key: ID
+        claim_id: ID
+        claim_generation: PosInt
         project_id: ID
         board_id: ID
-        board_revision: GitOID
-        owner_fence: Fence
-        ordering: string
-        claims: ClaimPrecondition-array
+        claimant: {claimant_id: ID, owner_fence: Fence}
+        group: {max_members: 256, min_members: UInt, member_count: UInt}
+        ordering: {field: task_id, direction: ascending, comparison: 'bytewise UTF-8'}
+        members: Member-array 1..256
+        board: {ref: Text, base_oid: GitOID, marker_path: Text}
+        claimed_at_seq: UInt
         lease_expires_at: Time
-        transition: 'claim|renew|release'
-        evidence_refs: EvidenceRef-array
-      claim_precondition: {task_id: ID, created_seq: PosInt, expected_revision: UInt, expected_status: 'pending|in_progress', claim_generation: UInt}
+      member: {task_id: ID, board_row_revision: UInt, criterion_digest: SHA}
+      bound: One value, 256, enforced by the schema. A wider group is a different record, not a larger claim.
+      ordering_rule: Members are ascending by task_id, compared bytewise over UTF-8; the ordering is data, not something a reader infers from array position.
+      gitoid_rule: base_oid is a normal object id, 40 or 64 lowercase hex; no abbreviation and no algorithm flag.
+      consistency: member_count must equal the number of members; a claim that disagrees with itself is refused.
       atomicity: One protected old-OID to candidate-OID CAS commits every row, event and operation marker or none.
       loser: CLAIM_CONFLICT returns current board_revision and changed task ids; no partial wave launches.
       commit_point: Remote marker, row and event readback precedes native start.
       lease: Broker monotonic 120 seconds, renewed every 40 seconds; requested expiry is only an upper bound.
+    Criterion:
+      schema_version: cf.criterion.v1
+      fields: {id: ID, description: Text, argv: string-array 1..64, cwd: Text, expected_exit: integer 0..255, timeout_s: integer 1..86400, oracle_digest: SHA}
+      executable_projection: id, argv, cwd, expected_exit, timeout_s, oracle_digest
+      storage_projection: the same six fields as board-row columns, copied verbatim
+      display_projection: id and description only
+      rules: argv is a program plus arguments and never a shell string; an empty argv is refused; a missing argv, cwd or expected_exit is a typed refusal rather than a default; legacy text and verification fields are migration evidence and are never executed.
+      adapter: Board row acceptance_criteria to BriefInput task.acceptance_criteria is a lossless field copy.
+    EvidenceRecord:
+      schema_version: cf.evidence.v1
+      discriminated_by: phase
+      fields: {evidence_id: ID, phase: 'staged|source|integrated|publication|closure', task_id: ID, claim: {claim_id: ID, claim_generation: PosInt}, subject: object, criterion_results: object-array, evidence_refs: EvidenceRef-array, verdict: {kind: 'pass|fail|unverified', reason: string-or-null}, actor: {actor_id: ID, actor_kind: Text}, observed_at: Time}
+      subjects:
+        staged: {base_oid: GitOID, commit_oid: null, tree_digest: SHA, policy_ref: EvidenceRef}
+        source: {base_oid: GitOID, commit_oid: GitOID, tree_digest: SHA}
+        integrated: {base_oid: GitOID, commit_oid: GitOID, integrated_oid: GitOID, tree_digest: SHA}
+        publication: {accepted_object: {commit_oid: GitOID, tree_digest: SHA}, observed_tip: GitOID, ref: Text}
+        closure: {accepted_object: {commit_oid: GitOID, tree_digest: SHA}, closure_commit: GitOID}
+      staged_rule: A staged record never names a commit; an implementation that already committed is writing a source record.
+      publication_rule: Publication binds the accepted object by digest; the observed tip may advance and only ancestry is re-judged. Rewriting accepted_object to the new tip is PUBLICATION_DRIFT.
+      fields_by_phase: ancestry and decision exist only on publication; the schema refuses them on any other phase.
+      closure_rule: A closure record cites the publication record that permitted it.
+    ConfigDocument:
+      schema_version: cf.config.v1
+      fields: {generation: PosInt, project_id: ID, scope: 'global|project|lane', settings: Settings, enums: {admission_mode: 'tasks|cooldown', lane_kind: 'foreman|satellite|signals'}, origins: map, updated_at: Time, updated_by: ID}
+      settings: {max_concurrent: PosInt, load_gate: UInt 0..4096, round_budget: UInt, attempt_timeout_s: PosInt, turn_timeout_s: PosInt, credential_ttl_s: PosInt, claim_lease_s: PosInt, group_max_members: 256}
+      origins_rule: Every setting has an origin (default, explicit or inherited); an origin naming a setting that does not exist is refused.
+      enums_rule: An unknown enumeration value is refused, never silently replaced by the default.
+      generation_rule: A launch names the generation it observed; a stale generation is refused rather than merged.
     BriefInput:
       schema_version: cf.brief-input.v1
       fields: {directive: Text, task: TaskRow, criteria: Criterion-array, skills: string-array, attachments: EvidenceRef-array}
@@ -1859,7 +1892,9 @@ execution_contracts:
         criteria: Criterion-array
         workspace: Workspace
         effective: EffectiveSettings
+        launch: {commitment_ref: EvidenceRef, commitment_digest: SHA, launch_id: ID, nonce: Text}
       immutable: A changed input requires a new attempt and claim generation.
+      derived_identities: dispatch_id and execution_key are derived by the resident supervisor from the persisted launch commitment (LCR-1); the brief carries them for the worker's use but never authors them.
     WorkerResult:
       schema_version: worker-result.v1
       fields:
@@ -1894,7 +1929,8 @@ execution_contracts:
         task_results: TaskResultRef-array
         budget: {allowance: RoundAllowance, consumed: RoundAllowance, reserved: RoundAllowance, remaining: RoundAllowance}
         stop_reason: 'no_useful_work|budget_exhausted|cancelled|paused|deadline|dependency_unavailable|failed'
-        memory_refs: EvidenceRef-array
+        round_summary_digest: SHA
+        summary_memory_ref: EvidenceRef
         evidence_refs: EvidenceRef-array
         status: 'pass|fail|unverified|partial|unknown'
         finished_at: Time
@@ -1902,40 +1938,48 @@ execution_contracts:
       digest: JCS of the complete record with report_digest absent.
       budget_invariant: remaining = allowance - consumed - reserved.
       accounting_mode: charge-on-start; charged is the worker ledger state counted by consumed; refusal before admission leaves consumed unchanged.
+      layering: The report names round_summary_digest and summary_memory_ref, both computed before the report exists; it carries no memory_refs array (IV 5.5, LCR-1). A report that arrives before its round summary is refused.
+      closure: cf.round-closure.v1 may name report_digest and the summary refs afterwards; neither lower layer names it back.
     MemoryRecord:
-      schema_version: memory-record.v1
+      schema_version: cf.memory-record.v1
       discriminated_by: record_type
       common_fields:
-        schema_version: {type: string, const: memory-record.v1}
+        schema_version: {type: string, const: cf.memory-record.v1}
         record_type: 'worker|wave|round|resolution|decision|finding'
         record_id: ID
-        project_id: ID
+        domain: ID
         namespace: ID
-        round_id: ID
-        wave_id: ID-or-null
-        attempt_id: ID-or-null
-        task_id: ID-or-null
-        owner_fence: Fence
-        writer_id: ID
-        local_seq: PosInt
-        created_at: Time
+        body_kind: ID
+        writer: Writer
+        relations: Relation-array
         body: object
+        created_at: Time
+        state: 'local|synced|rejected'
         payload_digest: SHA
+        sync: MemorySyncReceipt
+      writer:
+        fields: {writer_id: ID, writer_role: 'owner|manager|foreman|worker|judge|reconciler', writer_generation: PosInt, owner_fence: Fence}
+        required: writer_id and writer_role
+        retired_alias: writer_identity is an import alias for writer.writer_id; an importer that drops writer_role is refused.
       presence:
-        worker: wave_id, attempt_id and task_id are required.
-        wave: wave_id is required; attempt_id and task_id are null.
-        round: wave_id, attempt_id and task_id are null.
-        resolution: wave_id, attempt_id and task_id are null; body.resolution_of is non-empty.
-        decision_finding: wave_id, attempt_id and task_id are null; body uses the generic evidence shape.
+        worker: body.task_id and body.attempt_id are required; body.commit and body.error are present and null when absent.
+        wave: body.wave_id is required; body.attempt_ids is non-empty; body.stop_reason is present and null when absent.
+        round: body.round_id, body.state, body.wave_refs and body.budget are required; body.stop_reason is present and null when absent.
+        resolution: body.subject and body.outcome are required; body.rationale is present and null when absent.
+        decision: body.subject and body.outcome are required; body.rationale is present and null when absent.
+        finding: body.severity and body.summary are required; body.disposition is present and null when absent.
+      nullable_rule: A nullable body field is present and null; it is never omitted. Absence and not-applicable must stay distinguishable to a reader.
       bodies:
-        worker: {outcome: string, result_ref: EvidenceRef, evidence_refs: EvidenceRef-array, relations: Relation-array}
-        wave: {state: string, worker_refs: EvidenceRef-array, stop_reason: string, relations: Relation-array}
-        round: {state: string, wave_refs: EvidenceRef-array, budget: RoundBudget, report_ref: EvidenceRef, relations: Relation-array}
-        resolution: {resolution_of: EvidenceRef-array, action: string, reason: Text, evidence_refs: EvidenceRef-array}
-        decision_finding: {text: Text, evidence_refs: EvidenceRef-array, relations: Relation-array}
-      digest: JCS of the complete record with payload_digest absent; writer, fence, ids and body are included.
+        worker: {schema_version: cf.worker-outcome.v1, task_id: ID, attempt_id: ID, outcome: 'pass|fail|unverified|cancelled', commit: string-or-null, error: string-or-null, evidence_refs: EvidenceRef-array}
+        wave: {schema_version: cf.wave-summary.v1, wave_id: ID, attempt_ids: ID-array, outcome: 'complete|partial|failed|cancelled|unverified', stop_reason: string-or-null}
+        round: {schema_version: cf.round-summary.v1, round_id: ID, state: 'complete|partial|failed|cancelled|unverified|empty', wave_refs: object-array, budget: RoundBudget, stop_reason: string-or-null, evidence_refs: EvidenceRef-array, relations: Relation-array, created_at: Time}
+        resolution: {schema_version: cf.resolution.v1, resolution_id: ID, subject: ID, outcome: 'resolved|unresolved|superseded', rationale: string-or-null}
+        decision: {schema_version: cf.decision.v1, decision_id: ID, subject: ID, outcome: string, rationale: string-or-null}
+        finding: {schema_version: cf.finding.v1, finding_id: ID, severity: 'critical|high|medium|low', summary: Text, disposition: string-or-null}
+      round_body_forbidden: report_digest and the record's own memory reference are forbidden in the round body; the final report names the summary, never the reverse.
+      digest: JCS of the complete record with payload_digest, sync and signature absent; writer, fence, ids, relations and body are included.
       local_commit: Temporary file, fsync, atomic rename and directory fsync acknowledge local-only durability.
-      sync_receipt: MemorySyncReceipt is separate and mutable; it never changes payload_digest.
+      sync_receipt: MemorySyncReceipt is separate and mutable; it never changes payload_digest. The record carries only a projection {state, receipt_ref, receipt_digest}; the full receipt is a separate record referenced by receipt_ref.
     MemorySyncReceipt:
       fields:
         record_id: ID
@@ -1963,9 +2007,89 @@ execution_contracts:
         method: {type: string, const: PUT}
         path: {type: string, pattern: '^/v1/launches/[A-Za-z0-9._:-]+$'}
         body: LaunchInput
-      launch_identity: launch_id is owner identity; execution_key = SHA256(JCS({launch_id,input_digest})).
+      launch_identity:
+        rule: LCR-1. content then record then envelope; every identity is allocated before it is hashed; a derived identifier is validated by recomputation, never by iteration.
+        layer_contract:
+          L0: {contents: immutable caller payload plus preallocated owning identity and nonce, excluded: every derived identity and every digest, may_include: nothing derived}
+          L1: {contents: L0 content, L0 digest, record identity, role and version, excluded: own digest, own signature, any higher-layer reference, may_include: L0 and lower-layer digests}
+          L2: {contents: L1 record, L1 digest, audience and transport metadata, excluded: envelope signature and any envelope digest, may_include: L1 and lower-layer digests}
+        bootstrap_identities:
+          launch_id: {allocator: launching foreman before admission, hash_exempt: preallocated, may appear in L0 content, never derived from a launch digest}
+          dispatch_id: {allocator: supervisor from the persisted commitment, hash_exempt: derived once, excluded from L0 input_digest}
+          execution_key: {allocator: supervisor from launch_id and L0 input_digest, hash_exempt: derived once, excluded from L0 input_digest}
+          registration_id: {allocator: controller before the enrolment request, hash_exempt: preallocated, never allocated by Crier}
+          node_id_and_generation: {allocator: Crier from the accepted grant, hash_exempt: response only, never in the request's L0 digest}
+          task_wave_claim_ids: {allocator: board before claim construction, hash_exempt: preallocated, ordering fields are not derived from the record digest}
+          receipt_digest: {allocator: Crier after the unsigned payload, hash_exempt: excludes itself and the signature}
+          report_digest: {allocator: reporter after the final report body, hash_exempt: excludes itself and the signature, may include the round-summary digest}
+        derivations:
+          execution_key: 'H("cf.execution-key.v1" || launch_id || input_digest)'
+          dispatch_id: 'd- || H("cf.dispatch-id.v1" || launch_id || input_digest)'
+          never_reads: dispatch_id, execution_key, commitment_digest, confirmation_digest
+        construction: allocate launch_id and nonce; build and persist the commitment; derive both identities once; write the confirmation; materialize the launch input carrying the commitment's input_digest; submit CT-02/CT-05.
+        refusal: A supplied dispatch_id or execution_key that does not recompute from launch_id and input_digest is CONTRACT_INVALID. Searching for a matching input_digest is non-conforming.
+        vectors: CV-16-A cold chain, CV-16-B changed derived identifier, CV-02-A the request carrying the commitment.
       replay: Identical request returns the original response; changed digest returns LAUNCH_CONFLICT without exec.
       retired: cf.supervisor.v1, .node/execution/control.sock and submit/status/cancel/drain/resume are not a second protocol.
+    LaunchCommitment:
+      schema_version: cf.launch-commitment.v1
+      layer: L1
+      fields:
+        schema_version: {type: string, const: cf.launch-commitment.v1}
+        launch_id: ID
+        nonce: Text
+        project_id: ID
+        kind: 'worker|foreman'
+        task_id: ID
+        wave_id: ID
+        round_id: ID
+        attempt_id: ID
+        supervisor: {supervisor_id: ID, supervisor_kind: Text, owner_fence: Fence}
+        brief_ref: EvidenceRef
+        input_digest: SHA
+        input_ref: EvidenceRef
+        limits: {cpu_millis: PosInt, memory_bytes: PosInt, pids: PosInt}
+        runtime_digest: SHA
+        workspace_ref: EvidenceRef
+        committed_at: Time
+        commitment_digest: SHA
+      digest: JCS of the record excluding commitment_digest, signature, dispatch_id, execution_key, confirmation_digest and launch_input_digest.
+      forbidden: The commitment never carries a derived identity. A record that does is a different, non-conforming record and the schema refuses it.
+      input_digest_rule: input_digest covers L0 fields only; it is never recomputed over the materialized launch input.
+    LaunchConfirmation:
+      schema_version: cf.launch-confirmation.v1
+      layer: L1b
+      fields:
+        schema_version: {type: string, const: cf.launch-confirmation.v1}
+        launch_id: ID
+        input_digest: SHA
+        commitment_digest: SHA
+        execution_key: SHA
+        dispatch_id: ID
+        derivation: object
+        accepted_at: Time
+        state: 'accepted|running|succeeded|failed|cancelled|expired|unknown'
+        state_version: PosInt
+        confirmation_digest: SHA
+      digest: JCS of the record excluding confirmation_digest and signature.
+      first_derived_record: The confirmation is the first record that contains dispatch_id and execution_key.
+    LaunchResponse:
+      schema_version: cf.launch-response.v1
+      fields: {accepted_at: Time, commitment_digest: SHA, confirmation_digest: SHA, dispatch_id: ID, execution_key: SHA, input_digest: SHA, launch_id: ID, state: LaunchState, state_version: PosInt, resolution: {kind: 'none|reconciled|quarantined', reason: string-or-null}, native_session_id: string-or-null, started_at: Time-or-null, heartbeat_at: Time-or-null, finished_at: Time-or-null, result_digest: SHA-or-null, error: object-or-null}
+      launch_state: 'accepted|running|succeeded|failed|cancelled|expired|unknown'
+      totality: Every journal state maps to exactly one state plus a resolution; see execution_contracts.terminal_projection. An unresolvable journal record is `unknown` with resolution quarantined, never coerced to a neighbour.
+    Settlement:
+      schema_version: cf.settlement.v1
+      fields: {settlement_id: ID, scope: {kind: 'task|wave|round|project', id: ID}, outcome: SettlementOutcome, counts: {verified: UInt, unverified: UInt, failed: UInt, cancelled: UInt, expired: UInt, unknown: UInt}, revisions: UInt, evidence_refs: EvidenceRef-array, settled_at: Time, settlement_digest: SHA}
+      outcomes: settled_success, settled_failure, settled_partial, settled_unverified, settled_empty, settled_cancelled, settled_expired, settled_unknown, settled_verified_then_reopened
+      total_derived: There is no total field; the total is the sum of the six counts, so a settlement cannot disagree with itself.
+      late_evidence: A revision after settlement increments revisions and re-opens closure; it never rewrites the settlement.
+    Cancellation:
+      schema_version: cf.cancellation.v1
+      fields: {cancellation_id: ID, launch_id: ID, requested_phase: CancelPhase, request: {requested_at: Time, requested_by: ID, reason: Text}, applied: {applied_at: Time, applied_phase: CancelPhase, journal_state_before: Text, journal_state_after: Text, terminal_effect: 'refused_no_launch|cancelled_before_start|signalled_quiesced|already_terminal', permit_consumed: boolean}, signal: {kind: string-or-null, sent_at: Time-or-null, quiescence_at: Time-or-null}, evidence_refs: EvidenceRef-array}
+      phases: pre_admission, prestart, running, terminal
+      idempotence: A repeated cancellation in the same phase produces the same cancellation_digest and changes nothing. A cancellation after the terminal state records already_terminal and changes nothing.
+      never_success: A cancelled launch is never counted as a success.
     CustodyRequest:
       schema_version: custody.v1
       common_fields: {request_id: ID, idempotency_key: ID, owner_fence: Fence, registration_generation: PosInt}
@@ -2108,6 +2232,60 @@ execution_contracts:
     attempt_wall_timeout: {result: attempt_timeout, success: false, round_may_continue: true}
     round_deadline: {result: round_deadline, new_launches: false, cleanup_and_reports_continue: true}
     postcheck_failure: {result: settled_failure, success: false, dependency_success_wakeup: false}
+  terminal_projection:
+    rule: Total. Every journal state and every evidence revision has exactly one row; no state is coerced to a neighbour and no row is inferred by an implementation.
+    launch_response:
+      RESERVED: {state: accepted, resolution: none}
+      START_INTENT_without_native_proof: {state: unknown, resolution: quarantined, reason: START_UNKNOWN}
+      STARTED: {state: running, resolution: none}
+      RUNNING: {state: running, resolution: none}
+      terminal_success_with_result_digest: {state: succeeded, resolution: none}
+      terminal_failure: {state: failed, resolution: none}
+      terminal_cancelled_before_start: {state: cancelled, resolution: none}
+      terminal_cancelled_after_quiescence: {state: cancelled, resolution: none}
+      EXPIRED_at_admission_deadline: {state: expired, resolution: none}
+      unreadable_or_conflicting_journal: {state: unknown, resolution: quarantined}
+    settlement:
+      all_verified: settled_success
+      any_failed: settled_failure
+      verified_and_unverified: settled_partial
+      uniformly_unverified: settled_unverified
+      zero_members_or_zero_budget: settled_empty
+      cancelled_before_terminal: settled_cancelled
+      admission_deadline_passed_unstarted: settled_expired
+      control_state_unresolvable: settled_unknown
+      late_evidence_revision: settled_verified_then_reopened
+    invariants:
+      - A uniformly unverified round never settles as success and never triggers a fresh execution to obtain a verdict.
+      - A cancelled or expired member is never counted as failed and never as verified.
+      - A settlement that was true when written is never rewritten by late evidence; the revision counter moves and closure re-opens.
+      - No success counter exists without a verified evidence record.
+  digest_domains:
+    framing: A record digest is SHA-256 over the JCS bytes of the record minus its own digest and signature. A layer-crossing digest is SHA-256 over an ASCII domain tag concatenated with the canonical bytes named here; fixed-width parts mean no separator is added.
+    domains:
+      input_digest: {tag: null, covers: JCS of the L0 BriefInput, excludes: every derived identity, every digest, every signature}
+      commitment_digest: {tag: null, covers: JCS of cf.launch-commitment.v1, excludes: commitment_digest, signature, dispatch_id, execution_key, confirmation_digest, launch_input_digest}
+      confirmation_digest: {tag: null, covers: JCS of cf.launch-confirmation.v1, excludes: confirmation_digest, signature}
+      execution_key: {tag: cf.execution-key.v1, covers: launch_id then input_digest, excludes: everything else}
+      dispatch_id: {tag: cf.dispatch-id.v1, covers: d- then launch_id then input_digest, excludes: everything else}
+      request_digest: {tag: null, covers: JCS of the request body minus the excluded list, excludes: request_digest, replay_digest, idempotency_key, every signature}
+      replay_digest: {tag: null, covers: message_type then JCS of the same reduced body, excludes: the same list}
+      response_body_digest: {tag: cf.crier.response-body.v1, covers: JCS of the unsigned payload, excludes: the receipt, receipt_digest, every signature}
+      receipt_digest: {tag: cf.crier.receipt.v1, covers: JCS of the receipt body, excludes: receipt_digest, signature}
+      payload_digest: {tag: null, covers: JCS of cf.memory-record.v1, excludes: payload_digest, sync, signature}
+      round_summary_digest: {tag: null, covers: JCS of the round-summary body, excludes: round_summary_digest, report_digest, own memory ref, signature}
+      report_digest: {tag: null, covers: JCS of the final report body, excludes: report_digest, signature, closure_ref}
+      group_claim_digest: {tag: null, covers: JCS of cf.group-claim.v1, excludes: group_claim_digest}
+      config_digest: {tag: null, covers: JCS of cf.config.v1, excludes: config_digest}
+      settlement_digest: {tag: null, covers: JCS of cf.settlement.v1, excludes: settlement_digest}
+    rule: A digest that is not in this table is not comparable to one that is. Readback records store both request and replay digests plus the excluded-field list they were computed under.
+    recomputation: A mismatch is CONTRACT_INVALID; a fixed-point search is never an allowed recovery.
+  conformance_bundle:
+    path: docs/handbook/conformance/manifest.json
+    version: 1.0.0
+    owns: closed JSON Schemas, non-secret fixture bytes and the digest manifest
+    does_not_restate: docs/handbook/contract-vectors.json remains the single normative source of executable cases
+    rule: The bundle pins this model's digest; this model names the bundle path and version and never its digest.
   evidence_classes:
     execution: WorkerResult and native result bytes establish execution only.
     mechanical_policy: Deterministic argv, exit, oracle and repository checks have independent refs and outcomes.

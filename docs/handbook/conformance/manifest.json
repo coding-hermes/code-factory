@@ -1,0 +1,558 @@
+{
+  "bundle_id": "cf2a-conformance",
+  "bundle_version": "1.0.0",
+  "status": "frozen at pass-7 wave 1",
+  "frozen_at": "2026-11-15T21:00:00Z",
+  "frozen_by": "CF2A-01 pass-7 wave 1",
+  "purpose": "Everything needed to check a record without a repository checkout: the closed schema for its shape, the fixture for its bytes, the pinned digest for its identity and one command that asserts all three.",
+  "no_checkout_inference": "A reader needs this directory and the two source files named below. No field, bound or digest is left to be inferred from the implementation.",
+  "normative_sources": {
+    "model": {
+      "path": "docs/SYSTEM-MODEL.yaml",
+      "sha256": "11621ec8c7ebbd829342b2c1cc183930562315fce4522dd4f3014e852066ad70"
+    },
+    "vectors": {
+      "path": "docs/handbook/contract-vectors.json",
+      "sha256": "d087f9621d57358468be6c56443a38ec1eb1eef8fddba2142f94d75ba96bb9ad",
+      "vector_count": 80,
+      "note": "single normative source of executable cases; this bundle points at it and does not restate it"
+    }
+  },
+  "schemas": [
+    {
+      "path": "docs/handbook/conformance/schemas/cf2a.criterion.schema.json",
+      "sha256": "b3371c652246cbf55a12bd360c62e66b6676daab7137c57d304ad3e232bd1a56",
+      "file": "cf2a.criterion.schema.json",
+      "title": "cf.criterion.v1",
+      "id": "https://spec.coding-hermes.invalid/cf2a/1.0.0/schemas/cf2a.criterion.schema.json"
+    },
+    {
+      "path": "docs/handbook/conformance/schemas/cf2a.evidence.schema.json",
+      "sha256": "1ecd022845bc97a211bd8ee0f3dafcd8ab2e3704437ec651b07795d881a8cbbe",
+      "file": "cf2a.evidence.schema.json",
+      "title": "cf.evidence.v1",
+      "id": "https://spec.coding-hermes.invalid/cf2a/1.0.0/schemas/cf2a.evidence.schema.json"
+    },
+    {
+      "path": "docs/handbook/conformance/schemas/cf2a.execution.schema.json",
+      "sha256": "c41d4269acff3c8a818588e12b5531033a2c2f5c40f2bfb07eb364f888c870fa",
+      "file": "cf2a.execution.schema.json",
+      "title": "cf2a.execution",
+      "id": "https://spec.coding-hermes.invalid/cf2a/1.0.0/schemas/cf2a.execution.schema.json"
+    },
+    {
+      "path": "docs/handbook/conformance/schemas/cf2a.board-claim.schema.json",
+      "sha256": "e0001baad2b05694179bba6df805df0e3849527a21c10f3a1aae6d67bf66cb8f",
+      "file": "cf2a.board-claim.schema.json",
+      "title": "cf.group-claim.v1",
+      "id": "https://spec.coding-hermes.invalid/cf2a/1.0.0/schemas/cf2a.board-claim.schema.json"
+    },
+    {
+      "path": "docs/handbook/conformance/schemas/cf2a.memory.schema.json",
+      "sha256": "d09ef8425b36740e2fb4e95615c64a76e1ff1bd623dc178619ff3c191b43c2a4",
+      "file": "cf2a.memory.schema.json",
+      "title": "cf.memory-record.v1",
+      "id": "https://spec.coding-hermes.invalid/cf2a/1.0.0/schemas/cf2a.memory.schema.json"
+    },
+    {
+      "path": "docs/handbook/conformance/schemas/cf2a.config.schema.json",
+      "sha256": "0ed83ccace5c574e83d18ff4530954b677fdb9c416b158f4cfdeb484b112754c",
+      "file": "cf2a.config.schema.json",
+      "title": "cf.config.v1",
+      "id": "https://spec.coding-hermes.invalid/cf2a/1.0.0/schemas/cf2a.config.schema.json"
+    }
+  ],
+  "fixtures": [
+    {
+      "fixture_id": "cf2a.launch-commitment",
+      "path": "docs/handbook/conformance/fixtures/launch-commitment.json",
+      "sha256": "90b9efcccca8213dbc95cdad24317ed249b9938296ff0cb04475938e40af7dd4",
+      "kind": "positive",
+      "file": "launch-commitment.json",
+      "non_secret": "contains fixture identities and a public test key only; no credential value appears"
+    },
+    {
+      "fixture_id": "cf2a.launch-confirmation",
+      "path": "docs/handbook/conformance/fixtures/launch-confirmation.json",
+      "sha256": "9d10b02f87c97cf26ad6a360f367ffd4b614f2158480ee287a6d23f188f753aa",
+      "kind": "positive",
+      "file": "launch-confirmation.json",
+      "non_secret": "contains fixture identities and a public test key only; no credential value appears"
+    },
+    {
+      "fixture_id": "cf2a.custody-request-response",
+      "path": "docs/handbook/conformance/fixtures/custody-request-response.json",
+      "sha256": "8b744bf02a57731d442926611a52e5a36781cc149f504eb30cab2d7b0765b348",
+      "kind": "positive-with-negative-arms",
+      "file": "custody-request-response.json",
+      "non_secret": "contains fixture identities and a public test key only; no credential value appears"
+    },
+    {
+      "fixture_id": "cf2a.board-group-claim",
+      "path": "docs/handbook/conformance/fixtures/board-group-claim.json",
+      "sha256": "43d3e7d099a22a7054a719929ae54961804018e6eaa5b8ff005abb62302e6b27",
+      "kind": "positive-with-negative-arms",
+      "file": "board-group-claim.json",
+      "non_secret": "contains fixture identities and a public test key only; no credential value appears"
+    },
+    {
+      "fixture_id": "cf2a.memory-round-summary",
+      "path": "docs/handbook/conformance/fixtures/memory-round-summary.json",
+      "sha256": "dca69c5373d29e183d3a54502c7b16223fa0ce5f2de0a936507b43b97ee5a32f",
+      "kind": "positive-with-negative-arms",
+      "file": "memory-round-summary.json",
+      "non_secret": "contains fixture identities and a public test key only; no credential value appears"
+    }
+  ],
+  "bindings": [
+    {
+      "schema": "cf2a.execution.schema.json",
+      "fixture": "launch-commitment.json",
+      "pointer": "/l1_commitment",
+      "expect": "pass"
+    },
+    {
+      "schema": "cf2a.execution.schema.json",
+      "fixture": "launch-commitment.json",
+      "pointer": "/l1b_confirmation",
+      "expect": "pass"
+    },
+    {
+      "schema": "cf2a.execution.schema.json",
+      "fixture": "launch-commitment.json",
+      "pointer": "/l2_launch_input",
+      "expect": "pass"
+    },
+    {
+      "schema": "cf2a.execution.schema.json",
+      "fixture": "launch-confirmation.json",
+      "pointer": "/launch_response",
+      "expect": "pass"
+    },
+    {
+      "schema": "cf2a.execution.schema.json",
+      "fixture": "launch-confirmation.json",
+      "pointer": "/settlements/all_verified",
+      "expect": "pass"
+    },
+    {
+      "schema": "cf2a.execution.schema.json",
+      "fixture": "launch-confirmation.json",
+      "pointer": "/settlements/late_evidence",
+      "expect": "pass"
+    },
+    {
+      "schema": "cf2a.execution.schema.json",
+      "fixture": "launch-confirmation.json",
+      "pointer": "/cancellations/prestart",
+      "expect": "pass"
+    },
+    {
+      "schema": "cf2a.execution.schema.json",
+      "fixture": "launch-confirmation.json",
+      "pointer": "/cancellations/running",
+      "expect": "pass"
+    },
+    {
+      "schema": "cf2a.execution.schema.json",
+      "fixture": "launch-confirmation.json",
+      "pointer": "/cancellations/terminal",
+      "expect": "pass"
+    },
+    {
+      "schema": "cf2a.config.schema.json",
+      "fixture": "launch-commitment.json",
+      "pointer": "/config_generation17/document",
+      "expect": "pass"
+    },
+    {
+      "schema": "cf2a.board-claim.schema.json",
+      "fixture": "board-group-claim.json",
+      "pointer": "/group_claim",
+      "expect": "pass"
+    },
+    {
+      "schema": "cf2a.criterion.schema.json",
+      "fixture": "board-group-claim.json",
+      "pointer": "/criterion",
+      "expect": "pass"
+    },
+    {
+      "schema": "cf2a.evidence.schema.json",
+      "fixture": "board-group-claim.json",
+      "pointer": "/evidence_chain/0",
+      "expect": "pass"
+    },
+    {
+      "schema": "cf2a.evidence.schema.json",
+      "fixture": "board-group-claim.json",
+      "pointer": "/evidence_chain/1",
+      "expect": "pass"
+    },
+    {
+      "schema": "cf2a.evidence.schema.json",
+      "fixture": "board-group-claim.json",
+      "pointer": "/evidence_chain/2",
+      "expect": "pass"
+    },
+    {
+      "schema": "cf2a.evidence.schema.json",
+      "fixture": "board-group-claim.json",
+      "pointer": "/evidence_chain/3",
+      "expect": "pass"
+    },
+    {
+      "schema": "cf2a.evidence.schema.json",
+      "fixture": "board-group-claim.json",
+      "pointer": "/evidence_chain/4",
+      "expect": "pass"
+    },
+    {
+      "schema": "cf2a.memory.schema.json",
+      "fixture": "memory-round-summary.json",
+      "pointer": "/memory_record",
+      "expect": "pass"
+    }
+  ],
+  "negative_arms": [
+    {
+      "name": "the commitment cannot carry a derived identity",
+      "kind": "schema",
+      "schema": "cf2a.execution.schema.json",
+      "fixture": "launch-commitment.json",
+      "base": "/l1_commitment",
+      "pointer": "/l1_commitment",
+      "op": "set",
+      "parent": "",
+      "key": "dispatch_id",
+      "value": "d-0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "name": "an identity must exist inside the hashed bytes",
+      "kind": "schema",
+      "schema": "cf2a.execution.schema.json",
+      "fixture": "launch-commitment.json",
+      "base": "/l1_commitment",
+      "pointer": "/l1_commitment",
+      "op": "remove",
+      "parent": "",
+      "key": "launch_id",
+      "value": null
+    },
+    {
+      "name": "a higher layer must name the lower-layer digest",
+      "kind": "schema",
+      "schema": "cf2a.execution.schema.json",
+      "fixture": "launch-commitment.json",
+      "base": "/l1b_confirmation",
+      "pointer": "/l1b_confirmation",
+      "op": "remove",
+      "parent": "",
+      "key": "commitment_digest",
+      "value": null
+    },
+    {
+      "name": "an unknown launch state is refused, never coerced",
+      "kind": "schema",
+      "schema": "cf2a.execution.schema.json",
+      "fixture": "launch-confirmation.json",
+      "base": "/launch_response",
+      "pointer": "/launch_response",
+      "op": "set",
+      "parent": "",
+      "key": "state",
+      "value": "suceeded"
+    },
+    {
+      "name": "a count may not be negative",
+      "kind": "schema",
+      "schema": "cf2a.execution.schema.json",
+      "fixture": "launch-confirmation.json",
+      "base": "/settlements/all_verified/counts",
+      "pointer": "/settlements/all_verified/counts",
+      "op": "set",
+      "parent": "",
+      "key": "verified",
+      "value": -1
+    },
+    {
+      "name": "a cancellation must state its applied phase",
+      "kind": "schema",
+      "schema": "cf2a.execution.schema.json",
+      "fixture": "launch-confirmation.json",
+      "base": "/cancellations/prestart/applied",
+      "pointer": "/cancellations/prestart/applied",
+      "op": "remove",
+      "parent": "",
+      "key": "applied_phase",
+      "value": null
+    },
+    {
+      "name": "the bound is enforced by the schema",
+      "kind": "schema",
+      "schema": "cf2a.board-claim.schema.json",
+      "fixture": "board-group-claim.json",
+      "base": "/group_claim",
+      "pointer": "/members",
+      "op": "array-repeat",
+      "count": 257
+    },
+    {
+      "name": "one GitOID form only",
+      "kind": "schema",
+      "schema": "cf2a.board-claim.schema.json",
+      "fixture": "board-group-claim.json",
+      "base": "/group_claim",
+      "pointer": "/group_claim",
+      "op": "set",
+      "parent": "/board",
+      "key": "base_oid",
+      "value": "1111111"
+    },
+    {
+      "name": "a precommit record never names a commit",
+      "kind": "schema",
+      "schema": "cf2a.evidence.schema.json",
+      "fixture": "board-group-claim.json",
+      "base": "/evidence_chain/0/subject",
+      "pointer": "/evidence_chain/0/subject",
+      "op": "set",
+      "parent": "",
+      "key": "commit_oid",
+      "value": "2222222222222222222222222222222222222222"
+    },
+    {
+      "name": "publication must state the ancestry judgment",
+      "kind": "schema",
+      "schema": "cf2a.evidence.schema.json",
+      "fixture": "board-group-claim.json",
+      "base": "/evidence_chain/3",
+      "pointer": "/evidence_chain/3",
+      "op": "remove",
+      "parent": "",
+      "key": "ancestry",
+      "value": null
+    },
+    {
+      "name": "a lower layer may not include a higher-layer digest",
+      "kind": "schema",
+      "schema": "cf2a.memory.schema.json",
+      "fixture": "memory-round-summary.json",
+      "base": "/memory_record/body",
+      "pointer": "/memory_record/body",
+      "op": "set",
+      "parent": "",
+      "key": "report_digest",
+      "value": "e989fd1f6b5b40f04f40a50e0900f3f5a7a2e2a25b93a7bcd487e6b70402d554"
+    },
+    {
+      "name": "role is required",
+      "kind": "schema",
+      "schema": "cf2a.memory.schema.json",
+      "fixture": "memory-round-summary.json",
+      "base": "/memory_record/writer",
+      "pointer": "/memory_record/writer",
+      "op": "remove",
+      "parent": "",
+      "key": "writer_role",
+      "value": null
+    },
+    {
+      "name": "a nullable field must be present and null",
+      "kind": "schema",
+      "schema": "cf2a.memory.schema.json",
+      "fixture": "memory-round-summary.json",
+      "base": "/memory_record/body",
+      "pointer": "/memory_record/body",
+      "op": "remove",
+      "parent": "",
+      "key": "stop_reason",
+      "value": null
+    },
+    {
+      "name": "a criterion with no argv is not executable",
+      "kind": "schema",
+      "schema": "cf2a.criterion.schema.json",
+      "fixture": "board-group-claim.json",
+      "base": "/criterion",
+      "pointer": "/criterion",
+      "op": "set",
+      "parent": "",
+      "key": "argv",
+      "value": []
+    },
+    {
+      "name": "an unknown enumeration value is refused",
+      "kind": "schema",
+      "schema": "cf2a.config.schema.json",
+      "fixture": "launch-commitment.json",
+      "base": "/config_generation17/document/enums",
+      "pointer": "/config_generation17/document/enums",
+      "op": "set",
+      "parent": "",
+      "key": "admission_mode",
+      "value": "taskz"
+    }
+  ],
+  "digest_checks": [
+    {
+      "name": "execution_key",
+      "kind": "derived",
+      "fixture": "launch-commitment.json",
+      "formula": "H(\"cf.execution-key.v1\" || launch_id || input_digest)",
+      "concat": [
+        "cf.execution-key.v1",
+        "l-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048",
+        "aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a"
+      ],
+      "prefix": "",
+      "inputs": {
+        "launch_id": "l-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048",
+        "input_digest": "aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a"
+      },
+      "value": "add6df27bfc4facef355695078b5e1171eda32325a99263c30b81b9f0fc842fc"
+    },
+    {
+      "name": "dispatch_id",
+      "kind": "derived",
+      "fixture": "launch-commitment.json",
+      "formula": "d- || H(\"cf.dispatch-id.v1\" || launch_id || input_digest)",
+      "concat": [
+        "cf.dispatch-id.v1",
+        "l-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048",
+        "aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a"
+      ],
+      "prefix": "d-",
+      "inputs": {
+        "launch_id": "l-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048",
+        "input_digest": "aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a"
+      },
+      "value": "d-2ccec62df73e9a889ec12b5c1600e4706d2311d766bfc3a6b07bac986b94fcab"
+    },
+    {
+      "name": "commitment_digest",
+      "kind": "record",
+      "fixture": "launch-commitment.json",
+      "object": "/l1_commitment",
+      "value": "fefb5e5d7887999e0123ebb9bbae94116150941341f2fcb0f1c751861a228b3d",
+      "exclude": [
+        "commitment_digest"
+      ]
+    },
+    {
+      "name": "confirmation_digest",
+      "kind": "record",
+      "fixture": "launch-commitment.json",
+      "object": "/l1b_confirmation",
+      "value": "093889a3a6f4a61ff1af28d578f1757254446a1c9b3ac15543297097812e6e74",
+      "exclude": [
+        "confirmation_digest"
+      ]
+    },
+    {
+      "name": "round_summary_digest",
+      "kind": "record",
+      "fixture": "memory-round-summary.json",
+      "object": "/round_summary_body",
+      "value": "8307e064c4773afc4e1c08f1271a9612e4e47e055ff53628dd80af8b0239803a"
+    },
+    {
+      "name": "memory_payload_digest",
+      "kind": "record",
+      "fixture": "memory-round-summary.json",
+      "object": "/memory_record",
+      "value": "0956384d160d52cbac30f25fb91c11bac662c715ad3601c20cf6ae95339ff04d",
+      "exclude": [
+        "payload_digest",
+        "sync"
+      ]
+    },
+    {
+      "name": "report_digest",
+      "kind": "record",
+      "fixture": "memory-round-summary.json",
+      "object": "/final_report",
+      "value": "e989fd1f6b5b40f04f40a50e0900f3f5a7a2e2a25b93a7bcd487e6b70402d554",
+      "exclude": [
+        "report_digest"
+      ]
+    },
+    {
+      "name": "response_body_digest",
+      "kind": "layer",
+      "fixture": "custody-request-response.json",
+      "object": "/payload",
+      "value": "5df30f1a177f1a97d690a3a8bcc134afda949b5c7893288231139d7748cf5de5",
+      "tag": "cf.crier.response-body.v1"
+    },
+    {
+      "name": "receipt_digest",
+      "kind": "layer",
+      "fixture": "custody-request-response.json",
+      "object": "/receipt",
+      "value": "6d58935d1a6b9ef1815cc59309e074778ab0f528b3780a57f63ba2f0e984cb08",
+      "tag": "cf.crier.receipt.v1"
+    },
+    {
+      "name": "group_claim_digest",
+      "kind": "record",
+      "fixture": "board-group-claim.json",
+      "object": "/group_claim",
+      "value": "80b87a4dbf8b7ce41ad6b12d722b41701c0625c6119811eb3fa8f2afb59d5388"
+    },
+    {
+      "name": "criterion_digest",
+      "kind": "record",
+      "fixture": "board-group-claim.json",
+      "object": "/criterion",
+      "value": "4e7e486cd95ba75400b4e7faa54640d2e98a244b7d47d8ec3253c490bbab0dc4"
+    },
+    {
+      "name": "config_digest",
+      "kind": "record",
+      "fixture": "launch-commitment.json",
+      "object": "/config_generation17/document",
+      "value": "67e64205bd31b8d38eaae619e7299551dd85d1f93eadec32ac80bbb96e23ea8d"
+    }
+  ],
+  "shape_only": [
+    {
+      "what": "the repeated `a` digest in IV.3 protocol examples",
+      "why": "a placeholder for wire shape, not a claim about stored bytes",
+      "counts_as_positive_qualification": false
+    },
+    {
+      "what": "the ed25519 key in custody-request-response.json",
+      "why": "deterministic test key derived from a published seed; it authorizes nothing outside this fixture",
+      "counts_as_positive_qualification": false
+    }
+  ],
+  "pdf_relation": {
+    "delivered_pdf": null,
+    "state": "not rebuilt for pass 7",
+    "previous_build": {
+      "path": "/home/kara/code-factory-reports/handbook/code-factory-handbook-2026-11-05-r2.pdf",
+      "sha256": "9a8fae7b366243ffd2282fccad46d9e49463b70e18f862e0eba549c33f6aca89",
+      "note": "pass-6 revision; it predates this bundle and is not evidence for it"
+    },
+    "built_by": "scripts/build_book.py",
+    "rule": "this bundle pins source digests, not PDF bytes. A PDF built from other sources, or from these sources after any pinned digest changes, is a different artifact and the manifest must be re-frozen before it may be cited",
+    "reissue_owner": "wave 4 (P7-14 figures, P7-16 Part IX dispositions)"
+  },
+  "runner": {
+    "interpreter": "python3",
+    "requires": [
+      "jsonschema>=4.18"
+    ],
+    "invocation": "python3 -c \"$(jq -r '.runner.program' docs/handbook/conformance/manifest.json)\" docs/handbook/conformance/manifest.json",
+    "program_sha256": "7e7d55540dd708029a1e0b66ab6c871447dc40f295889263289479dadbe94e5b",
+    "program": "\"\"\"CF2A-01 conformance bundle runner.\n\nUsage, from the repository root:\n\n    python3 docs/handbook/conformance/run.py\n    python3 -c \"<this program>\" docs/handbook/conformance/manifest.json\n\nIt reads the manifest, then:\n  1. verifies the pinned digest of the model, the vectors, every schema and every fixture,\n  2. validates each positive binding with the schema it names,\n  3. applies each negative arm and asserts the schema refuses the mutated record,\n  4. recomputes each digest check from the fixture bytes,\n  5. prints one line per failure and a final verdict.\n\nExit 0 means every pinned digest matched, every positive binding validated and every\nnegative arm was refused. Exit 1 means at least one of those did not hold.\nRequires jsonschema >= 4.18 for the schema steps.\n\"\"\"\nimport copy\nimport hashlib\nimport json\nimport pathlib\nimport sys\n\ntry:\n    import jsonschema\nexcept ImportError:\n    print(\"FAIL jsonschema is required (pip install 'jsonschema>=4.18')\")\n    sys.exit(1)\n\n\ndef jcs(obj):\n    return json.dumps(obj, sort_keys=True, separators=(\",\", \":\"), ensure_ascii=False)\n\n\ndef sha(text):\n    return hashlib.sha256(text.encode(\"utf-8\")).hexdigest()\n\n\ndef resolve(node, pointer):\n    cur = node\n    for part in [p for p in pointer.split(\"/\") if p]:\n        part = part.replace(\"~1\", \"/\").replace(\"~0\", \"~\")\n        cur = cur[int(part)] if isinstance(cur, list) else cur[part]\n    return cur\n\n\ndef apply_arm(doc, arm):\n    node = copy.deepcopy(doc)\n    op = arm[\"op\"]\n    if op == \"set\":\n        resolve(node, arm[\"parent\"])[arm[\"key\"]] = arm[\"value\"]\n    elif op == \"remove\":\n        resolve(node, arm[\"parent\"]).pop(arm[\"key\"], None)\n    elif op == \"array-repeat\":\n        items = resolve(node, arm[\"pointer\"])\n        template = items[0]\n        built = []\n        for i in range(arm[\"count\"]):\n            item = copy.deepcopy(template)\n            item[\"task_id\"] = \"CF-%04d\" % i\n            built.append(item)\n        parent, _, leaf = arm[\"pointer\"].rpartition(\"/\")\n        if parent:\n            resolve(node, parent)[leaf] = built\n        else:\n            node[leaf] = built\n    elif op == \"array-reverse\":\n        items = list(resolve(node, arm[\"pointer\"]))\n        parent, _, leaf = arm[\"pointer\"].rpartition(\"/\")\n        if parent:\n            resolve(node, parent)[leaf] = list(reversed(items))\n        else:\n            node[leaf] = list(reversed(items))\n    else:\n        raise SystemExit(\"unknown mutation op: \" + op)\n    return node\n\n\ndef main():\n    target = sys.argv[1] if len(sys.argv) > 1 else \"docs/handbook/conformance/manifest.json\"\n    manifest_path = pathlib.Path(target).resolve()\n    manifest = json.loads(manifest_path.read_text())\n    bundle_dir = manifest_path.parent\n    root = bundle_dir.parents[2]\n    fails = []\n\n    def fail(msg):\n        fails.append(msg)\n\n    # 1. pinned digests\n    pinned = [manifest[\"normative_sources\"][\"model\"], manifest[\"normative_sources\"][\"vectors\"]]\n    pinned += manifest[\"schemas\"] + manifest[\"fixtures\"]\n    for entry in pinned:\n        path = root / entry[\"path\"]\n        if not path.exists():\n            fail(\"missing artifact: \" + entry[\"path\"])\n            continue\n        actual = hashlib.sha256(path.read_bytes()).hexdigest()\n        if actual != entry[\"sha256\"]:\n            fail(\"digest drift: %s expected %s got %s\" % (entry[\"path\"], entry[\"sha256\"], actual))\n\n    # 2. positive bindings\n    validators = {}\n    for entry in manifest[\"schemas\"]:\n        name = entry[\"path\"].rsplit(\"/\", 1)[-1]\n        validators[name] = jsonschema.Draft202012Validator(json.loads((root / entry[\"path\"]).read_text()))\n    fixtures = {}\n    for entry in manifest[\"fixtures\"]:\n        name = entry[\"path\"].rsplit(\"/\", 1)[-1]\n        fixtures[name] = json.loads((root / entry[\"path\"]).read_text())\n\n    for b in manifest[\"bindings\"]:\n        doc = resolve(fixtures[b[\"fixture\"]], b[\"pointer\"])\n        errs = list(validators[b[\"schema\"]].iter_errors(doc))\n        if b[\"expect\"] == \"pass\" and errs:\n            fail(\"binding %s%s vs %s: %s\" % (b[\"fixture\"], b[\"pointer\"], b[\"schema\"], errs[0].message))\n        if b[\"expect\"] == \"fail\" and not errs:\n            fail(\"binding %s%s vs %s accepted a record it must refuse\" % (b[\"fixture\"], b[\"pointer\"], b[\"schema\"]))\n\n    # 3. negative arms\n    for arm in manifest[\"negative_arms\"]:\n        if arm[\"kind\"] != \"schema\":\n            continue\n        base = resolve(fixtures[arm[\"fixture\"]], arm.get(\"base\", \"/\"))\n        doc = apply_arm(base, arm)\n        if not list(validators[arm[\"schema\"]].iter_errors(doc)):\n            fail(\"negative arm %r was accepted by %s\" % (arm[\"name\"], arm[\"schema\"]))\n\n    # 4. digest recomputation\n    for chk in manifest[\"digest_checks\"]:\n        prefix = chk.get(\"prefix\") or \"\"\n        if chk.get(\"kind\") == \"derived\":\n            got = prefix + sha(\"\".join(chk[\"concat\"]))\n        else:\n            obj = resolve(fixtures[chk[\"fixture\"]], chk[\"object\"])\n            if obj is None:\n                fail(\"digest check %s: object %s is absent\" % (chk[\"name\"], chk[\"object\"]))\n                continue\n            if chk.get(\"exclude\"):\n                obj = {k: v for k, v in obj.items() if k not in chk[\"exclude\"]}\n            got = prefix + sha((chk.get(\"tag\") or \"\") + jcs(obj))\n        if got != chk[\"value\"]:\n            fail(\"digest %s: expected %s got %s\" % (chk[\"name\"], chk[\"value\"], got))\n\n    if fails:\n        for f in fails:\n            print(\"FAIL \" + f)\n        print(\"conformance bundle: %d failure(s)\" % len(fails))\n        return 1\n    print(\"conformance bundle: clean — %d pinned artifacts, %d bindings, %d negative arms, %d digest checks\"\n          % (len(pinned), len(manifest[\"bindings\"]), len(manifest[\"negative_arms\"]), len(manifest[\"digest_checks\"])))\n    return 0\n\n\nif __name__ == \"__main__\":\n    sys.exit(main())\n",
+    "pass_means": "every pinned digest matched, every positive binding validated against its schema, every negative arm was refused, and every digest check recomputed",
+    "fail_means": "at least one of those did not hold; the failure line names which"
+  },
+  "checks_this_bundle_cannot_make": [
+    "a live deployment implements the contract (that needs a version-bound execution receipt)",
+    "the fixture's test key is trusted anywhere (it is not)",
+    "the shipped PDF matches these sources (that is a build-time question, answered by rebuilding)"
+  ]
+}

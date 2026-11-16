@@ -1,0 +1,293 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spec.coding-hermes.invalid/cf2a/1.0.0/schemas/cf2a.execution.schema.json",
+  "$comment": "CF2A-01 pass-7 Wave 1 · the execution family under LCR-1: launch commitment (L1), launch confirmation (L1b), materialized launch input (L2), launch response, worker result, settlement and phase-discriminated cancellation. One closed object per variant, discriminated by schema_version. No variant declares a field that hashes its own record.",
+  "title": "cf2a.execution",
+  "oneOf": [
+    {"$ref": "#/$defs/launchCommitment"},
+    {"$ref": "#/$defs/launchConfirmation"},
+    {"$ref": "#/$defs/launchInput"},
+    {"$ref": "#/$defs/launchResponse"},
+    {"$ref": "#/$defs/workerResult"},
+    {"$ref": "#/$defs/settlement"},
+    {"$ref": "#/$defs/cancellation"}
+  ],
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "casRef": {"type": "string", "pattern": "^cas\\+sha256://[^/]+/[0-9a-f]{64}$"},
+    "gitoid": {"type": "string", "pattern": "^[0-9a-f]{40}$|^[0-9a-f]{64}$"},
+    "ownerFence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authority_id", "epoch", "owner_id", "project_id"],
+      "properties": {
+        "authority_id": {"type": "string", "minLength": 1},
+        "epoch": {"type": "integer", "minimum": 0},
+        "owner_id": {"type": "string", "minLength": 1},
+        "project_id": {"type": "string", "minLength": 1}
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cpu_millis", "memory_bytes", "pids"],
+      "properties": {
+        "cpu_millis": {"type": "integer", "minimum": 1},
+        "memory_bytes": {"type": "integer", "minimum": 1},
+        "pids": {"type": "integer", "minimum": 1}
+      }
+    },
+    "launchCommitment": {
+      "title": "cf.launch-commitment.v1",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "launch_id", "nonce", "project_id", "kind", "task_id",
+                   "wave_id", "round_id", "attempt_id", "supervisor", "brief_ref", "input_digest",
+                   "input_ref", "limits", "runtime_digest", "workspace_ref", "committed_at",
+                   "commitment_digest"],
+      "properties": {
+        "schema_version": {"const": "cf.launch-commitment.v1"},
+        "launch_id": {"type": "string", "pattern": "^l-[0-9a-f]{64}$",
+                      "description": "Preallocated by the launching foreman before admission; hash-exempt bootstrap identity."},
+        "nonce": {"type": "string", "pattern": "^[0-9a-f]{16,64}$"},
+        "project_id": {"type": "string", "minLength": 1},
+        "kind": {"enum": ["worker", "foreman"]},
+        "task_id": {"type": "string", "minLength": 1},
+        "wave_id": {"type": "string", "minLength": 1},
+        "round_id": {"type": "string", "minLength": 1},
+        "attempt_id": {"type": "string", "minLength": 1},
+        "supervisor": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["supervisor_id", "supervisor_kind", "owner_fence"],
+          "properties": {
+            "supervisor_id": {"type": "string", "minLength": 1},
+            "supervisor_kind": {"type": "string", "minLength": 1},
+            "owner_fence": {"$ref": "#/$defs/ownerFence"}
+          }
+        },
+        "brief_ref": {"$ref": "#/$defs/casRef"},
+        "input_digest": {"$ref": "#/$defs/digest",
+                         "description": "L0 only. Never recomputed over the materialized launch input."},
+        "input_ref": {"$ref": "#/$defs/casRef"},
+        "limits": {"$ref": "#/$defs/limits"},
+        "runtime_digest": {"$ref": "#/$defs/digest"},
+        "workspace_ref": {"$ref": "#/$defs/casRef"},
+        "committed_at": {"type": "string", "format": "date-time"},
+        "commitment_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "launchConfirmation": {
+      "title": "cf.launch-confirmation.v1",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "launch_id", "input_digest", "commitment_digest",
+                   "execution_key", "dispatch_id", "derivation", "accepted_at", "state",
+                   "state_version", "confirmation_digest"],
+      "properties": {
+        "schema_version": {"const": "cf.launch-confirmation.v1"},
+        "launch_id": {"type": "string", "pattern": "^l-[0-9a-f]{64}$"},
+        "input_digest": {"$ref": "#/$defs/digest"},
+        "commitment_digest": {"$ref": "#/$defs/digest"},
+        "execution_key": {"$ref": "#/$defs/digest"},
+        "dispatch_id": {"type": "string", "pattern": "^d-[0-9a-f]{64}$"},
+        "derivation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["execution_key", "dispatch_id", "boundary"],
+          "properties": {
+            "execution_key": {"type": "object"},
+            "dispatch_id": {"type": "object"},
+            "boundary": {"type": "string", "minLength": 1}
+          }
+        },
+        "accepted_at": {"type": "string", "format": "date-time"},
+        "state": {"$ref": "#/$defs/launchState"},
+        "state_version": {"type": "integer", "minimum": 1},
+        "confirmation_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "launchInput": {
+      "title": "cf.launch-input.v1",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "launch_id", "commitment", "commitment_digest",
+                   "confirmation_digest", "dispatch_id", "execution_key", "input_digest",
+                   "input_digest_rule", "materialized_at"],
+      "properties": {
+        "schema_version": {"const": "cf.launch-input.v1"},
+        "launch_id": {"type": "string", "pattern": "^l-[0-9a-f]{64}$"},
+        "commitment": {"$ref": "#/$defs/launchCommitment"},
+        "commitment_digest": {"$ref": "#/$defs/digest"},
+        "confirmation_digest": {"$ref": "#/$defs/digest"},
+        "dispatch_id": {"type": "string", "pattern": "^d-[0-9a-f]{64}$"},
+        "execution_key": {"$ref": "#/$defs/digest"},
+        "input_digest": {"$ref": "#/$defs/digest"},
+        "input_digest_rule": {"type": "string", "minLength": 1},
+        "materialized_at": {"type": "string", "format": "date-time"}
+      }
+    },
+    "launchResponse": {
+      "title": "cf.launch-response.v1",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["accepted_at", "commitment_digest", "confirmation_digest", "dispatch_id",
+                   "error", "execution_key", "finished_at", "heartbeat_at", "input_digest",
+                   "launch_id", "native_session_id", "resolution", "result_digest",
+                   "started_at", "state", "state_version"],
+      "properties": {
+        "accepted_at": {"type": "string", "format": "date-time"},
+        "commitment_digest": {"$ref": "#/$defs/digest"},
+        "confirmation_digest": {"$ref": "#/$defs/digest"},
+        "dispatch_id": {"type": "string", "pattern": "^d-[0-9a-f]{64}$"},
+        "error": {"type": ["object", "null"]},
+        "execution_key": {"$ref": "#/$defs/digest"},
+        "finished_at": {"type": ["string", "null"], "format": "date-time"},
+        "heartbeat_at": {"type": ["string", "null"], "format": "date-time"},
+        "input_digest": {"$ref": "#/$defs/digest"},
+        "launch_id": {"type": "string", "pattern": "^l-[0-9a-f]{64}$"},
+        "native_session_id": {"type": ["string", "null"]},
+        "resolution": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "reason"],
+          "properties": {
+            "kind": {"enum": ["none", "reconciled", "quarantined"]},
+            "reason": {"type": ["string", "null"]}
+          }
+        },
+        "result_digest": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+        "started_at": {"type": ["string", "null"], "format": "date-time"},
+        "state": {"$ref": "#/$defs/launchState"},
+        "state_version": {"type": "integer", "minimum": 1}
+      }
+    },
+    "workerResult": {
+      "title": "worker-result.v1",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifacts", "attempt_id", "commit", "corr_id", "dispatch_id", "error",
+                   "evidence_refs", "execution_key", "finished_at", "idempotency_key",
+                   "owner_fence", "project_id", "round_id", "run_id", "schema_version",
+                   "status", "wave_id", "worker_id"],
+      "properties": {
+        "artifacts": {"type": "array"},
+        "attempt_id": {"type": "string", "minLength": 1},
+        "commit": {"type": ["object", "null"]},
+        "corr_id": {"type": "string", "minLength": 1},
+        "dispatch_id": {"type": "string", "pattern": "^d-[0-9a-f]{64}$"},
+        "error": {"type": ["object", "null"]},
+        "evidence_refs": {"type": "array", "items": {"$ref": "#/$defs/casRef"}},
+        "execution_key": {"$ref": "#/$defs/digest"},
+        "finished_at": {"type": "string", "format": "date-time"},
+        "idempotency_key": {"type": "string", "minLength": 1},
+        "owner_fence": {"$ref": "#/$defs/ownerFence"},
+        "project_id": {"type": "string", "minLength": 1},
+        "round_id": {"type": "string", "minLength": 1},
+        "run_id": {"type": "string", "minLength": 1},
+        "schema_version": {"const": "worker-result.v1"},
+        "status": {"enum": ["pass", "fail", "unverified", "cancelled"]},
+        "wave_id": {"type": "string", "minLength": 1},
+        "worker_id": {"type": "string", "minLength": 1}
+      }
+    },
+    "settlement": {
+      "title": "cf.settlement.v1",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "settlement_id", "scope", "outcome", "counts",
+                   "revisions", "evidence_refs", "settled_at", "settlement_digest"],
+      "properties": {
+        "schema_version": {"const": "cf.settlement.v1"},
+        "settlement_id": {"type": "string", "minLength": 1},
+        "scope": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "id"],
+          "properties": {
+            "kind": {"enum": ["task", "wave", "round", "project"]},
+            "id": {"type": "string", "minLength": 1}
+          }
+        },
+        "outcome": {
+          "enum": ["settled_success", "settled_failure", "settled_partial", "settled_unverified",
+                   "settled_empty", "settled_cancelled", "settled_expired", "settled_unknown",
+                   "settled_verified_then_reopened"],
+          "description": "Total over the outcome lattice: every journal state and every evidence revision has exactly one row in the IV.6 projection table."
+        },
+        "counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["verified", "unverified", "failed", "cancelled", "expired", "unknown"],
+          "properties": {
+            "verified": {"type": "integer", "minimum": 0},
+            "unverified": {"type": "integer", "minimum": 0},
+            "failed": {"type": "integer", "minimum": 0},
+            "cancelled": {"type": "integer", "minimum": 0},
+            "expired": {"type": "integer", "minimum": 0},
+            "unknown": {"type": "integer", "minimum": 0}
+          },
+          "description": "Six disjoint classes. There is no `total` field: the total is their sum, so a settlement cannot disagree with itself."
+        },
+        "revisions": {"type": "integer", "minimum": 0},
+        "evidence_refs": {"type": "array", "items": {"$ref": "#/$defs/casRef"}},
+        "settled_at": {"type": "string", "format": "date-time"},
+        "settlement_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "cancellation": {
+      "title": "cf.cancellation.v1",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "cancellation_id", "launch_id", "requested_phase",
+                   "request", "applied", "signal", "evidence_refs"],
+      "properties": {
+        "schema_version": {"const": "cf.cancellation.v1"},
+        "cancellation_id": {"type": "string", "minLength": 1},
+        "launch_id": {"type": "string", "pattern": "^l-[0-9a-f]{64}$"},
+        "requested_phase": {"$ref": "#/$defs/cancelPhase"},
+        "request": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["requested_at", "requested_by", "reason"],
+          "properties": {
+            "requested_at": {"type": "string", "format": "date-time"},
+            "requested_by": {"type": "string", "minLength": 1},
+            "reason": {"type": "string", "minLength": 1}
+          }
+        },
+        "applied": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["applied_at", "applied_phase", "journal_state_before",
+                        "journal_state_after", "terminal_effect", "permit_consumed"],
+          "properties": {
+            "applied_at": {"type": "string", "format": "date-time"},
+            "applied_phase": {"$ref": "#/$defs/cancelPhase"},
+            "journal_state_before": {"type": "string", "minLength": 1},
+            "journal_state_after": {"type": "string", "minLength": 1},
+            "terminal_effect": {"enum": ["refused_no_launch", "cancelled_before_start",
+                                          "signalled_quiesced", "already_terminal"]},
+            "permit_consumed": {"type": "boolean"}
+          }
+        },
+        "signal": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "sent_at", "quiescence_at"],
+          "properties": {
+            "kind": {"type": ["string", "null"]},
+            "sent_at": {"type": ["string", "null"], "format": "date-time"},
+            "quiescence_at": {"type": ["string", "null"], "format": "date-time"}
+          }
+        },
+        "evidence_refs": {"type": "array", "items": {"$ref": "#/$defs/casRef"}}
+      }
+    },
+    "launchState": {
+      "enum": ["accepted", "running", "succeeded", "failed", "cancelled", "expired", "unknown"],
+      "description": "Seven states. An unresolvable journal state maps to `unknown` with a quarantine resolution; it is never coerced to a neighbour."
+    },
+    "cancelPhase": {"enum": ["pre_admission", "prestart", "running", "terminal"]}
+  }
+}

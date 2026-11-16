@@ -1,0 +1,552 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spec.coding-hermes.invalid/cf2a/1.0.0/schemas/cf2a.evidence.schema.json",
+  "$comment": "CF2A-01 pass-7 Wave 1 \u00b7 phase-discriminated evidence record (P7-06). One closed schema, one phase discriminator, five non-interchangeable subjects. A record may not borrow a later phase's subject to look complete.",
+  "title": "cf.evidence.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "evidence_id",
+    "phase",
+    "task_id",
+    "claim",
+    "subject",
+    "verdict",
+    "observed_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "cf.evidence.v1"
+    },
+    "evidence_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "phase": {
+      "enum": [
+        "staged",
+        "source",
+        "integrated",
+        "publication",
+        "closure"
+      ]
+    },
+    "task_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "claim_id",
+        "claim_generation"
+      ],
+      "properties": {
+        "claim_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "claim_generation": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "subject": {
+      "type": "object"
+    },
+    "criterion_results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "criterion_id",
+          "result"
+        ],
+        "properties": {
+          "criterion_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "criterion_digest": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "argv": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "exit_code": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "expected_exit": {
+            "type": "integer"
+          },
+          "result": {
+            "enum": [
+              "pass",
+              "fail",
+              "unverified"
+            ]
+          }
+        }
+      }
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^cas\\+sha256://"
+      }
+    },
+    "ancestry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "accepted_is_ancestor_of_tip",
+        "judged_by"
+      ],
+      "properties": {
+        "accepted_is_ancestor_of_tip": {
+          "type": "boolean"
+        },
+        "judged_by": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "description": "Publication only. Declared here so the phase condition can narrow it; any other phase that carries it is refused."
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "rule"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "permitted",
+            "denied"
+          ]
+        },
+        "rule": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "description": "Publication only. A denied decision is a recorded outcome, not an absent record."
+    },
+    "verdict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "reason"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "pass",
+            "fail",
+            "unverified"
+          ]
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actor_id",
+        "actor_kind"
+      ],
+      "properties": {
+        "actor_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "actor_kind": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "observed_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "phase": {
+            "const": "staged"
+          }
+        },
+        "required": [
+          "phase"
+        ]
+      },
+      "then": {
+        "properties": {
+          "subject": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "base_oid",
+              "commit_oid",
+              "tree_digest",
+              "policy_ref"
+            ],
+            "properties": {
+              "base_oid": {
+                "$ref": "#/$defs/gitoid"
+              },
+              "commit_oid": {
+                "type": "null",
+                "description": "A staged record never names a commit: the object does not exist yet."
+              },
+              "tree_digest": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "policy_ref": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "criterion_results": {
+            "minItems": 1
+          }
+        },
+        "allOf": [
+          {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "ancestry"
+                  ]
+                },
+                {
+                  "required": [
+                    "decision"
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "phase": {
+            "const": "source"
+          }
+        },
+        "required": [
+          "phase"
+        ]
+      },
+      "then": {
+        "properties": {
+          "subject": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "base_oid",
+              "commit_oid",
+              "tree_digest"
+            ],
+            "properties": {
+              "base_oid": {
+                "$ref": "#/$defs/gitoid"
+              },
+              "commit_oid": {
+                "$ref": "#/$defs/gitoid"
+              },
+              "tree_digest": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            }
+          }
+        },
+        "required": [
+          "criterion_results",
+          "actor"
+        ],
+        "allOf": [
+          {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "ancestry"
+                  ]
+                },
+                {
+                  "required": [
+                    "decision"
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "phase": {
+            "const": "integrated"
+          }
+        },
+        "required": [
+          "phase"
+        ]
+      },
+      "then": {
+        "properties": {
+          "subject": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "base_oid",
+              "commit_oid",
+              "integrated_oid",
+              "tree_digest"
+            ],
+            "properties": {
+              "base_oid": {
+                "$ref": "#/$defs/gitoid"
+              },
+              "commit_oid": {
+                "$ref": "#/$defs/gitoid"
+              },
+              "integrated_oid": {
+                "$ref": "#/$defs/gitoid"
+              },
+              "tree_digest": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            }
+          }
+        },
+        "required": [
+          "criterion_results",
+          "actor"
+        ],
+        "allOf": [
+          {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "ancestry"
+                  ]
+                },
+                {
+                  "required": [
+                    "decision"
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "phase": {
+            "const": "publication"
+          }
+        },
+        "required": [
+          "phase"
+        ]
+      },
+      "then": {
+        "properties": {
+          "subject": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "accepted_object",
+              "observed_tip",
+              "ref"
+            ],
+            "properties": {
+              "accepted_object": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "commit_oid",
+                  "tree_digest"
+                ],
+                "properties": {
+                  "commit_oid": {
+                    "$ref": "#/$defs/gitoid"
+                  },
+                  "tree_digest": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  }
+                }
+              },
+              "observed_tip": {
+                "$ref": "#/$defs/gitoid"
+              },
+              "ref": {
+                "type": "string",
+                "pattern": "^refs/"
+              }
+            }
+          },
+          "ancestry": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "accepted_is_ancestor_of_tip",
+              "judged_by"
+            ],
+            "properties": {
+              "accepted_is_ancestor_of_tip": {
+                "type": "boolean"
+              },
+              "judged_by": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "decision": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "rule"
+            ],
+            "properties": {
+              "kind": {
+                "enum": [
+                  "permitted",
+                  "denied"
+                ]
+              },
+              "rule": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "required": [
+          "ancestry",
+          "decision"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "phase": {
+            "const": "closure"
+          }
+        },
+        "required": [
+          "phase"
+        ]
+      },
+      "then": {
+        "properties": {
+          "subject": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "accepted_object",
+              "closure_commit"
+            ],
+            "properties": {
+              "accepted_object": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "commit_oid",
+                  "tree_digest"
+                ],
+                "properties": {
+                  "commit_oid": {
+                    "$ref": "#/$defs/gitoid"
+                  },
+                  "tree_digest": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  }
+                }
+              },
+              "closure_commit": {
+                "$ref": "#/$defs/gitoid"
+              }
+            }
+          }
+        },
+        "required": [
+          "evidence_refs"
+        ],
+        "allOf": [
+          {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "ancestry"
+                  ]
+                },
+                {
+                  "required": [
+                    "decision"
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "$defs": {
+    "gitoid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$|^[0-9a-f]{64}$",
+      "description": "One GitOID form: 40 or 64 lowercase hex. No abbreviation, no algorithm flag, no prefix."
+    }
+  }
+}

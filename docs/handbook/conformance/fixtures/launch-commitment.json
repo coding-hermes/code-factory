@@ -1,0 +1,306 @@
+{
+  "fixture_id": "cf2a.launch-commitment",
+  "fixture_version": "1.0.0",
+  "kind": "positive",
+  "schema": "cf2a.execution.schema.json",
+  "note": "The complete CT-02 launch chain: L0 content, L1 commitment, L1b confirmation, L2 materialized input and the supervisor.v1 request the foreman submits. No layer hashes its own output.",
+  "l0": {
+    "kind": "immutable brief input",
+    "canonical_json": "{\"attachments\":[],\"criteria\":[{\"argv\":[\"verify\",\"--fixture\"],\"cwd\":\".\",\"description\":\"The admitted change is verified.\",\"expected_exit\":0,\"id\":\"AC-1\",\"oracle_digest\":\"fc360a2ecbbd5eec0f5748b31a5ae732497b5c2ee81ebce4feee6a15acbd7eb8\",\"timeout_s\":60}],\"directive\":\"Complete the admitted board tasks and return evidence.\",\"schema_version\":\"cf.brief-input.v1\",\"skills\":[],\"task\":{\"acceptance_criteria\":[{\"argv\":[\"verify\",\"--fixture\"],\"cwd\":\".\",\"description\":\"The admitted change is verified.\",\"expected_exit\":0,\"id\":\"AC-1\",\"oracle_digest\":\"fc360a2ecbbd5eec0f5748b31a5ae732497b5c2ee81ebce4feee6a15acbd7eb8\",\"timeout_s\":60}],\"cancel_request\":null,\"claim\":{\"claim_generation\":1,\"claim_id\":\"claim-cf1-1\",\"claimant_id\":\"foreman-1\",\"lease_expires_at\":\"2026-11-11T19:03:00Z\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"}},\"completion\":null,\"complexity\":3,\"created_at\":\"2026-11-11T18:00:00Z\",\"created_seq\":1,\"deferral\":null,\"depends_on\":[],\"fixture\":false,\"id\":\"CF-1\",\"initiative_id\":\"initiative-1\",\"kind\":\"task\",\"operation_id\":\"op-claim-cf1\",\"paths\":[\".\"],\"reasoning\":\"A complete vector is required before implementation.\",\"resources\":[],\"revision\":2,\"schema_version\":\"cf.board-task.v1\",\"status\":\"in_progress\",\"title\":\"Prove the execution contract\",\"updated_at\":\"2026-11-11T19:01:00Z\"}}",
+    "input_digest": "aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a",
+    "input_ref": "cas+sha256://code-factory/aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a",
+    "rule": "input_digest covers L0 fields only; dispatch_id, execution_key, input_digest itself and every signature are excluded"
+  },
+  "preallocated": {
+    "launch_id": "l-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048",
+    "nonce": "6b1f0c9a2d4e7385",
+    "rule": "allocated before any digest; hash-exempt bootstrap identities"
+  },
+  "l1_commitment": {
+    "schema_version": "cf.launch-commitment.v1",
+    "launch_id": "l-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048",
+    "nonce": "6b1f0c9a2d4e7385",
+    "project_id": "code-factory",
+    "kind": "worker",
+    "task_id": "CF-1",
+    "wave_id": "w-1",
+    "round_id": "r-17",
+    "attempt_id": "a-1",
+    "supervisor": {
+      "supervisor_id": "sup-1",
+      "supervisor_kind": "resident-foreman",
+      "owner_fence": {
+        "authority_id": "auth-1",
+        "epoch": 7,
+        "owner_id": "manager-1",
+        "project_id": "code-factory"
+      }
+    },
+    "brief_ref": "cas+sha256://code-factory/aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a",
+    "input_digest": "aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a",
+    "input_ref": "cas+sha256://code-factory/aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a",
+    "limits": {
+      "cpu_millis": 1000,
+      "memory_bytes": 4294967296,
+      "pids": 256
+    },
+    "runtime_digest": "be4bd8d671d581f1a49eb9e6ca8fb764ecb6d6ce288f84b16f93f83abb0c8410",
+    "workspace_ref": "cas+sha256://code-factory/85edc4b2f340931dd4b873f4d06edb8252fee8ade465c7e2f95ac49995742c11",
+    "committed_at": "2026-11-11T19:01:00Z",
+    "commitment_digest": "fefb5e5d7887999e0123ebb9bbae94116150941341f2fcb0f1c751861a228b3d"
+  },
+  "l1_commitment_excluded": [
+    "commitment_digest",
+    "signature",
+    "dispatch_id",
+    "execution_key",
+    "confirmation_digest",
+    "launch_input_digest"
+  ],
+  "l1_commitment_digest_rule": "sha256 over JCS bytes of the commitment excluding every field named in l1_commitment_excluded",
+  "derivation": {
+    "execution_key": {
+      "tag": "cf.execution-key.v1",
+      "formula": "H(\"cf.execution-key.v1\" || launch_id || input_digest)",
+      "value": "add6df27bfc4facef355695078b5e1171eda32325a99263c30b81b9f0fc842fc"
+    },
+    "dispatch_id": {
+      "tag": "cf.dispatch-id.v1",
+      "formula": "d- || H(\"cf.dispatch-id.v1\" || launch_id || input_digest)",
+      "value": "d-2ccec62df73e9a889ec12b5c1600e4706d2311d766bfc3a6b07bac986b94fcab"
+    },
+    "cycle_check": "input_digest covers L0 only; neither derivation reads a digest of the record it is stored in"
+  },
+  "l1b_confirmation": {
+    "schema_version": "cf.launch-confirmation.v1",
+    "launch_id": "l-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048",
+    "input_digest": "aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a",
+    "commitment_digest": "fefb5e5d7887999e0123ebb9bbae94116150941341f2fcb0f1c751861a228b3d",
+    "execution_key": "add6df27bfc4facef355695078b5e1171eda32325a99263c30b81b9f0fc842fc",
+    "dispatch_id": "d-2ccec62df73e9a889ec12b5c1600e4706d2311d766bfc3a6b07bac986b94fcab",
+    "derivation": {
+      "execution_key": {
+        "tag": "cf.execution-key.v1",
+        "inputs": [
+          "launch_id",
+          "input_digest"
+        ]
+      },
+      "dispatch_id": {
+        "tag": "cf.dispatch-id.v1",
+        "prefix": "d-",
+        "inputs": [
+          "launch_id",
+          "input_digest"
+        ]
+      },
+      "boundary": "neither derivation reads dispatch_id, execution_key, commitment_digest or any confirmation field"
+    },
+    "accepted_at": "2026-11-11T19:02:00Z",
+    "state": "accepted",
+    "state_version": 1,
+    "confirmation_digest": "093889a3a6f4a61ff1af28d578f1757254446a1c9b3ac15543297097812e6e74"
+  },
+  "l1b_confirmation_excluded": [
+    "confirmation_digest",
+    "signature"
+  ],
+  "l2_launch_input": {
+    "schema_version": "cf.launch-input.v1",
+    "launch_id": "l-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048",
+    "commitment": {
+      "schema_version": "cf.launch-commitment.v1",
+      "launch_id": "l-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048",
+      "nonce": "6b1f0c9a2d4e7385",
+      "project_id": "code-factory",
+      "kind": "worker",
+      "task_id": "CF-1",
+      "wave_id": "w-1",
+      "round_id": "r-17",
+      "attempt_id": "a-1",
+      "supervisor": {
+        "supervisor_id": "sup-1",
+        "supervisor_kind": "resident-foreman",
+        "owner_fence": {
+          "authority_id": "auth-1",
+          "epoch": 7,
+          "owner_id": "manager-1",
+          "project_id": "code-factory"
+        }
+      },
+      "brief_ref": "cas+sha256://code-factory/aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a",
+      "input_digest": "aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a",
+      "input_ref": "cas+sha256://code-factory/aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a",
+      "limits": {
+        "cpu_millis": 1000,
+        "memory_bytes": 4294967296,
+        "pids": 256
+      },
+      "runtime_digest": "be4bd8d671d581f1a49eb9e6ca8fb764ecb6d6ce288f84b16f93f83abb0c8410",
+      "workspace_ref": "cas+sha256://code-factory/85edc4b2f340931dd4b873f4d06edb8252fee8ade465c7e2f95ac49995742c11",
+      "committed_at": "2026-11-11T19:01:00Z",
+      "commitment_digest": "fefb5e5d7887999e0123ebb9bbae94116150941341f2fcb0f1c751861a228b3d"
+    },
+    "commitment_digest": "fefb5e5d7887999e0123ebb9bbae94116150941341f2fcb0f1c751861a228b3d",
+    "confirmation_digest": "093889a3a6f4a61ff1af28d578f1757254446a1c9b3ac15543297097812e6e74",
+    "dispatch_id": "d-2ccec62df73e9a889ec12b5c1600e4706d2311d766bfc3a6b07bac986b94fcab",
+    "execution_key": "add6df27bfc4facef355695078b5e1171eda32325a99263c30b81b9f0fc842fc",
+    "input_digest": "aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a",
+    "input_digest_rule": "carried from the commitment; never recomputed over this materialized object",
+    "materialized_at": "2026-11-11T19:02:01Z"
+  },
+  "supervisor_request": {
+    "body": {
+      "attempt_id": "a-1",
+      "commitment": {
+        "schema_version": "cf.launch-commitment.v1",
+        "launch_id": "l-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048",
+        "nonce": "6b1f0c9a2d4e7385",
+        "project_id": "code-factory",
+        "kind": "worker",
+        "task_id": "CF-1",
+        "wave_id": "w-1",
+        "round_id": "r-17",
+        "attempt_id": "a-1",
+        "supervisor": {
+          "supervisor_id": "sup-1",
+          "supervisor_kind": "resident-foreman",
+          "owner_fence": {
+            "authority_id": "auth-1",
+            "epoch": 7,
+            "owner_id": "manager-1",
+            "project_id": "code-factory"
+          }
+        },
+        "brief_ref": "cas+sha256://code-factory/aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a",
+        "input_digest": "aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a",
+        "input_ref": "cas+sha256://code-factory/aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a",
+        "limits": {
+          "cpu_millis": 1000,
+          "memory_bytes": 4294967296,
+          "pids": 256
+        },
+        "runtime_digest": "be4bd8d671d581f1a49eb9e6ca8fb764ecb6d6ce288f84b16f93f83abb0c8410",
+        "workspace_ref": "cas+sha256://code-factory/85edc4b2f340931dd4b873f4d06edb8252fee8ade465c7e2f95ac49995742c11",
+        "committed_at": "2026-11-11T19:01:00Z",
+        "commitment_digest": "fefb5e5d7887999e0123ebb9bbae94116150941341f2fcb0f1c751861a228b3d"
+      },
+      "deadline": "2026-11-11T21:00:00Z",
+      "dispatch_id": "d-2ccec62df73e9a889ec12b5c1600e4706d2311d766bfc3a6b07bac986b94fcab",
+      "execution_key": "add6df27bfc4facef355695078b5e1171eda32325a99263c30b81b9f0fc842fc",
+      "input_digest": "aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a",
+      "input_ref": "cas+sha256://code-factory/aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a",
+      "kind": "worker",
+      "launch_id": "l-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048",
+      "limits": {
+        "cpu_millis": 1000,
+        "memory_bytes": 4294967296,
+        "pids": 256
+      },
+      "round_id": "r-17",
+      "runtime_digest": "be4bd8d671d581f1a49eb9e6ca8fb764ecb6d6ce288f84b16f93f83abb0c8410",
+      "task_id": "CF-1",
+      "wave_id": "w-1",
+      "worker_id": "worker-1",
+      "workspace_ref": "cas+sha256://code-factory/85edc4b2f340931dd4b873f4d06edb8252fee8ade465c7e2f95ac49995742c11"
+    },
+    "idempotency_key": "launch-a1-key",
+    "method": "PUT",
+    "owner_fence": {
+      "authority_id": "auth-1",
+      "epoch": 7,
+      "owner_id": "manager-1",
+      "project_id": "code-factory"
+    },
+    "path": "/v1/launches/l-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048",
+    "project_id": "code-factory",
+    "request_id": "supervise-a1",
+    "schema_version": "supervisor.v1"
+  },
+  "supervisor_request_canonical_json": "{\"body\":{\"attempt_id\":\"a-1\",\"commitment\":{\"attempt_id\":\"a-1\",\"brief_ref\":\"cas+sha256://code-factory/aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a\",\"commitment_digest\":\"fefb5e5d7887999e0123ebb9bbae94116150941341f2fcb0f1c751861a228b3d\",\"committed_at\":\"2026-11-11T19:01:00Z\",\"input_digest\":\"aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a\",\"input_ref\":\"cas+sha256://code-factory/aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a\",\"kind\":\"worker\",\"launch_id\":\"l-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048\",\"limits\":{\"cpu_millis\":1000,\"memory_bytes\":4294967296,\"pids\":256},\"nonce\":\"6b1f0c9a2d4e7385\",\"project_id\":\"code-factory\",\"round_id\":\"r-17\",\"runtime_digest\":\"be4bd8d671d581f1a49eb9e6ca8fb764ecb6d6ce288f84b16f93f83abb0c8410\",\"schema_version\":\"cf.launch-commitment.v1\",\"supervisor\":{\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"supervisor_id\":\"sup-1\",\"supervisor_kind\":\"resident-foreman\"},\"task_id\":\"CF-1\",\"wave_id\":\"w-1\",\"workspace_ref\":\"cas+sha256://code-factory/85edc4b2f340931dd4b873f4d06edb8252fee8ade465c7e2f95ac49995742c11\"},\"deadline\":\"2026-11-11T21:00:00Z\",\"dispatch_id\":\"d-2ccec62df73e9a889ec12b5c1600e4706d2311d766bfc3a6b07bac986b94fcab\",\"execution_key\":\"add6df27bfc4facef355695078b5e1171eda32325a99263c30b81b9f0fc842fc\",\"input_digest\":\"aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a\",\"input_ref\":\"cas+sha256://code-factory/aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a\",\"kind\":\"worker\",\"launch_id\":\"l-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048\",\"limits\":{\"cpu_millis\":1000,\"memory_bytes\":4294967296,\"pids\":256},\"round_id\":\"r-17\",\"runtime_digest\":\"be4bd8d671d581f1a49eb9e6ca8fb764ecb6d6ce288f84b16f93f83abb0c8410\",\"task_id\":\"CF-1\",\"wave_id\":\"w-1\",\"worker_id\":\"worker-1\",\"workspace_ref\":\"cas+sha256://code-factory/85edc4b2f340931dd4b873f4d06edb8252fee8ade465c7e2f95ac49995742c11\"},\"idempotency_key\":\"launch-a1-key\",\"method\":\"PUT\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"path\":\"/v1/launches/l-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048\",\"project_id\":\"code-factory\",\"request_id\":\"supervise-a1\",\"schema_version\":\"supervisor.v1\"}",
+  "supervisor_request_sha256": "4d8124138ab8507bac885805409e845bcb5f8adc91d15ebc6f8b3dc3249e817a",
+  "config_generation17": {
+    "document": {
+      "schema_version": "cf.config.v1",
+      "generation": 17,
+      "project_id": "code-factory",
+      "scope": "project",
+      "settings": {
+        "max_concurrent": 4,
+        "load_gate": 12,
+        "round_budget": 20000,
+        "attempt_timeout_s": 1800,
+        "turn_timeout_s": 300,
+        "credential_ttl_s": 300,
+        "claim_lease_s": 1800,
+        "group_max_members": 256
+      },
+      "enums": {
+        "admission_mode": "tasks",
+        "lane_kind": "foreman"
+      },
+      "origins": {
+        "settings.max_concurrent": "explicit",
+        "settings.load_gate": "explicit",
+        "settings.group_max_members": "default"
+      },
+      "updated_at": "2026-11-11T18:30:00Z",
+      "updated_by": "owner-1"
+    },
+    "config_digest": "67e64205bd31b8d38eaae619e7299551dd85d1f93eadec32ac80bbb96e23ea8d",
+    "rule": "the launch names a config generation; the document digest binds the settings the launch observed"
+  },
+  "negative_arms": [
+    {
+      "name": "derived identifier changed",
+      "mutate": {
+        "pointer": "/l1b_confirmation/dispatch_id",
+        "value": "d-0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "expected": {
+        "accepted": false,
+        "refusal": "CONTRACT_INVALID",
+        "detail": "dispatch_id recomputed from launch_id and input_digest differs; recomputation refuses",
+        "no_rehash": "the implementation must not retry with a different input_digest"
+      }
+    },
+    {
+      "name": "confirmation digest inside its own domain",
+      "mutate": {
+        "pointer": "/l1b_confirmation/confirmation_digest",
+        "value": "included-in-own-hash"
+      },
+      "expected": {
+        "accepted": false,
+        "refusal": "CONTRACT_INVALID",
+        "detail": "a record may not include its own digest"
+      }
+    },
+    {
+      "name": "L0 content mutated after the commitment",
+      "mutate": {
+        "pointer": "/l0/canonical_json",
+        "op": "replace",
+        "find": "Prove the execution contract",
+        "value": "Prove the execution contract (tampered)"
+      },
+      "expected": {
+        "accepted": false,
+        "refusal": "DIGEST_MISMATCH",
+        "detail": "input_digest no longer matches the L0 bytes"
+      }
+    },
+    {
+      "name": "launch id absent from the canonical bytes",
+      "mutate": {
+        "pointer": "/l1_commitment/launch_id",
+        "op": "remove"
+      },
+      "expected": {
+        "accepted": false,
+        "refusal": "CONTRACT_INVALID",
+        "detail": "an identity quoted by the path must also exist inside the hashed bytes"
+      }
+    }
+  ]
+}

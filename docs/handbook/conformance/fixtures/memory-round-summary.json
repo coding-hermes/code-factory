@@ -1,0 +1,386 @@
+{
+  "fixture_id": "cf2a.memory-round-summary",
+  "fixture_version": "1.0.0",
+  "kind": "positive-with-negative-arms",
+  "schema": "cf2a.memory.schema.json",
+  "note": "P7-08 commitment chain: role-discriminated memory record, round summary, final report and the closure witness. No layer hashes a layer above it.",
+  "round_summary_body": {
+    "schema_version": "cf.round-summary.v1",
+    "project_id": "code-factory",
+    "round_id": "r-17",
+    "run_id": "run-17",
+    "corr_id": "c-17",
+    "owner_fence": {
+      "authority_id": "auth-1",
+      "epoch": 7,
+      "owner_id": "manager-1",
+      "project_id": "code-factory"
+    },
+    "state": "complete",
+    "wave_refs": [
+      {
+        "wave_id": "w-1",
+        "attempt_ids": [
+          "a-1"
+        ],
+        "state": "complete"
+      }
+    ],
+    "budget": {
+      "allowance": 20000,
+      "consumed": 1,
+      "reserved": 0,
+      "remaining": 19999
+    },
+    "stop_reason": "no_useful_work",
+    "evidence_refs": [
+      "cas+sha256://code-factory/ac02e2270feefb35649d9eb0d054f72088c2245561e4eb9b55c491a4090bca99"
+    ],
+    "relations": [
+      {
+        "kind": "covers",
+        "target": "wave:w-1"
+      }
+    ],
+    "created_at": "2026-11-11T19:24:00Z"
+  },
+  "round_summary_excluded": [
+    "round_summary_digest",
+    "memory_ref",
+    "report_digest",
+    "signature"
+  ],
+  "round_summary_digest": "8307e064c4773afc4e1c08f1271a9612e4e47e055ff53628dd80af8b0239803a",
+  "memory_record": {
+    "schema_version": "cf.memory-record.v1",
+    "record_id": "mem-r17-round",
+    "record_type": "round",
+    "domain": "code-factory",
+    "namespace": "factory/code-factory/rounds/r-17",
+    "body_kind": "cf.round-summary.v1",
+    "writer": {
+      "writer_id": "foreman-1",
+      "writer_role": "foreman",
+      "writer_generation": 3,
+      "owner_fence": {
+        "authority_id": "auth-1",
+        "epoch": 7,
+        "owner_id": "manager-1",
+        "project_id": "code-factory"
+      }
+    },
+    "relations": [
+      {
+        "kind": "covers",
+        "target": "wave:w-1"
+      }
+    ],
+    "body": {
+      "schema_version": "cf.round-summary.v1",
+      "project_id": "code-factory",
+      "round_id": "r-17",
+      "run_id": "run-17",
+      "corr_id": "c-17",
+      "owner_fence": {
+        "authority_id": "auth-1",
+        "epoch": 7,
+        "owner_id": "manager-1",
+        "project_id": "code-factory"
+      },
+      "state": "complete",
+      "wave_refs": [
+        {
+          "wave_id": "w-1",
+          "attempt_ids": [
+            "a-1"
+          ],
+          "state": "complete"
+        }
+      ],
+      "budget": {
+        "allowance": 20000,
+        "consumed": 1,
+        "reserved": 0,
+        "remaining": 19999
+      },
+      "stop_reason": "no_useful_work",
+      "evidence_refs": [
+        "cas+sha256://code-factory/ac02e2270feefb35649d9eb0d054f72088c2245561e4eb9b55c491a4090bca99"
+      ],
+      "relations": [
+        {
+          "kind": "covers",
+          "target": "wave:w-1"
+        }
+      ],
+      "created_at": "2026-11-11T19:24:00Z"
+    },
+    "created_at": "2026-11-11T19:24:00Z",
+    "state": "local",
+    "payload_digest": "0956384d160d52cbac30f25fb91c11bac662c715ad3601c20cf6ae95339ff04d",
+    "sync": {
+      "state": "local",
+      "receipt_ref": null,
+      "receipt_digest": null
+    }
+  },
+  "memory_record_excluded": [
+    "payload_digest",
+    "sync",
+    "signature"
+  ],
+  "memory_payload_digest": "0956384d160d52cbac30f25fb91c11bac662c715ad3601c20cf6ae95339ff04d",
+  "final_report": {
+    "budget": {
+      "allowance": 20000,
+      "consumed": 1,
+      "remaining": 19999,
+      "reserved": 0
+    },
+    "corr_id": "c-17",
+    "evidence_refs": [
+      "cas+sha256://code-factory/ac02e2270feefb35649d9eb0d054f72088c2245561e4eb9b55c491a4090bca99"
+    ],
+    "finished_at": "2026-11-11T19:25:00Z",
+    "idempotency_key": "report-r17",
+    "owner_fence": {
+      "authority_id": "auth-1",
+      "epoch": 7,
+      "owner_id": "manager-1",
+      "project_id": "code-factory"
+    },
+    "project_id": "code-factory",
+    "round_id": "r-17",
+    "round_summary_digest": "8307e064c4773afc4e1c08f1271a9612e4e47e055ff53628dd80af8b0239803a",
+    "run_id": "run-17",
+    "schema_version": "round-report.v1",
+    "status": "pass",
+    "stop_reason": "no_useful_work",
+    "summary_memory_ref": "cas+sha256://code-factory/0956384d160d52cbac30f25fb91c11bac662c715ad3601c20cf6ae95339ff04d",
+    "task_results": [
+      {
+        "attempt_id": "a-1",
+        "result_ref": "cas+sha256://code-factory/ac02e2270feefb35649d9eb0d054f72088c2245561e4eb9b55c491a4090bca99",
+        "status": "pass",
+        "task_id": "CF-1"
+      }
+    ],
+    "waves": [
+      {
+        "attempt_ids": [
+          "a-1"
+        ],
+        "state": "complete",
+        "wave_id": "w-1"
+      }
+    ],
+    "report_digest": "e989fd1f6b5b40f04f40a50e0900f3f5a7a2e2a25b93a7bcd487e6b70402d554"
+  },
+  "report_excluded": [
+    "report_digest",
+    "signature",
+    "closure_ref"
+  ],
+  "report_digest": "e989fd1f6b5b40f04f40a50e0900f3f5a7a2e2a25b93a7bcd487e6b70402d554",
+  "closure": {
+    "schema_version": "cf.round-closure.v1",
+    "round_id": "r-17",
+    "run_id": "run-17",
+    "report_digest": "e989fd1f6b5b40f04f40a50e0900f3f5a7a2e2a25b93a7bcd487e6b70402d554",
+    "report_ref": "cas+sha256://code-factory/e989fd1f6b5b40f04f40a50e0900f3f5a7a2e2a25b93a7bcd487e6b70402d554",
+    "round_summary_digest": "8307e064c4773afc4e1c08f1271a9612e4e47e055ff53628dd80af8b0239803a",
+    "summary_memory_ref": "cas+sha256://code-factory/0956384d160d52cbac30f25fb91c11bac662c715ad3601c20cf6ae95339ff04d",
+    "closed_at": "2026-11-11T19:25:30Z",
+    "note": "L2 convergence witness: references both lower layers, is referenced by neither"
+  },
+  "role_discriminated_envelope": {
+    "envelope": [
+      "schema_version",
+      "record_id",
+      "record_type",
+      "domain",
+      "namespace",
+      "body_kind",
+      "writer",
+      "relations",
+      "body",
+      "created_at",
+      "state"
+    ],
+    "writer": {
+      "required": [
+        "writer_id",
+        "writer_role"
+      ],
+      "optional": [
+        "writer_generation",
+        "owner_fence"
+      ]
+    },
+    "record_types": [
+      "worker",
+      "wave",
+      "round",
+      "resolution",
+      "decision",
+      "finding"
+    ],
+    "body_union": {
+      "worker": {
+        "required": [
+          "task_id",
+          "attempt_id",
+          "outcome"
+        ],
+        "nullable": [
+          "commit",
+          "error"
+        ]
+      },
+      "wave": {
+        "required": [
+          "wave_id",
+          "attempt_ids",
+          "outcome"
+        ],
+        "nullable": [
+          "stop_reason"
+        ]
+      },
+      "round": {
+        "required": [
+          "round_id",
+          "state",
+          "wave_refs",
+          "budget"
+        ],
+        "nullable": [
+          "stop_reason"
+        ]
+      },
+      "resolution": {
+        "required": [
+          "resolution_id",
+          "subject",
+          "outcome"
+        ],
+        "nullable": [
+          "rationale"
+        ]
+      },
+      "decision": {
+        "required": [
+          "decision_id",
+          "subject",
+          "outcome"
+        ],
+        "nullable": [
+          "rationale"
+        ]
+      },
+      "finding": {
+        "required": [
+          "finding_id",
+          "severity",
+          "summary"
+        ],
+        "nullable": [
+          "disposition"
+        ]
+      }
+    },
+    "null_rule": "a body field listed as nullable MUST be present and null; it may not be omitted"
+  },
+  "label_map": {
+    "rule": "human labels from earlier revisions import losslessly into the canonical names; the canonical names never change meaning",
+    "aliases": {
+      "writer_identity": "writer.writer_id",
+      "worker-outcome": "record_type=worker, body.outcome",
+      "wave-summary": "record_type=wave",
+      "round-summary": "record_type=round",
+      "resolution": "record_type=resolution",
+      "decision": "record_type=decision",
+      "finding": "record_type=finding"
+    },
+    "lossless": true
+  },
+  "chain_order": [
+    "round summary body (no report_digest, no memory_ref)",
+    "round memory record wrapping the body (payload_digest covers the record as stored)",
+    "final report body naming round_summary_digest and summary_memory_ref",
+    "closure witness naming both lower layers"
+  ],
+  "negative_arms": [
+    {
+      "name": "summary names the final report",
+      "mutate": {
+        "pointer": "/round_summary_body/report_digest",
+        "value": "e989fd1f6b5b40f04f40a50e0900f3f5a7a2e2a25b93a7bcd487e6b70402d554"
+      },
+      "expected": {
+        "accepted": false,
+        "refusal": "CONTRACT_INVALID",
+        "detail": "a lower layer may not include the digest of a higher layer"
+      }
+    },
+    {
+      "name": "summary names its own memory record",
+      "mutate": {
+        "pointer": "/round_summary_body/memory_ref",
+        "value": "cas+sha256://code-factory/0956384d160d52cbac30f25fb91c11bac662c715ad3601c20cf6ae95339ff04d"
+      },
+      "expected": {
+        "accepted": false,
+        "refusal": "CONTRACT_INVALID",
+        "detail": "the summary excludes its own memory reference"
+      }
+    },
+    {
+      "name": "report re-hashes itself",
+      "mutate": {
+        "pointer": "/final_report/report_digest",
+        "op": "recompute-including-self"
+      },
+      "expected": {
+        "accepted": false,
+        "refusal": "CONTRACT_INVALID"
+      }
+    },
+    {
+      "name": "role omitted from the envelope",
+      "mutate": {
+        "pointer": "/memory_record/writer/writer_role",
+        "op": "remove"
+      },
+      "expected": {
+        "accepted": false,
+        "refusal": "CONTRACT_INVALID",
+        "detail": "role is required; a record whose role is unknown cannot be projected"
+      }
+    },
+    {
+      "name": "nullable field omitted rather than null",
+      "mutate": {
+        "pointer": "/final_report/stop_reason",
+        "op": "remove"
+      },
+      "expected": {
+        "accepted": false,
+        "refusal": "CONTRACT_INVALID"
+      }
+    },
+    {
+      "name": "alias mapped by dropping a required field",
+      "mutate": {
+        "pointer": "/memory_record/writer",
+        "op": "alias-flatten",
+        "value": "writer_identity"
+      },
+      "expected": {
+        "accepted": false,
+        "refusal": "CONTRACT_INVALID",
+        "detail": "an importer that loses writer_role is not lossless"
+      }
+    }
+  ]
+}

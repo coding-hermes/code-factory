@@ -1,0 +1,228 @@
+{
+  "fixture_id": "cf2a.custody-request-response",
+  "fixture_version": "1.0.0",
+  "kind": "positive-with-negative-arms",
+  "schema": "cf2a.execution.schema.json",
+  "note": "P7-03 custody chain: request digests, unsigned payload, receipt and signed envelope. The credential value never appears; only its CAS reference.",
+  "request": {
+    "schema_version": "cf.crier.request.v1",
+    "message_type": "custody.claim",
+    "request_id": "req-custody-1",
+    "idempotency_key": "custody-lease-1-gen3",
+    "principal": {
+      "principal_id": "node-1",
+      "principal_kind": "node"
+    },
+    "lease": {
+      "lease_id": "lease-1",
+      "node_id": "node-1",
+      "generation": 3
+    },
+    "project_id": "code-factory",
+    "owner_fence": {
+      "authority_id": "auth-1",
+      "epoch": 7,
+      "owner_id": "manager-1",
+      "project_id": "code-factory"
+    },
+    "nonce": "5d0c4a7e91b3f628",
+    "body": {
+      "operation": "claim",
+      "lease": {
+        "lease_id": "lease-1",
+        "node_id": "node-1",
+        "generation": 3
+      }
+    },
+    "issued_at": "2026-11-11T19:05:00Z",
+    "request_digest": "bbf5250d9a7985f9dbf6280f12a0ebcb038e50170d9089898f10aec8a1d736cc",
+    "replay_digest": "7905bb36b85bf1cf6e28e6e042ab80747659a53422f80a3f211a6fe7e42592ce"
+  },
+  "request_excluded": [
+    "request_digest",
+    "replay_digest",
+    "idempotency_key",
+    "signature"
+  ],
+  "request_digest": "bbf5250d9a7985f9dbf6280f12a0ebcb038e50170d9089898f10aec8a1d736cc",
+  "replay_digest": "7905bb36b85bf1cf6e28e6e042ab80747659a53422f80a3f211a6fe7e42592ce",
+  "payload": {
+    "schema_version": "cf.crier.response-payload.v1",
+    "message_type": "custody.claim",
+    "request_id": "req-custody-1",
+    "request_digest": "bbf5250d9a7985f9dbf6280f12a0ebcb038e50170d9089898f10aec8a1d736cc",
+    "replay_digest": "7905bb36b85bf1cf6e28e6e042ab80747659a53422f80a3f211a6fe7e42592ce",
+    "result": {
+      "outcome": "granted",
+      "credential_ref": "cas+sha256://code-factory/9c1e4f0b7d2a6358",
+      "expires_at": "2026-11-11T19:10:00Z",
+      "usage": "single-delivery"
+    }
+  },
+  "response_body_digest": "5df30f1a177f1a97d690a3a8bcc134afda949b5c7893288231139d7748cf5de5",
+  "receipt": {
+    "schema_version": "cf.crier.receipt.v1",
+    "message_type": "custody.claim",
+    "response_body_digest": "5df30f1a177f1a97d690a3a8bcc134afda949b5c7893288231139d7748cf5de5",
+    "lease": {
+      "lease_id": "lease-1",
+      "node_id": "node-1",
+      "generation": 3
+    },
+    "principal": {
+      "principal_id": "node-1",
+      "principal_kind": "node"
+    },
+    "nonce": "5d0c4a7e91b3f628",
+    "delivered_at": "2026-11-11T19:05:01Z",
+    "expires_at": "2026-11-11T19:05:31Z",
+    "ttl_seconds": 30
+  },
+  "receipt_excluded": [
+    "receipt_digest",
+    "signature"
+  ],
+  "receipt_digest": "6d58935d1a6b9ef1815cc59309e074778ab0f528b3780a57f63ba2f0e984cb08",
+  "envelope": {
+    "schema_version": "cf.crier.envelope.v1",
+    "audience": {
+      "node_id": "node-1",
+      "generation": 3,
+      "project_id": "code-factory"
+    },
+    "transport": {
+      "kind": "mtls",
+      "session_id": "sess-7f21"
+    },
+    "signer": {
+      "key_id": "conformance-test-key-1",
+      "public_key_hex": "08ee59b4d1351ee363eb8a0f5cfcdb8fda1bc01dcc94e5f0b5114084d2b754f2",
+      "alg": "ed25519"
+    },
+    "payload": {
+      "schema_version": "cf.crier.response-payload.v1",
+      "message_type": "custody.claim",
+      "request_id": "req-custody-1",
+      "request_digest": "bbf5250d9a7985f9dbf6280f12a0ebcb038e50170d9089898f10aec8a1d736cc",
+      "replay_digest": "7905bb36b85bf1cf6e28e6e042ab80747659a53422f80a3f211a6fe7e42592ce",
+      "result": {
+        "outcome": "granted",
+        "credential_ref": "cas+sha256://code-factory/9c1e4f0b7d2a6358",
+        "expires_at": "2026-11-11T19:10:00Z",
+        "usage": "single-delivery"
+      }
+    },
+    "receipt": {
+      "schema_version": "cf.crier.receipt.v1",
+      "message_type": "custody.claim",
+      "response_body_digest": "5df30f1a177f1a97d690a3a8bcc134afda949b5c7893288231139d7748cf5de5",
+      "lease": {
+        "lease_id": "lease-1",
+        "node_id": "node-1",
+        "generation": 3
+      },
+      "principal": {
+        "principal_id": "node-1",
+        "principal_kind": "node"
+      },
+      "nonce": "5d0c4a7e91b3f628",
+      "delivered_at": "2026-11-11T19:05:01Z",
+      "expires_at": "2026-11-11T19:05:31Z",
+      "ttl_seconds": 30
+    },
+    "receipt_digest": "6d58935d1a6b9ef1815cc59309e074778ab0f528b3780a57f63ba2f0e984cb08",
+    "response_body_digest": "5df30f1a177f1a97d690a3a8bcc134afda949b5c7893288231139d7748cf5de5",
+    "signature": {
+      "alg": "ed25519",
+      "key_id": "conformance-test-key-1",
+      "sig_hex": "290364148da7f8912df14d3905f69d1ea67bd640f48a21707d05ffac9c708431b34deee9175143e156e54be4c0680616eb402ef23d5de26375af90a3b1fd1809",
+      "transcript_sha256": "d6384cef0d6b95375871e39f8b7788c1b4510e0bca45e4bf006bcb83f46bfa13"
+    }
+  },
+  "signature": {
+    "alg": "ed25519",
+    "public_key_hex": "08ee59b4d1351ee363eb8a0f5cfcdb8fda1bc01dcc94e5f0b5114084d2b754f2",
+    "key_note": "deterministic conformance test key derived from sha256('cf2a-conformance-ed25519-test-key/v1'); it authorizes nothing outside this fixture",
+    "transcript": "{\"audience\":{\"generation\":3,\"node_id\":\"node-1\",\"project_id\":\"code-factory\"},\"receipt_digest\":\"6d58935d1a6b9ef1815cc59309e074778ab0f528b3780a57f63ba2f0e984cb08\",\"response_body_digest\":\"5df30f1a177f1a97d690a3a8bcc134afda949b5c7893288231139d7748cf5de5\",\"schema_version\":\"cf.crier.envelope-signature.v1\",\"transport\":{\"kind\":\"mtls\",\"session_id\":\"sess-7f21\"}}",
+    "transcript_sha256": "d6384cef0d6b95375871e39f8b7788c1b4510e0bca45e4bf006bcb83f46bfa13",
+    "signature_hex": "290364148da7f8912df14d3905f69d1ea67bd640f48a21707d05ffac9c708431b34deee9175143e156e54be4c0680616eb402ef23d5de26375af90a3b1fd1809"
+  },
+  "verification_order": [
+    "recompute response_body_digest from payload with the cf.crier.response-body.v1 tag",
+    "recompute receipt_digest from receipt with the cf.crier.receipt.v1 tag",
+    "compare receipt.response_body_digest to the recomputed payload digest",
+    "verify the envelope signature over the transcript naming receipt_digest, response_body_digest, audience and transport",
+    "compare audience to the receiving node id and generation",
+    "only then accept the credential reference"
+  ],
+  "response_hash_rule": "the response hash never covers the embedded receipt or its digest",
+  "negative_arms": [
+    {
+      "name": "payload mutated after the receipt was issued",
+      "mutate": {
+        "pointer": "/payload/result/expires_at"
+      },
+      "expected": {
+        "accepted": false,
+        "refusal": "DIGEST_MISMATCH",
+        "detail": "recomputed response_body_digest differs from receipt.response_body_digest"
+      }
+    },
+    {
+      "name": "receipt linked to a different payload",
+      "mutate": {
+        "pointer": "/receipt/response_body_digest"
+      },
+      "expected": {
+        "accepted": false,
+        "refusal": "DIGEST_MISMATCH"
+      }
+    },
+    {
+      "name": "receipt digest included in its own domain",
+      "mutate": {
+        "pointer": "/receipt/receipt_digest",
+        "value": "included"
+      },
+      "expected": {
+        "accepted": false,
+        "refusal": "CONTRACT_INVALID"
+      }
+    },
+    {
+      "name": "envelope replayed to another audience",
+      "mutate": {
+        "pointer": "/envelope/audience/node_id",
+        "value": "node-2"
+      },
+      "expected": {
+        "accepted": false,
+        "refusal": "AUDIENCE_MISMATCH",
+        "detail": "the signature transcript names the original audience"
+      }
+    },
+    {
+      "name": "request replay digest reused for a different message type",
+      "mutate": {
+        "pointer": "/request/replay_digest"
+      },
+      "value_hint": "H(\"custody.release\" || canonical body)",
+      "expected": {
+        "accepted": false,
+        "refusal": "DIGEST_MISMATCH"
+      }
+    },
+    {
+      "name": "idempotency key inside the request digest domain",
+      "mutate": {
+        "pointer": "/request/request_digest",
+        "op": "recompute-including-idempotency-key"
+      },
+      "expected": {
+        "accepted": false,
+        "refusal": "CONTRACT_INVALID",
+        "detail": "the excluded-field list is normative; a digest computed with a different list is not comparable"
+      }
+    }
+  ]
+}
