@@ -460,10 +460,10 @@ debit worker allowance. The round report names the count `consumed`; ledger stat
 
 | Record / key | Required stored fields beyond key |
 |---|---|
-| round / round_id | run_id, corr_id, project_id, lane_id, config_generation, board OID, owner_fence, allowance integer, deadline, request_digest, state, state_version, created_at, updated_at |
+| round / round_id | run_id, corr_id, project_id, lane_id, config_generation, board OID, owner_fence, allowance integer, admitted_at, admitted_monotonic, round_deadline, round_remaining_ns, postcheck_deadline, tick_start, tick_deadline, tick_remaining_ns, request_digest, state, state_version, created_at, updated_at |
 | capacity / reservation_id | round_id, host_id, resource vector, weight, state held/released, release_reason nullable |
 | worker / round_id,worker_id | state reserved/charged/refunded, launch_id, first_attempt_id, transition_seq integer |
-| attempt / attempt_id | round_id,worker_id, wave_id,dispatch_id,launch_id,input_digest,deadline,state intent/start_unknown/running/terminal/quarantined, native_session_id nullable, result_digest nullable |
+| attempt / attempt_id | round_id,worker_id, wave_id,dispatch_id,launch_id,input_digest,attempt_deadline,attempt_released_at,attempt_monotonic,attempt_remaining_ns,state intent/start_unknown/running/terminal/quarantined, native_session_id nullable, result_digest nullable |
 | result / attempt_id or round_id | canonical body, digest, received_at, terminal outcome, fence, late boolean |
 | projection / round_id,sink | sink board/memory/publication/verifier, expected_digest, state pending/applied/conflict, receipt nullable |
 | outbox / destination,message_id | canonical body, digest, state pending/claimed/acked/dead, attempts, available_at, claim_owner nullable, claim_until nullable, receipt nullable |
@@ -690,22 +690,65 @@ Admission materializes Part V §V.12. `total_budget` is the integer 0..20,000
 worker-attempt allowance, including the valid 20,000 case; zero admits no worker
 launches. Simultaneous slots remain an independent resource.
 `deadline_s` is 120..604800 seconds, default 21600; `tick_wall_s` has the same default and
-must cover the round plus settlement. The scheduler's deadline record contains
-`admitted_monotonic`, `round_deadline`, `postcheck_deadline` and `tick_deadline`. Every
-model-turn timeout, attempt wall, hook, retry and outbox operation consumes the same
-monotonic round budget; none resets it at a wave or process restart. A remaining attempt
-budget insufficient for launch/transfer/cleanup reserves returns
-`DEADLINE_INSUFFICIENT` before grant request.
+must cover the round plus settlement. Admission records `admitted_at`,
+`admitted_monotonic`, `round_deadline = admitted_at + deadline_s`,
+`round_remaining_ns`, `postcheck_deadline`, `tick_start`, `tick_deadline =
+min(tick_start + tick_wall_s, round_deadline + postcheck_budget +
+projection_budget)` and `tick_remaining_ns`. `CT-02.execution.round_deadline` is the
+absolute round instant and `CT-02.execution.deadline_s` is its duration; the retired
+`policy.round_wall_s` is not emitted or read. The attempt records its own
+`attempt_released_at`, `attempt_monotonic`, `attempt_deadline` and
+`attempt_remaining_ns` at first durable native release. Every model-turn timeout, hook,
+retry and outbox operation consumes the same round budget; none resets it at a wave or
+process restart. On a new boot the remainder is
+`min(checkpoint_remaining, max(0, absolute_deadline - now_utc))`; a missing checkpoint is
+`DEADLINE_UNKNOWN`, never a fresh full budget. A remaining attempt budget insufficient
+for launch/transfer/cleanup reserves returns `DEADLINE_INSUFFICIENT` before grant
+request.
 
-The §15 lifecycle names are projections, not a second state machine. `RETURNED` is CT-06
-`received`; `PROJECTIONS_PENDING` for memory/evidence is `awaiting_evidence` (also named
-`REPORTED_PENDING_MEMORY` in VII); `PROJECTIONS_PENDING` for a required POST hook is
-`postcheck_pending`; `CLOSED` is one of `settled_success`, `settled_failure` or
-`settled_partial` from Part I's reduction; unresolved `UNKNOWN` is CT-06 `unknown`.
+Scheduler cancellation, lease loss and initiative stop use M2's phase-discriminated
+`cancellation.v1`, never a fabricated native identity. For `RESERVED`/`START_INTENT` it
+sends `phase=unstarted` and persists the non-signalling CAS; for a durable
+`STARTED`/`RUNNING` record it sends `phase=native` with the exact incarnation; for
+`START_UNKNOWN` or incomplete identity it sends `phase=ambiguous` and retains the
+quarantine/readback. The cancel CAS and the start-release CAS share `state_version`, so a
+winning prestart cancel prevents release. Scheduler settles the outcome from the
+returned phase/state, never from process absence.
+
+The §15 lifecycle names are projections, not a second state machine. The scheduler
+applies the Wave 1 total projection table mechanically; no chapter may coerce an
+unverified or ambiguous execution into success. The module rows are:
+
+| Execution / round source | LaunchResponse projection | CT-06 settlement projection |
+|---|---|---|
+| `RESERVED`, no native identity | `state=accepted`, `resolution=none`, `outcome=null` | `received`; no success counter |
+| `START_INTENT` without native proof | `state=unknown`, `resolution=quarantined`, `outcome=null` | `unknown`; reconciliation, no retry |
+| `STARTED` or `RUNNING` | `state=running`, `resolution=none`, `outcome=null` | `received` or `awaiting_evidence` |
+| terminal result `pass`, every required task passes and publication is verified | `state=succeeded`, `outcome=pass` | `settled_success` |
+| terminal result `fail`, no unknown/unverified remainder | `state=failed`, `outcome=fail` | `settled_failure` |
+| mixed pass/fail, or execution pass with definitive publication failure | terminal `state`, immutable `outcome=partial` | `settled_partial`; never success |
+| uniform or any required `unverified`, including uncertain commit, push or gate readback | terminal `state`, immutable `outcome=unverified` | `settled_unverified` (dedicated terminal; no success counter and no fresh execution) |
+| `START_UNKNOWN`, `STOP_UNKNOWN`, control death or ambiguous native identity | `state=unknown`, `resolution=quarantined`, `outcome=unknown` | `unknown`; quarantine and reconciliation, never a retry |
+| cancelled before start with proof | `state=cancelled`, `resolution=none`, `outcome=null` | `settled_cancelled`; refund only the proven never-started reservation |
+| cancelled native and quiescent | `state=cancelled`, `resolution=none`, `outcome=null` | `settled_cancelled`; capacity releases after quiescence |
+| expired start with no process | `state=expired`, `resolution=none`, `outcome=fail` with `EXPIRED_START` | `settled_failure`; no worker credit |
+| expired start with unknown process | `state=unknown`, `resolution=quarantined`, `outcome=unknown` | `unknown` |
+| empty task scope | `state=succeeded`, `outcome=pass`, consumed 0 | `settled_success` with zero work; no worker launch |
+| zero allowance with nonempty task scope | `state=accepted`, `outcome=null` | `settled_failure` with `BUDGET_EXHAUSTED`; no success counter |
+| required POST hook exhaustion | execution outcome retained | `settled_failure` with `POSTCHECK_FAILED` |
+| late evidence or authorized retry after settlement | execution projection unchanged | new `settlement_revision` only; reruns readback/hooks, never work |
+
+`RETURNED` is CT-06 `received`; `PROJECTIONS_PENDING` for memory/evidence is
+`awaiting_evidence` (also named `REPORTED_PENDING_MEMORY` in VII);
+`PROJECTIONS_PENDING` for a required POST hook is `postcheck_pending`; `CLOSED` is one
+of `settled_success`, `settled_failure`, `settled_partial`, `settled_unverified` or
+`settled_cancelled` from this total mapping; unresolved `UNKNOWN` is CT-06 `unknown`.
+`settled_unverified` and `settled_cancelled` are dedicated terminal states in the Wave 1
+CT-06 record, not aliases for failure or unknown.
 Execution status remains immutable while settlement revisions change. Capacity releases
 only after native quiescence, even while projections remain pending. Worker allowance is
-not credited back, and no next round starts until the prior round reaches a terminal
-settlement revision.
+not credited back except for the one proven never-started refund, and no next round
+starts until the prior round reaches a terminal settlement revision.
 
 A clean worker exit without a durable result is `UNKNOWN_RESULT`, not pass. Worker death
 after result fsync replays that result; death before evidence fsync is unknown and

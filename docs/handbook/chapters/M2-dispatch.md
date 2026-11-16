@@ -355,9 +355,10 @@ EVIDENCE: docs/handbook/contract-vectors.json
 
 The contract is specification-only; runtime delivery and supervisor conformance remain unverified.
 
-The worker `launch_id` derives from the JCS array
-`[project_id,round_id,wave_id,worker_id,attempt_id]` as specified in §15.4;
-`execution_key = SHA256(JCS({launch_id,input_digest}))`. Dispatch/delivery IDs
+The worker `launch_id` is preallocated by the foreman from its round ledger immediately
+before CT-05, as specified in §15.4; it is not derived from a launch digest. The
+supervisor derives `execution_key` once from `launch_id` and the L0 `input_digest`.
+Dispatch/delivery IDs
 are receipt identities, not uniqueness authority. Unique indexes exist for
 execution_key and for `[project_id,round_id,task_id,attempt_id]`. Reusing an
 attempt for different input is `LAUNCH_CONFLICT`. Round custody deduplicates on
@@ -439,8 +440,15 @@ A launch validates all three and the 30 s one-use dispatch grant. Custody renewa
 loss does not create another executor: the durable execution key survives redelivery.
 Owner/claim renewal failure immediately freezes protected effects; at their deadline
 (with no grace) the supervisor sends TERM to the exact process group, then KILL after
-10 s if needed, records quiescence or `STOP_UNKNOWN`, and requests fencing. Round and
-attempt wall clocks start at the first durable release; restart cannot reset them.
+10 s if needed, records quiescence or `STOP_UNKNOWN`, and requests fencing. The round
+wall starts once at durable admission (`admitted_at`/`admitted_monotonic` and
+`round_deadline`); the attempt wall starts at the first durable native release
+(`attempt_released_at`/`attempt_deadline`). Restart cannot reset either clock. A
+30-second admission-to-release delay consumes 30 seconds of the same round; it does not
+move the round end. Each turn has its own start and timeout, bounded by the remaining
+attempt. The deadline record stores both an absolute UTC deadline and a monotonic
+remainder, with the restart conversion in Part V §V.12. A missing checkpoint is
+`DEADLINE_UNKNOWN`, never a fresh budget.
 The default attempt wall is 1800 s, bounded by remaining round wall minus the configured
 launch, transfer and cleanup reserves (Part V §V.12). CF_TIMEOUT_S limits each model turn;
 it does not replace this attempt wall or the 21600 s default round deadline. Scheduler's
@@ -456,6 +464,36 @@ only to a discovered running/terminal observation or fenced quarantine; no direc
 retry edge exists. Rejected input never reserves an attempt. Every terminal state
 produces a durable typed result, outbox and Crier acknowledgement after custody;
 expired/unstarted cancellation reports fail with the specific reason, not pass.
+
+**Phase-discriminated cancellation (P7-17).** The
+`POST /v1/launches/{launch_id}/cancellation` request is one closed
+`cancellation.v1` body: `{schema_version, request_id, idempotency_key,
+expected_state_version, reason, launch_id, phase, execution_key, boot_id,
+process_instance_id, native_session_id, request_digest}`. `phase` is
+`unstarted`, `native` or `ambiguous`; the identity members are nullable only where the
+chosen phase does not yet have them.
+
+- `unstarted` is for proven `RESERVED` or `START_INTENT` work with no native identity.
+  It performs a non-signalling state CAS to `CANCELLED`; no TERM/KILL is sent and no
+  reservation is released after a winning cancel.
+- `native` requires `STARTED` or `RUNNING` plus the exact `execution_key`, `boot_id`,
+  `process_instance_id` and `native_session_id`. It persists cancellation, then TERM,
+  10-second wait, KILL and an empty-cgroup check. Surviving descendants or unavailable
+  readback is `STOP_UNKNOWN`, quarantined and blocks replacement.
+- `ambiguous` is for `START_UNKNOWN` or a start whose identity cannot be proved. It
+  records a durable cancel request without signalling, quarantines the launch and
+  returns `quarantine_ref`; absent proof is never treated as “not running”.
+
+The start-release CAS and cancel CAS compete on the same `state_version`. A prestart
+cancel that wins prevents the first release and no process may start; a release that
+wins makes a subsequent cancel `native` and requires the incarnation identity. The
+result is `{launch_id,phase,state:accepted|already_terminal|quarantined,state_version,
+cancel_requested_at,quiesced,quarantine_ref,terminal_reason}`. Repeating the same
+`(idempotency_key,request_digest)` returns the original result. A late result is retained
+as late evidence and cannot replace a terminal `CANCELLED`; a mismatched identity or
+stale version returns `STATE_CONFLICT` or `STALE_OWNER` without signalling. The
+state-version record and this request are the only cancellation identity; retired
+alternate cancel verbs are refused.
 
 Return transport states are `pending`, `delivered`, `acked`; delivery retries use
 the same envelope/result bytes at 5,10,20,40,80,160,300 s (then 300 s), through 24 h.
@@ -481,7 +519,9 @@ Required dispatch metrics are attempts, outcomes, refusals by reason, lease age,
 `supervisor.v1` on `$HOME/.local/state/factory/supervisor/control.sock` is the
 sole target control protocol, and `cf.native.v1` on the child's stdin/stdout is
 the sole target native-adapter protocol. M5 §16.1 supplies their complete
-request/event framing. The socket has mode 0600 and verifies peer UID. The
+request/event framing. The socket is owned by `factory-control`, carries a base
+owner-only mode and the named `u:factory-foreman:rw-` ACL plus traversal ACLs from
+M1 §17.5; the worker has no entry. `$HOME` is `factory-control`'s HOME. The
 foreman sends HTTP-shaped `PUT /v1/launches/{launch_id}` with outer fields
 `{schema_version:"supervisor.v1",request_id:ID,idempotency_key:ID,
 owner_fence:Fence,project_id:ID,method:"PUT",path:"/v1/launches/{launch_id}",
@@ -493,16 +533,29 @@ stdout is diagnostic; structured native results travel only in
 `cf.native-event.v1` records on the child's stdout, with human output captured
 separately.
 
-Execution identity is allocated before any process exists. `launch_id` is the
-owner's stable logical-launch identity and
-`execution_key = SHA256(JCS({launch_id,input_digest}))`. `input_digest` is the
-SHA-256 of the complete resolved `LaunchInput` in RFC 8785 JCS, excluding the
-digest member itself.
+Execution identity is allocated before any process exists. The launching foreman
+preallocates `launch_id` and a nonce before admission; `launch_id` is not derived from a
+digest of the launch. The L0 `LaunchCommitment` contains the immutable `BriefInput`,
+`launch_id`, nonce, owner identity and the resolved kind/round/workspace fields. Its
+`input_digest` covers only those L0 fields and explicitly excludes `dispatch_id`,
+`execution_key`, `input_digest` itself and every signature. The supervisor validates and
+persists the commitment first, then derives each value exactly once:
 
-|| Role | launch_id derivation | Other identities |
+```text
+execution_key = SHA-256(UTF-8("cf.execution-key.v1\n") || launch_id || "\n" || input_digest)
+dispatch_id   = "d-" || SHA-256(UTF-8("cf.dispatch-id.v1\n") || launch_id || "\n" || input_digest)
+native_name   = "cf-" || execution_key
+```
+
+`LaunchInput` carries the commitment and derived identities; its `input_digest` is the
+commitment value and is never recomputed over the materialized object. The construction
+order is content, then record, then envelope. No consumer searches for a digest fixed
+point; a mismatch is `CONTRACT_INVALID` or `LAUNCH_CONFLICT`.
+
+|| Role | Identity allocation | Derived identities |
 |---|---|---|
-|| foreman | `l-` + SHA-256(JCS(`["foreman",project_id,round_id,run_id]`)) | `execution_key` from launch ID/input digest; `dispatch_id="d-"+execution_key`; `native_name="cf-"+execution_key` |
-|| worker | `l-` + SHA-256(JCS(`[project_id,round_id,wave_id,worker_id,attempt_id]`)) | the same execution-key, dispatch-ID and native-name derivation |
+|| foreman | the foreman preallocates `launch_id` and nonce before CT-02 admission; the round/run reference is recorded in the commitment, not hashed to allocate the ID | `execution_key`, `dispatch_id="d-"+H("cf.dispatch-id.v1"||launch_id||input_digest)`, `native_name="cf-"+execution_key` |
+|| worker | the foreman preallocates `launch_id` from its round ledger immediately before CT-05; `attempt_id` is allocated at the same point | the same execution-key, dispatch-ID and native-name derivation |
 
 The dispatcher reserves budget and the supervisor persists the unique
 execution_key/launch_id/dispatch_id/native_name and input digest before exec.

@@ -526,9 +526,16 @@ starts the signed Crier admission receiver. Failed recovery serves status with
 admission=false; it does not discard prior attempts.
 
 The supervisor exposes exactly one socket,
-`$HOME/.local/state/factory/supervisor/control.sock`, mode 0600, owned by
-`factory-control`, with peer-UID verification. The worker namespace contains no
-control socket. SO_PEERCRED, role, registration generation and live fence
+`$HOME/.local/state/factory/supervisor/control.sock`, where `$HOME` is
+`factory-control`'s HOME `/var/lib/factory/control`; it is owned by
+`factory-control`, has a base owner-only mode and a named
+`u:factory-foreman:rw-` ACL entry, with `u:factory-foreman:--x` traversal on every
+ancestor directory and no list bit. It is created under umask 077, ACLs are applied
+before `listen(2)` and read back with `getfacl`, and peer-UID verification follows.
+`factory-worker` has no entry, no mount and no connect path. If ACL support or the
+expected entries are absent, readiness is false with `SOCKET_ACCESS_UNSUPPORTED`; the
+signed `execution.socket_access=preconnected-fd` mode is the only alternative and has
+no implicit fallback. SO_PEERCRED, role, registration generation and live fence
 authorize each request under M1 §17.5. Each request is one UTF-8 JCS object plus
 LF (maximum 1048576 bytes). Launch is HTTP-shaped
 `PUT /v1/launches/{launch_id}` with body
@@ -536,36 +543,59 @@ LF (maximum 1048576 bytes). Launch is HTTP-shaped
 owner_fence:Fence,project_id:ID,method:"PUT",path:"/v1/launches/{launch_id}",
 body:LaunchInput}`.
 
-`LaunchInput` is `{kind:foreman|worker,dispatch_id:ID,
-input_digest:SHA,input_ref:EvidenceRef,workspace_ref:EvidenceRef,
-runtime_digest:SHA,round_id:ID,wave_id:ID|null,task_id:ID|null,
-worker_id:ID|null,attempt_id:ID|null,deadline:Time,limits:ResourceLimits}`;
-`launch_id` occurs only in the outer path, not as a duplicate body member.
-Worker launches require wave/task/worker/attempt IDs; a cold foreman launch has
-null wave/task/worker/attempt IDs and cannot mint them. `input_digest` is
-SHA-256 over RFC 8785 JCS of the resolved LaunchInput with `input_digest`
-absent. `execution_key = SHA256(JCS({launch_id,input_digest}))`; the supervisor
-recomputes it before reservation. Identical retries replay the original record;
-changed bytes return `LAUNCH_CONFLICT` without exec.
+`LaunchInput` is `{kind:foreman|worker,launch_commitment:LaunchCommitment,
+dispatch_id:ID,execution_key:SHA,input_digest:SHA,input_ref:EvidenceRef,
+workspace_ref:EvidenceRef,runtime_digest:SHA,round_id:ID,wave_id:ID|null,
+task_id:ID|null,worker_id:ID|null,attempt_id:ID|null,deadline:Time,
+limits:ResourceLimits}`; `launch_id` occurs only in the outer path, not as a duplicate
+body member. `LaunchCommitment` is the L0 record
+`{schema_version:"cf.launch-commitment.v1",launch_id,nonce,owner_identity,kind,
+brief:BriefInput,input_ref,workspace_ref,runtime_digest,round_id,wave_id,task_id,
+worker_id,attempt_id,deadline,limits}`. `input_digest` is
+`SHA-256(UTF-8("cf.launch-input.v1\n") || JCS(LaunchCommitment))` and excludes
+`dispatch_id`, `execution_key`, `input_digest` itself and every signature. The
+supervisor validates and persists the commitment before deriving
+`execution_key = SHA-256(UTF-8("cf.execution-key.v1\n") || launch_id || "\n" || input_digest)`
+and `dispatch_id = "d-" || SHA-256(UTF-8("cf.dispatch-id.v1\n") || launch_id || "\n" || input_digest)`.
+The materialized `LaunchInput` carries those derived values but never recomputes
+`input_digest` over itself. Every non-derived materialized field must equal the
+corresponding commitment field; a mismatch is `CONTRACT_INVALID` before reservation.
+Identical retries replay the original record; changed bytes
+return `LAUNCH_CONFLICT` without exec. A reader that tries to iterate to a fixed point
+is non-conforming. Worker launches require wave/task/worker/attempt IDs; a cold foreman
+launch has null wave/task/worker/attempt IDs and cannot mint them.
 
 `GET /v1/launches/{launch_id}` reads the durable launch journal.
 `GET /v1/launches/{launch_id}/result` reads only committed result evidence.
-`POST /v1/launches/{launch_id}/cancellation` accepts
-`{request_id:ID,expected_state_version:PosInt,reason:Text,launch_id:ID,
-execution_key:SHA,boot_id:ID,process_instance_id:ID,native_session_id:ID}`
-and uses the M2 state CAS plus the exact run identity before TERM/KILL. The expected state version and
-every identity member must match the durable STARTED/RUNNING record; a stale
-version or a PID-reused process is refused without signalling. PID reuse
-never authorizes signaling. These are the complete target operations; retired
-submit/status/output/cancel/drain/resume verbs and fd-3/fd-4 channels return
-`UNSUPPORTED_VERSION`. Responses use Part IV ResponseBody. LaunchResponse is
+`POST /v1/launches/{launch_id}/cancellation` accepts the closed `cancellation.v1`
+body `{request_id:ID,idempotency_key:ID,request_digest:SHA,
+expected_state_version:PosInt,reason:Text,launch_id:ID,phase:unstarted|native|
+ambiguous,execution_key:SHA|null,boot_id:ID|null,process_instance_id:ID|null,
+native_session_id:ID|null}`. `unstarted` is a non-signalling state CAS for proven
+`RESERVED`/`START_INTENT` work and requires no native identity. `native` requires a
+durable `STARTED`/`RUNNING` record and every identity member to match that exact
+incarnation before TERM/KILL. `ambiguous` records a durable cancel request and
+quarantines `START_UNKNOWN` or an unprovable identity without signalling. The
+start-release CAS and cancellation CAS compete on the same `state_version`: a winning
+prestart cancel prevents release; a winning release makes a later cancel `native`. A
+stale version, wrong identity or PID-reused process is refused without signalling. The
+result is `{launch_id,phase,state:accepted|already_terminal|quarantined,state_version,
+cancel_requested_at,quiesced,quarantine_ref,terminal_reason}`, replayed by the same
+key/digest; a late result cannot replace `CANCELLED`. Retired submit/status/output/
+cancel/drain/resume verbs and fd-3/fd-4 channels return `UNSUPPORTED_VERSION`.
+Responses use Part IV ResponseBody. LaunchResponse is
 `{execution_key:SHA,launch_id:ID,input_digest:SHA,native_session_id:ID|null,
-state:accepted|running|succeeded|failed|cancelled,state_version:PosInt,
+state:accepted|running|succeeded|failed|cancelled|expired|unknown,
+resolution:none|quarantined,
+outcome:pass|fail|unverified|partial|unknown|null,state_version:PosInt,
 accepted_at:Time,started_at:Time|null,heartbeat_at:Time|null,finished_at:Time|null,
 result_digest:SHA|null,error:Error|null}`; a new launch returns HTTP 201.
-Socket command receipt is not an execution verdict. Service lifecycle operations
-use the M1 signed service manifest and the same control socket under the
-`factory-control` role; no second socket or launch protocol exists.
+`state` is the journal/lifecycle projection and `outcome` is the immutable execution
+verdict; `START_UNKNOWN`/`STOP_UNKNOWN` remain `state=unknown` with
+`resolution=quarantined` and never become `failed` by absence. Socket command receipt is
+not an execution verdict.
+Service lifecycle operations use the M1 signed service manifest and the same control
+socket under the `factory-control` role; no second socket or launch protocol exists.
 
 The launch adapter invocation is
 `/opt/factory/hermes/current/bin/cf-hermes --protocol cf.native.v1 --execution-key <SHA>`.
@@ -720,7 +750,8 @@ modes and socket visibility, so an executable answering a version string cannot 
 an unenforced installation.
 
 The conformance union gains the following required legs: `foreman-launch-identity`,
-`worker-launch-identity`, `protocol-framing`, `control-isolation`,
+`worker-launch-identity`, `protocol-framing`, `control-isolation` (including the
+positive foreman ACL connect/readiness probe and the worker-negative refusal),
 `credential-sealing`, `attempt-deadline` and `round-deadline`. They prove one cold CT-02
 foreman launch without future worker IDs, subsequent CT-05 submission to the same
 supervisor, exact stdin/stdout event framing, worker denial of every administrative or

@@ -102,7 +102,7 @@ The target management surface is `factory.v1` and has these observable operation
 | Operation | Request / result | Refusal or degraded result |
 |---|---|---|
 | `GET /v1/config` | `{desired, observed, effective, generation, status}` | `404 CONFIG_UNAVAILABLE` when no generation exists |
-| `PUT /v1/config` | `{expected_generation, desired, idempotency_key}` → `202 {operation_id, generation}` | `409 GENERATION_CONFLICT`; secret material is `422 SECRET_MATERIAL_FORBIDDEN` |
+| `PUT /v1/config` | exact `config.update` body `{schema_version, operation_id, idempotency_key, expected_generation, scope, project_id, node_id, desired}` → `202 {operation_id, generation, scope, desired_digest}` | `409 GENERATION_CONFLICT`; secret material is `422 SECRET_MATERIAL_FORBIDDEN` |
 | `POST /v1/reconcile` | `{generation, idempotency_key}` → `202 {operation_id, status: accepted}` | `409 GENERATION_NOT_CURRENT`; same-key retry returns the original operation |
 | `GET /v1/operations/{operation_id}` | per-adapter states, acknowledgements, effective readback | `200 degraded` when any required readback is missing/stale; never `converged` |
 | `GET /v1/readiness/{project_id}` | `{profile, generation, binding_generation, probes}` | `503 NOT_READY` until authenticated operation probes and Crier/Scheduler bindings pass |
@@ -111,9 +111,15 @@ The target management surface is `factory.v1` and has these observable operation
 Every mutation is authenticated, scoped, durable before adapters run, and idempotent by
 `(principal, scope, operation, idempotency_key)`, where scope is `factory-control`
 for whole-document/global operations and `project:<project_id>` for project operations.
-The exact `cf2a.v1` / `factory.v1` `config.update` body, including
-`expected_generation`, `scope`, `project_id`, `node_id` and `desired`, is fixed in
-Part I §1.9.1 and M12 §19; this register does not define a second manager grammar.
+The exact `cf2a.v1` / `factory.v1` `config.update` body is the same schema in Part I
+§1.9.1, M12 §19 and CT-24: `schema_version`, `operation_id`, `idempotency_key`,
+`expected_generation`, explicit `scope`, `project_id`, `node_id` and `desired`.
+`project_id` is required for project scope and null for global scope; `node_id` is null
+on configuration update and belongs only to the separate node-token administration
+operation. `operation_id` is returned, not required; it is a hash-exempt retry hint
+(null or the previously returned value) excluded from `request_digest`, so a retry with
+the returned ID normalizes to the same digest and receipt. A supplied ID not bound to
+that key is `422 INVALID_FIELD` and never creates a second effect.
 Part I §1.9.1 supplies the exact mTLS HTTP wrapper, principal derivation,
 response/Error schema and route retirement rules; there is one generation, not a
 second project/global tuple. A project edit after any global change re-reads the
@@ -291,8 +297,8 @@ Two worked cards, one target and one measured:
 | Scope | lane (per-project lane running foreman rounds) |
 | Purpose | the total number of workers available to one foreman round, across all its waves |
 | Type / units | integer, workers |
-| Range / enum | >= 1; a value < 1 refused at admission |
-| Default / absence | TARGET: a declared default is a specification detail this register leaves to implementation reconciliation; absence refuses admission (fail-closed) rather than defaulting silently — unset, empty and zero are the same refusal |
+| Range / enum | integer 0..20000 worker attempts; zero is valid and admits no worker launches. The earlier ">= 1" card was historical and is superseded by the canonical zero-allowance policy |
+| Default / absence | TARGET: absence refuses admission (fail-closed); an explicit zero is a valid no-worker round, not a missing value |
 | Dependencies | distinct from concurrent-workers and from any wave-count limit (no separate fixed wave cap is imposed); not bounded by platform concurrency; only simultaneous workers are bounded by that separate ceiling (VII.12) |
 | Validation + typed error | admission validates the round request; error class `BUDGET_INVALID` names the field and the offending value |
 | Authorized editor | user intent |
@@ -608,7 +614,7 @@ unresolved references refuse activation.
 || Backup | enabled: boolean; interval_s: integer 300..86400 default 3600; retention_s: integer 86400..31536000 default 2592000; rpo_s: integer 300..86400 default 3600; rto_s: integer 300..86400 default 7200; deadline_s: integer 300..86400 default 3600; destination_ref: endpoint ID required if enabled; key_ref: backup SecretRef required if enabled; coordinator_loss: abort-and-hold default; offline_policy: refuse or partial default refuse |
 || transport | registry: `{backend: sqlite or postgres, endpoint_ref: optional Endpoint key}`; default backend sqlite, endpoint required for postgres; lease_s: integer 30..300 default 60; renew_s: integer 1..60 default 20; call_timeout_s: integer 1..10 default 5; signature_profile: literal CF2A-CRIER-1 |
 || scheduler | budget: integer 1..1000000 default 100; max_concurrent: integer 1..1024 default 10; tick_wall_s: integer 120..604800 default 21600; namespaces: map of project-ID to `{reserved: integer 0..1024 default 0, hard_cap: integer 1..1024 default max_concurrent}`, absent means every project gets defaults |
-|| execution | mode: literal resident default resident; artifact_ref: artifact ID default supervisor; harness_artifact_ref: artifact ID default hermes; adapter_artifacts: map of capability ID to artifact ID default empty, with an exact signed entry for every requested capability and hermes equal to harness_artifact_ref; control_socket: absolute path default `$HOME/.local/state/factory/supervisor/control.sock`; state_root: absolute path default `/var/lib/factory/control`; launch_reserve_s: integer 1..120 default 30; transfer_reserve_s: integer 1..120 default 30; cleanup_reserve_s: integer 15..120 default 15 |
+|| execution | mode: literal resident default resident; artifact_ref: artifact ID default supervisor; harness_artifact_ref: artifact ID default hermes; adapter_artifacts: map of capability ID to artifact ID default empty, with an exact signed entry for every requested capability and hermes equal to harness_artifact_ref; control_socket: absolute path default `$HOME/.local/state/factory/supervisor/control.sock` where `$HOME` is the `factory-control` service HOME; socket_access: acl or preconnected-fd default acl; state_root: absolute path default `/var/lib/factory/control`; launch_reserve_s: integer 1..120 default 30; transfer_reserve_s: integer 1..120 default 30; cleanup_reserve_s: integer 15..120 default 15 |
 || credentials | renewal_margin_s: integer 60..3600 default 300; overlap_s: integer 0..300 default 60; proxy_ttl_s: integer 600..86400 default 3600; secret_bindings: SecretBinding list default empty; an enabled endpoint's credential_ref requires a matching binding |
 || SecretBinding | `{ref: SecretRef, resolver: control-broker or node-broker, delivery: sealed-fd, scope: nonempty operation-ID set, file_mode: literal 0600}`; resolver names only a service identity and socket, never secret material |
 | readiness | probe_interval_s: integer 5..60 default 10; stale_after_s: integer 15..300 default 30; failures_to_fail: integer 1..10 default 3 |
@@ -1129,23 +1135,44 @@ returns `LIMIT_UNSUPPORTED`.
 
 || Quantity | Configuration → wire/native field | Unit, domain and default | Effective rule |
 ||---|---|---|---|
-|| round worker allowance | `foreman.round.worker_budget.total` → CT-02 `total_budget` | workers, 0..20000; profile-selected | fixed for the round; consumed (ledger state `charged`) plus reserved never exceeds it; waves never reset it |
+|| round worker allowance | `foreman.round.worker_budget.total` → CT-02 `total_budget` | workers, 0..20000; profile-selected | fixed for the round; consumed (ledger state `charged`) plus reserved never exceeds it; waves never reset it; zero is valid and launches no worker |
 || concurrent worker slots | `foreman.round.concurrency` → supervisor resource vector | workers, 1..1024; default min(host slots, allowance) | simultaneous native runs only; independent of allowance |
 || attempts per worker | `retry_policy.max_attempts` → attempt ordinal | attempts, 1..10 default 3 | correction reuses the charged worker and consumes no second worker allowance |
 || model turns | `foreman.round.max_turns` → `CF_MAX_TURNS` / `EffectiveSettings.max_turns` | turns, 1..10000 default 40 | counts model calls within one attempt |
-|| model-turn timeout | `foreman.round.turn_timeout_s` → `CF_TIMEOUT_S` / `turn_timeout_s` | seconds, 1..86400 default 1800 | each model call independently; never multiplied by max turns |
-|| attempt wall | `foreman.round.attempt_wall_s` → `attempt_timeout_s` | seconds, 1..86400 default 1800 | all turns, backoff and adapter work in one attempt |
-|| round deadline | `foreman.round.deadline_s` → admission `policy.round_wall_s` | seconds, 120..604800 default 21600 | starts at durable admission; includes every wave, hook and return |
-|| scheduler tick wall | `scheduler.tick_wall_s` → `tick-timeout` | seconds, 120..604800 default 21600 | includes admitted round plus settlement; admission refuses `round_deadline > tick_wall` |
+|| model-turn timeout | `foreman.round.turn_timeout_s` → CT-02 `execution.turn_timeout_s` / `CF_TIMEOUT_S` / `EffectiveSettings.turn_timeout_s` | seconds, 1..86400 default 1800 | each model call independently from its own `turn_started_at`; never multiplied by max turns and never extended by restart |
+|| attempt wall | `foreman.round.attempt_wall_s` → CT-02 `execution.attempt_wall_s` / `attempt_timeout_s` | seconds, 1..86400 default 1800 | starts at the first durable native release; all turns, backoff and adapter work consume it; a restart preserves the same attempt deadline |
+|| round deadline | `foreman.round.deadline_s` → CT-02 `execution.round_deadline` (absolute Time) and `execution.deadline_s` (duration) | seconds, 120..604800 default 21600 | starts at durable admission; includes every wave, hook, retry, postcheck and return; no retired `policy.round_wall_s` field exists |
+|| scheduler tick wall | `scheduler.tick_wall_s` → scheduler `tick-timeout` / `tick_deadline` | seconds, 120..604800 default 21600 | starts at tick admission and must cover the admitted round plus settlement; `tick_deadline = min(tick_start + tick_wall_s, round_deadline + postcheck_budget + projection_budget)` |
 || Crier custody | `transport.lease_s` / `renew_s` → CT-03 | seconds, lease 30..300 default 60; renew 1..60 default 20 | `lease_s > renew_s + call_timeout_s + 5 + cleanup_reserve_s`; no task-runtime inference |
 || postchecks | `policy.postcheck_*` and hook `max_attempts` | attempts 1..5, retry 1..300 s; POST defaults 5 and 30 | same hook identity, within original round/tick deadline |
-|| backup barrier | `safety.backup.deadline_s` → cf.backup.v1 | seconds, 300..86400 default 3600 | lease 300, renew 60; no renewal by the lease expiry aborts the cut |
+|| backup barrier | `safety.backup.deadline_s` → `cf.backup-operation.v1` state and `cf.backup.v1` content | seconds, 300..86400 default 3600 | lease 300, renew 60; no renewal by the lease expiry aborts the cut and holds writers; content digest is immutable after VALIDATED |
 
-Admission computes `remaining_round = round_deadline - elapsed_monotonic` and
-`attempt_effective = min(attempt_wall_s, remaining_round - launch_reserve_s -
-transfer_reserve_s - cleanup_reserve_s)`. A nonpositive result is
-`DEADLINE_INSUFFICIENT`. `turn_effective = min(turn_timeout_s, attempt_effective)`; turn
-count never extends either wall. Scheduler reservation includes round execution,
+Every producer stores both an absolute UTC instant and a monotonic remainder for each
+deadline. At durable admission the scheduler records `admitted_at`, `admitted_monotonic`,
+`round_deadline = admitted_at + deadline_s`, `round_remaining_ns` and the configured
+`tick_deadline = min(tick_start + tick_wall_s, round_deadline + postcheck_budget +
+projection_budget)`. The round end is fixed by that first durable admission record; a
+30-second queue or native-release delay consumes 30 seconds of the same round and cannot
+move its end. The attempt records `attempt_released_at`, `attempt_monotonic`,
+`attempt_deadline` and `attempt_remaining_ns` at the first durable native release. Each
+turn records its own `turn_started_at` and `turn_deadline`; a turn never changes either
+outer wall.
+
+Restart converts without extending. The boot ID and checkpointed monotonic remainder are
+stored with each deadline. On the same boot, remaining time is the stored monotonic
+remainder. On a new boot, `remaining = min(checkpoint_remaining,
+max(0, absolute_deadline - now_utc))`; a backward clock change cannot increase the
+remainder and a forward change shortens it. A missing checkpoint is
+`DEADLINE_UNKNOWN`, never a fresh full budget. Physical restart does not reset an
+attempt or round, and reconciliation reserves are subtracted, never added.
+
+`remaining_round` is a duration in seconds; `attempt_effective =
+min(attempt_wall_s, remaining_round - launch_reserve_s - transfer_reserve_s -
+cleanup_reserve_s)`. A nonpositive result is `DEADLINE_INSUFFICIENT`.
+`turn_effective = min(turn_timeout_s, attempt_remaining_s)`. `tick_remaining =
+tick_deadline - tick_now` is a duration, while `round_deadline` and `tick_deadline` are
+absolute instants; the two are never compared or subtracted without the formulas above.
+Turn count never extends either wall. Scheduler reservation includes round execution,
 postcheck and projection time, so the global harness deadline participates in turn
 scheduling instead of appearing only in prose.
 

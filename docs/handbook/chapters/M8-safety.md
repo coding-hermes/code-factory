@@ -360,14 +360,22 @@ Read-only release/policy mounts are owned by `factory-control`, and a mount read
 prove the effective `ro` flag rather than relying on a file-mode claim.
 
 The foreman's only execution interface is
-`$HOME/.local/state/factory/supervisor/control.sock`, restricted by SO_PEERCRED
-and the live fence to `supervisor.v1` HTTP-shaped `PUT /v1/launches/{launch_id}`
-and query/reconciliation operations. It cannot edit allowance, launch identity,
-retention, policy or credentials. The worker has no control socket and can use
-only its one-way native-result channel for the preassigned execution key.
-Secret descriptors are delivered by the node broker directly to the authorized
-role, with seals and close-on-exec rules; no secret is placed in a shared
-environment, process argument, worker-readable staging directory or event.
+`$HOME/.local/state/factory/supervisor/control.sock` (with `$HOME` resolved as
+`factory-control`'s `/var/lib/factory/control`), reachable through the explicit
+`u:factory-foreman:--x` traversal ACLs and the socket ACL `u:factory-foreman:rw-`
+defined in M1 §17.5. SO_PEERCRED and the live fence restrict it to the
+`supervisor.v1` HTTP-shaped `PUT /v1/launches/{launch_id}` and
+query/reconciliation operations. It cannot edit allowance, launch identity,
+retention, policy or credentials. The worker has no ACL entry on the control,
+node-broker or peer socket, no mount containing one, and can use only its one-way
+native-result channel for the preassigned execution key. The node-broker socket grants
+its installer entry to `factory-control` only; the foreman has no entry. If the signed
+profile selects `execution.socket_access=preconnected-fd`, the trusted launcher passes
+the descriptor instead; there is no implicit fallback, and an unprovable selected mode
+fails readiness with `SOCKET_ACCESS_UNSUPPORTED`. Secret descriptors are delivered by
+the node broker directly to the authorized role, with seals and close-on-exec rules; no
+secret is placed in a shared environment, process argument, worker-readable staging
+directory or event.
 
 Configuration precedence is accepted generation → signed project/lane profile → signed
 deployment profile → global default. Global `safety.terminal_jail=required` requires the
@@ -382,7 +390,8 @@ retention index, launch/budget journal, supervisor administration socket, anothe
 credential, signed policy and peer worktree. All must fail without mutation. Positive
 readback proves the foreman's mediated submit, local pending-memory append, own result
 return and worktree write. The receipt carries UID/gid, mount table, namespace IDs,
-cgroup limits, socket visibility/modes, no-new-privileges and network-denial results.
+cgroup limits, socket visibility/modes and ACL entries, no-new-privileges and
+network-denial results.
 Emission and scrape use Part V §V.10 with bounded `reclaim`/`verify` operations and the
 FactoryIdentity of the affected attempt. A passing probe is version-bound to the signed
 profile digest; an unobserved probe is `UNVERIFIED`, never inferred from documentation.

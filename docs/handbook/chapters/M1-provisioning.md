@@ -319,7 +319,7 @@ The following citations describe legacy source coverage, not target qualificatio
 
 | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
 |---|---|---|---|---|---|
-| CT-22 | crier | out | **Normative target:** the authority/controller consumes the single-use tuple-bound `enrollment-grant.v1` reference, creates `registration_id` and the class-`crier` credential reference, while the Crier registrar is the only actor that admits `register.v1`, allocates the node identity and returns that reference; the node then emits the CT-22 outer `cf2a.v1` / body `register.v1` request at `POST /v1/factory/registrations` and proves a verified signed bus read before scheduling. **Implementation coverage:** no in-repo producer was measured — `bunker-crier-connect.sh` only stages `$HOME/.node/crier.json` and probes the inbox via `node-bus-worker.py --check` (`:13`, `:33`, `:53`, `:114-118`); it does **not** issue the registration request or write `auth/crier.token` (B06). **Neither `node_identity.py` (`:50-107`, merges/replaces local JSON) nor `node_gateway_auth.py` (`:70-162`, writes dashboard basic-auth + a password file) registers an agent** (B03); this measured absence is tracked as CF-276 and is not a gap in the target contract. | crier `internal/registry/handler.go:598` `HandleRegister` (legacy implementation coverage) and `:613` `HandleRegisterByID` (legacy implementation coverage) — target contract is CT-22 `register.v1` at `/v1/factory/registrations` | **UNVERIFIED** — the token/registration exchange was not re-run; the implementation producer is absent from the measured in-repo surface, while the normative actor and wire are specified above |
+| CT-22 | crier | out | **Normative target:** the authority/controller consumes the single-use tuple-bound `enrollment-grant.v1` reference, creates `registration_id` and the class-`crier` credential reference, while the Crier registrar is the only actor that admits `register.v1`, allocates `node_id` and `registration_generation` and returns that reference; the node then emits the CT-22 outer `cf2a.v1` / body `register.v1` request at `POST /v1/factory/registrations` and proves a verified signed bus read before scheduling. **Implementation coverage:** no in-repo producer was measured — `bunker-crier-connect.sh` only stages `$HOME/.node/crier.json` and probes the inbox via `node-bus-worker.py --check` (`:13`, `:33`, `:53`, `:114-118`); it does **not** issue the registration request or write `auth/crier.token` (B06). **Neither `node_identity.py` (`:50-107`, merges/replaces local JSON) nor `node_gateway_auth.py` (`:70-162`, writes dashboard basic-auth + a password file) registers an agent** (B03); this measured absence is tracked as CF-276 and is not a gap in the target contract. | crier `internal/registry/handler.go:598` `HandleRegister` (legacy implementation coverage) and `:613` `HandleRegisterByID` (legacy implementation coverage) — target contract is CT-22 `register.v1` at `/v1/factory/registrations` | **UNVERIFIED** — the token/registration exchange was not re-run; the implementation producer is absent from the measured in-repo surface, while the normative actor and wire are specified above |
 | CT-23 | bunker daemon | out | `lib.sh:107` `bunker_exec` | external public CLI/protocol | UNVERIFIED — legacy short-call observations lack a version-bound target qualification record |
 
 ## 7. Verification
@@ -544,7 +544,7 @@ Harness (handoff §1.5).
 | A2 | Bunker server prep (homes/keys, orphan reap) | operator, control host (`bunker-server-install.sh`) | A3 | server-level refusal, nothing spawned |
 | A3 | Agent create + per-Bunker config generate/readback | operator via `bunker-provision.sh --apply` / `node-create.sh` | A4 | partial artifacts named; destroy/retry contract below |
 | A4 | Credentials issued and installed — all five classes (R4) | control host + node, per class issuer | A5–A9 | a class that fails to install blocks its dependent legs only |
-| A5 | Bus membership: Crier identity + registration/token exchange, verified signed read | **Normative actor/data:** Part I §1.9.11 governs first registration: the authority consumes the tuple-bound single-use `enrollment-grant.v1`, creates `registration_id` and the class-`crier` credential reference, while the Crier registrar admits `register.v1`, allocates the node identity and returns that reference; the node then performs CT-22 `register.v1` (outer `cf2a.v1`, target `POST /v1/factory/registrations`) and proves a verified signed bus read before it is schedulable. **Implementation coverage:** `bunker-crier-connect.sh` only stages `$HOME/.node/crier.json` and probes the inbox; no in-repo registration producer was measured (CF-276), as recorded in the CT-22 coverage row. | M2 dispatch | enrollment failure sets `ENROLLMENT_FAILED`; a failed or unproven signed bus read sets `DEGRADED` and the node is **NOT** schedulable; stage-6 private clone and other dependents do not run. Resume the last completed stage under §17.2 with the same `operation_id`, `generation` and `manifest_digest`. |
+| A5 | Bus membership: Crier identity + registration/token exchange, verified signed read | **Normative actor/data:** Part I §1.9.11 governs first registration: the authority consumes the tuple-bound single-use `enrollment-grant.v1`, creates `registration_id` and the class-`crier` credential reference, while the Crier registrar admits `register.v1`, allocates `node_id` and `registration_generation` and returns that reference; the node then performs CT-22 `register.v1` (outer `cf2a.v1`, target `POST /v1/factory/registrations`) and proves a verified signed bus read before it is schedulable. **Implementation coverage:** `bunker-crier-connect.sh` only stages `$HOME/.node/crier.json` and probes the inbox; no in-repo registration producer was measured (CF-276), as recorded in the CT-22 coverage row. | M2 dispatch | enrollment failure sets `ENROLLMENT_FAILED`; a failed or unproven signed bus read sets `DEGRADED` and the node is **NOT** schedulable; stage-6 private clone and other dependents do not run. Resume the last completed stage under §17.2 with the same `operation_id`, `generation` and `manifest_digest`. |
 | A6 | Repo + **embedded board** checkout (the board ships inside the project repo, M4) | provisioner (M1 owns the checkout; M3 manages it afterwards) | M3/M4 | seed drift gates readiness |
 | A7 | Harness install: **exact Hermes/Oh My Hermes build pin** + tools/settings | provisioner via M5 installers | M5 lifecycle | version readback required, not name-only |
 | A8 | Inference access: node-scoped proxy credential + endpoint/model policy + **end-to-end inference proof** | M1 provisions; M12 owns the proxy credential chain | M5 run path | config-present-without-a-successful-request is not readiness |
@@ -587,7 +587,7 @@ future and outside this list.
 delivery, renewal and revocation, never interchangeable: (1) forge/GitHub (app installation,
 scoped tokens, deploy keys — clone/fetch vs push vs merge permissions documented separately; a
 read-only deploy-key proof does not establish publication capability); (2) Crier bus
-(the authority/controller creates the class-`crier` credential reference at enrollment, the Crier registrar admits `register.v1` and allocates the node identity;
+(the authority/controller creates the class-`crier` credential reference at enrollment, the Crier registrar admits `register.v1` and allocates `node_id` and `registration_generation`;
 the node performs CT-22 `register.v1` and the signed-read proof); (3) Bunker-control;
 (4) proxy/model access (node-scoped, preserving the control-host provider-secret boundary —
 provider keys are **not** copied to workers); (5) memory/DuckBrain. Each needs issuer, secure
@@ -617,7 +617,7 @@ The specified, not yet release-qualified, MVP profile is a user-space, image-bac
 |---|---|---|
 | admission | declared profile, role, disk floor, footprint; `profile_id` and `generation` | unknown profile, insufficient measured headroom or unreadable host state refuses before spawn |
 | create | `node_id`, `project_id`, repository identity `{forge, host, owner, repo, ref}` and credential references, never credentials in the identity | duplicate `(project_id,node_id,generation)` is idempotent; conflicting generation is a compare-and-swap refusal |
-| enrollment | controller principal, Bunker principal, tuple-bound single-use bootstrap reference, trust key/certificate fingerprint, Crier registration id and endpoint | §1.9.11 consumes the grant, allocates one node identity, installs class-`crier`, then proves the signed read; missing trust, wrong project/profile, a CAS-miss `expected_generation`, expired identity or registration refusal leaves `ENROLLMENT_FAILED` with no durable identity; failed read leaves `DEGRADED` and unschedulable |
+| enrollment | controller principal, Bunker principal, tuple-bound single-use bootstrap reference, trust key/certificate fingerprint, Crier registration id and endpoint | §1.9.11 consumes the grant, allocates `node_id` and `registration_generation`, installs class-`crier`, then proves the signed read; missing trust, wrong project/profile, a CAS-miss `expected_generation`, expired identity or registration refusal leaves `ENROLLMENT_FAILED` with no durable identity; failed read leaves `DEGRADED` and unschedulable |
 | provision | pinned artifacts and per-class credential references; seed manifest and digest | each artifact is digest-checked; partial installation records completed stages and retries only idempotent stages |
 | readiness | effective readback for profile, repo, Crier, harness, proxy inference and memory; machine-readable report | any unavailable or unmeasured required leg is `UNVERIFIED`, never READY; readiness is not inferred from file presence |
 | replace/remove | old generation fenced, new generation read back, revocations retained | replacement cannot inherit revoked credentials; removal preserves audit evidence and destroys only owned state |
@@ -733,21 +733,26 @@ receipt and performs no issue operation. A fresh nonce with the same idempotency
 and body digest also returns the original receipt.
 
 The authority atomically consumes the grant and records certificate serial,
-registration_id, agent/project binding and registration_generation=1 using the
-Part I journal. Renewal requires the current certificate and expected_generation;
-it increments registration_generation once. First registration never asks a caller
-for an unallocated generation. Changed grant/key under the same registration_id is
-`REGISTRATION_CONFLICT`. Response data is `{registration_id, registration_generation,
-certificate_der, expires_at, credential_refs:CredentialRef[], authority_seq}`;
-this certificate is public, not a bearer secret. A crash after issue returns the
-same certificate/refs. The node then uses mTLS plus the Crier-signed request to
+registration_id, agent/project binding, public-key fingerprint and authority sequence
+using the Part I journal. It does not allocate `node_id` or `registration_generation`;
+those belong to the Crier registrar's first accepted registration. A certificate
+renewal names the observed `registration_generation`; the Crier registrar owns the single
+increment on its separate registration-renewal operation. First registration never asks
+a caller for an unallocated generation. Changed grant/key
+under the same registration_id is `REGISTRATION_CONFLICT`. Response data is
+`{registration_id, certificate_der, expires_at, credential_refs:CredentialRef[], authority_seq}`;
+this certificate is public, not a bearer secret. A crash after issue returns the same
+certificate/refs. The node then uses mTLS plus the Crier-signed request to
 `POST /v1/factory/registrations` with the closed `register.v1` body (Part IV):
 `registration_id`, `agent_id`, `project_id`, `operation_id`, `expected_generation`,
-`profile_id`, `public_identity`, `capabilities` and `idempotency_key`. The legacy
-`/factory/v1/registrations` spelling is an alias only at the migration adapter. This adapter is not a
+`profile_id`, `public_identity`, `capabilities`, `idempotency_key` and `request_digest`.
+The legacy `/factory/v1/registrations` spelling is an alias only at the migration adapter. This adapter is not a
 claim that legacy POST /agents already implements this wire. Crier checks the live
-authority binding, persists the registration, and returns registration metadata and
-a scoped bus credential reference before any inbox read.
+authority binding, performs the durable duplicate lookup before the first-generation
+CAS, persists the registration, allocates exactly one `node_id` and
+`registration_generation=1`, and returns
+`{registration_id,node_id,registration_generation,expires_at,credential_ref}` before any
+inbox read. An exact replay returns those original bytes and allocates nothing.
 
 CredentialRef is `{id:ID,class:forge/crier/bunker/proxy/memory,subject:ID,
 project_id:ID,operations:ID[],generation:PosInt,expires_at:Time,issuer:ID}`.
@@ -993,13 +998,38 @@ capabilities; cgroup v2 CPU, memory and PID limits are service-owned.
 
 || Interface | Visible to | Access contract |
 ||---|---|---|
-|| `$HOME/.local/state/factory/supervisor/control.sock` | supervisor and `factory-control`; `factory-foreman` for launch only | `supervisor.v1` HTTP-shaped `PUT /v1/launches/{launch_id}`, query/reconciliation and role-guarded service operations for the live fence only; mode 0600 and peer-UID verification; worker mount has no socket |
-|| `/run/factory/<project>/worker-result.sock` | supervisor and `factory-worker` | one-way native-event/result writes for the current execution key; no submit, cancel, resume or other-attempt read |
-|| `/run/factory/node-broker/secrets.sock` | node broker and authorized service installer | `secret-resolve.v1` plus SCM_RIGHTS; absent from foreman/worker mounts |
+|| `$HOME/.local/state/factory/supervisor/control.sock` | supervisor and `factory-control`; `factory-foreman` for launch only | `supervisor.v1` HTTP-shaped `PUT /v1/launches/{launch_id}`, query/reconciliation and role-guarded service operations for the live fence only; owner `factory-control`, base owner-only mode, named ACL `u:factory-foreman:rw-`, ancestor traversal `u:factory-foreman:--x`, peer-UID verification; worker mount has no socket |
+|| `/run/factory/<project>/worker-result.sock` | supervisor and `factory-worker` | one-way native-event/result writes for the current execution key; no submit, cancel, resume or other-attempt read; owner `factory-control`, named ACL `u:factory-worker:rw-` only |
+|| `/run/factory/node-broker/secrets.sock` | node broker and the `factory-control` installer | `secret-resolve.v1` plus SCM_RIGHTS; owner `factory-node-broker`, named installer ACL `u:factory-control:rw-`, no foreman or worker entry; absent from foreman/worker mounts |
 || `/var/lib/factory/control` | `factory-control` | read-write service journal and policy root; all other roles have no mount |
 || `/var/lib/factory/foreman` | `factory-foreman` | read-write foreman HOME; read-only release mounts; no worker mount |
 || `/var/lib/factory/worker` | `factory-worker` | read-write worker HOME/worktree only; control, peer worktrees and policy are absent |
 || `/var/lib/factory/memory` | local memory writer | writer socket mediates foreman/worker append; neither can edit Git refs or resolution records directly |
+
+**Socket access (P7-04; D2=A).** `$HOME` in the control path is
+`factory-control`'s HOME, `/var/lib/factory/control`, not the invoker's HOME. On each
+directory from that root through `.local/state/factory/supervisor/`, the owner keeps rwx
+and the `factory-foreman` ACL entry is execute-only (`u:factory-foreman:--x`); the list
+bit is withheld so the foreman can traverse but cannot enumerate protected state. The
+socket is created under umask 077, receives `u:factory-foreman:rw-` before `listen(2)`,
+and is verified with `getfacl` plus a socket connect probe. Base owner mode remains
+owner-only; the effective permissions are owner plus the named foreman entry, never a
+shared group. The node-broker socket grants only `factory-control` the installer entry
+`u:factory-control:rw-`; the foreman and worker have no entry. The worker-result socket
+grants only `factory-worker` the named entry for its one-way result channel. ACL
+inheritance is explicit on each directory; no default ACL widens a sibling path.
+
+Startup and restart reapply the ACL before accepting and read it back. Missing ACL
+support, a narrowing/acl mismatch, a widened mask, or an ancestor without traversal is
+`SOCKET_ACCESS_UNSUPPORTED`, refuses readiness and leaves admission closed. A role
+revocation removes its named entry, closes matching peer sessions and increments the ACL
+generation in the readiness receipt; revocation never relies on `chmod` alone. The
+alternative signed mode is `execution.socket_access=preconnected-fd`: the trusted
+launcher passes one close-on-exec endpoint to the intended role, the supervisor
+authenticates the launcher-issued capability and launch identity, and the descriptor is
+not inherited by a worker and is invalid after restart. There is no implicit fallback
+between ACL and preconnected mode; if the selected mode cannot be proved, readiness is
+false.
 
 The foreman's mediated launch carries its fenced capability in an inherited sealed
 descriptor, not an environment variable. The supervisor checks SO_PEERCRED, the live
@@ -1016,7 +1046,7 @@ policy; and access a peer worktree. Every attempt must fail with `EACCES`,
 `SOCKET_NOT_PRESENT` or `CAPABILITY_SCOPE_DENIED` and produce no mutation. Positive probes
 prove that the fenced foreman can submit CT-05 and append local pending memory while the
 worker can return its own result and write only its worktree. The probe receipt includes
-UIDs, mount table, socket modes, cgroup values and policy digest. Terminal Jail remains
+UIDs, mount table, socket modes and ACLs, cgroup values and policy digest. Terminal Jail remains
 optional/off; these kernel/service boundaries are the baseline and cannot be bypassed by
  a cooperative harness.
 
@@ -1073,8 +1103,9 @@ The release manager journals `operation_id`, `idempotency_key`, `expected_genera
 (1) qualify/resolve the lock; (2) verify signature, digest, size, platform, dependency
 closure and compatibility; (3) fence the manager, refuse concurrent operations, stop new
 admission and drain or checkpoint in-flight work; (4) stage all artifacts/migrations in a
-new immutable generation; (5) create and verify the F15 pre-migration backup, retain it in
-an isolated generation, and record its receipt; (6) apply transactional/copy-on-write
+new immutable generation; (5) create and verify the F15 pre-migration backup, retain its immutable
+`cf.backup.v1` content digest in an isolated generation, and record the separate
+operation/publication receipt; (6) apply transactional/copy-on-write
 migration and atomically switch the active pointer; (7) postcheck binary/config/schema
 versions, token scope/generation, Crier/scheduler/proxy receipts and in-flight checkpoint;
 (8) finalize receipts/outbox and reopen admission. Version output alone is not success.

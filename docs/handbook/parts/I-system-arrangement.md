@@ -312,7 +312,8 @@ from approved target behavior.
   verbatim after the CF-354 fix (PROVEN); `CT-04` the node's reply (PARTIAL);
   `CT-22` agent registration: normatively the authority creates `registration_id` and
   the class-`crier` credential reference at enrollment, the Crier registrar is the only
-  actor that admits `register.v1` and allocates the node identity;
+  actor that admits `register.v1` and allocates `node_id` and
+  `registration_generation`;
   the node emits `register.v1` (outer `cf2a.v1`). Implementation coverage is
   unverified because no in-repo producer was measured (CF-276; M1 §6).
 - **Outputs:** `CT-03` inbox message plus a 30-second lease, pulled by
@@ -988,7 +989,7 @@ same-key retry or operation readback, not a fresh mutation.
 | Route / message_type | Body fields beyond common version/key | Result data / HTTP status |
 |---|---|---|
 | `GET /v1/config` / `config.read` | none | `200 State`; no edition: `404 CONFIG_UNAVAILABLE` |
-| `PUT /v1/config` / `config.update` | `expected_generation: integer >=0`, `desired: factory.v1 document` | `202 Accepted`; CAS miss: `409 GENERATION_CONFLICT` |
+| `PUT /v1/config` / `config.update` | `operation_id: ID or null`, `expected_generation: integer >=0`, `scope: factory-control / project:<ID>`, `project_id: ID or null`, `node_id: ID or null`, `desired: factory.v1 document` | `202 Accepted` `{operation_id,generation,scope,desired_digest}`; CAS miss: `409 GENERATION_CONFLICT` |
 | `POST /v1/validate` / `config.validate` | `desired: document` | `200 {valid: true, desired_digest}`; invalid: `422` |
 | `POST /v1/reconcile` / `reconcile` | `generation: integer >=1`, `project_id: ID or null` (null means whole Factory) | `202 Accepted`; stale: `409 GENERATION_NOT_CURRENT` |
 | `GET /v1/projects/{id}/state` / `project.read` | none | `200 State` restricted to project; absent: `404 PROJECT_UNKNOWN` |
@@ -1002,6 +1003,21 @@ same-key retry or operation readback, not a fresh mutation.
 | `GET /v1/rounds/{id}/progress` / `round.read` | none | `200 ProgressView`; absent: `404 ROUND_UNKNOWN` |
 | `POST /v1/rounds/{id}/control` / `round.control` | F8 control fields | `202 ControlReceipt`; stale fence: `409 STALE_OWNER` |
 
+The `config.update` body is the one machine-readable schema shared by Part I, Part V,
+M12 and CT-24. It has exactly `schema_version: "factory.v1"`, `operation_id`, `idempotency_key`,
+`expected_generation`, `scope`, `project_id`, `node_id` and `desired`.
+`scope` is explicitly `factory-control` or `project:<ID>`; `project_id` is the named ID
+for project scope and null for global scope; `node_id` is null on configuration update
+and exists only on the separate node-token administration operation. `operation_id` is
+returned, not required: the manager allocates it at accepted commit, and the request may
+carry it only as a retry hint, null on the first attempt or the previously returned value
+on a retry of that same operation. It is excluded from `request_digest` as a declared
+`excluded_derived` member, so an otherwise byte-identical retry with the returned ID
+normalizes to the same digest and deduplicates to the same receipt. A supplied ID that
+is not bound to that idempotency key is `422 INVALID_FIELD`; it never creates a second
+effect or generation. A lost response is therefore recovered by the same key/digest or
+by reading the accepted generation.
+
 Every response is the outer envelope with original request/correlation IDs and
 manager sender. Its body is `{schema_version: factory.v1, status: ok|accepted|error,
 data: typed object or null, error: Error or null}`. `Error` is exactly
@@ -1014,7 +1030,7 @@ unavailable durability/authority `503`; unknown routes/methods return `404`/`405
 
 | Type | Exact required members |
 |---|---|
-| Accepted | `operation_id: ID`, `generation: integer`, `status: accepted` |
+| Accepted | `operation_id: ID`, `generation: integer`, `status: accepted`, `scope: factory-control / project:<ID>`, `desired_digest: SHA` |
 | State | `desired: document`, `observed: Observation[]`, `effective: document or null`, `generation: integer`, `status: operation-state`, `operation_id: ID or null` |
 | Observation | `scope: ID`, `adapter_id: ID`, `observation_id: ID`, `observed_at: timestamp`, `values: resource object from capability schema`, `quality: fresh / stale / partial / unavailable`, `effective_digest: digest or null` |
 | Operation | `operation_id`, `generation`, `project_id: ID or null`, `state`, `state_version: integer`, `plan_digest: digest or null`, `steps: StepResult[]`, `irreversible_started: boolean`, `error: Error or null` |
@@ -1563,16 +1579,54 @@ A same-key/digest retry returns the original receipt, changed bytes return
 effect. Secret values never occur in JSON, argv, events or logs. All journal commits and
 outbox insertion precede acknowledgement or external effects.
 
+**Request and replay digest domains (P7-02).** `request_digest` and `replay_digest` are
+separate, domain-separated values; neither contains itself or the other. For a request
+body `B`, let `B′` be RFC 8785 JCS of `B` with `request_digest`, `replay_digest`,
+`signature`, `idempotency_key` and any operation-declared hash-exempt retry hint such as
+`config.update.operation_id` removed:
+
+```text
+request_digest = SHA-256(UTF-8("cf.request-digest.v1\n") || B′)
+replay_digest  = SHA-256(UTF-8("cf.replay-digest.v1\n") || UTF-8(message_type) || "\n" || B′)
+```
+
+The excluded-field list travels with every readback and deduplication record, together
+with both digest values. An operation that deliberately uses one identity instead of two
+must name which formula it uses and publish the mapping; the default is two values. This
+rule applies to certificate, capability, enrollment-grant, dispatch-grant, binding,
+secret-transfer, configuration and cancellation requests and to their readback records.
+No consumer may recompute a digest over a body containing the digest being checked.
+
+**Launch identity under LCR-1 (P7-01).** The launching foreman preallocates `launch_id`
+and a nonce before admission. The L0 `LaunchCommitment` contains the immutable
+`BriefInput`, `launch_id`, nonce and owner identity; its `input_digest` covers only those
+L0 fields and explicitly excludes `dispatch_id`, `execution_key`, `input_digest` itself
+and every signature. The supervisor validates and persists that commitment first, then
+derives each identity exactly once:
+
+```text
+execution_key = SHA-256(UTF-8("cf.execution-key.v1\n") || launch_id || "\n" || input_digest)
+dispatch_id   = "d-" || SHA-256(UTF-8("cf.dispatch-id.v1\n") || launch_id || "\n" || input_digest)
+```
+
+`LaunchInput` carries the commitment and the derived identities, but its `input_digest`
+is the commitment's immutable value; it is never recomputed over the materialized launch
+object. The construction order is content, then record, then envelope. A reader
+recomputes the same values from the same commitment; a mismatch is `CONTRACT_INVALID` or
+`LAUNCH_CONFLICT`. Searching for a digest fixed point is forbidden.
+
 **Certificate and capability lifecycle.** The authority owns these routes. `expires_at`
 is UTC for display; monotonic remaining lifetime governs enforcement. A certificate
-renewal increments registration_generation exactly once, permits at most the configured
-60-second overlap for in-flight reads, and revokes the old serial for mutations immediately.
+renewal request names the observed `registration_generation` and never allocates a new
+one; the Crier registrar owns the single increment on its separate registration-renewal
+operation, with at most the configured 60-second overlap for in-flight reads, and revokes
+the old serial for mutations immediately.
 A failed live revocation check is `AUTHORITY_UNAVAILABLE`, never a cached allow.
 
 || Route / body version | Additional request fields | Durable result and errors |
 ||---|---|---|
 || `POST /v1/certificates/renew` / `authority.v1` | registration_id, expected_generation, csr_der, public_key, requested_expires_at | `{registration_id,registration_generation,certificate_der,expires_at,credential_refs,authority_seq}`; wrong generation `REGISTRATION_CONFLICT`, weak/replayed key `UNAUTHORIZED` |
-|| `GET /v1/registrations/{id}` | none | registration metadata, certificate serials, generation, revocation state and assigned credential references; never private material |
+|| `GET /v1/registrations/{id}` | none | registration metadata, certificate serials, registration generation, revocation state and assigned credential references; never private material |
 || `POST /v1/capabilities/issue` / `authority.v1` | capability_id, subject_id, project_id, operations:ID[1..32], resource_refs:EvidenceRef[1..128], owner_fence, expires_at | `{capability_id,capability_ref,token_sha256,scope,expires_at,transfer_id}`; scope widening `FORBIDDEN`, lifetime above parent `CAPABILITY_EXPIRY_INVALID` |
 || `GET /v1/capabilities/{id}` | none | `issued|active|revoked|expired`, scope, token hash, expiry and current authority sequence |
 || `POST /v1/capabilities/{id}/revoke` / `authority.v1` | expected_authority_seq, reason | `200 {state:revoked,authority_seq}` only after online denial readback; otherwise `503 REVOCATION_UNVERIFIED` |
@@ -1666,11 +1720,15 @@ participant GET readbacks. Admission is therefore the conjunction
 false. [CT-26/28/29; F2/F11; III.M9.S2/S3]
 
 **Protected secret resolution and Bunker transfer.** The control broker socket is
-`/run/factory/broker/secrets.sock`, owned by the broker service UID, mode 0600. The node
-broker socket is `/run/factory/node-broker/secrets.sock`, owned by the node-broker UID,
-mode 0600. Neither socket is mounted into a worker namespace. A local request is one JCS
+`/run/factory/broker/secrets.sock`, owned and used by the control-broker service under
+`factory-control`, with a base owner-only mode and no other role entry. The node-broker
+socket is `/run/factory/node-broker/secrets.sock`, owned by the node-broker UID, with a
+base owner-only mode and the installer ACL `u:factory-control:rw-`; the foreman and
+worker have no entry. Neither socket is mounted into a worker namespace. A local request is one JCS
 line, at most 65536 bytes: `{schema_version:"secret-resolve.v1",request_id,corr_id,
-credential_ref,operation,idempotency_key}`. SO_PEERCRED supplies the principal; a caller
+credential_ref,operation,idempotency_key,request_digest}`. `request_digest` is the
+Part I §1.9.10 domain-separated value over the body excluding itself, `replay_digest`,
+`signature` and `idempotency_key`. SO_PEERCRED supplies the principal; a caller
 principal field is forbidden. The broker validates the online assigned-reference list,
 operation, registration generation and revocation state. Success returns metadata
 `{schema_version,request_id,credential_ref,fingerprint,expires_at,scope}` plus exactly one
@@ -1694,6 +1752,42 @@ descriptor; after descriptor loss or process restart, a consumed transfer return
 the descriptor atomically with owner-only permissions and readback. Fanout creates one
 independently scoped transfer per consumer; no broadcast descriptor or shared environment
 variable exists.
+
+**Mediated socket access under the four-UID profile (P7-04; D2=A).** Every protected
+AF_UNIX socket uses an explicit POSIX ACL plus directory traversal; no shared
+supplementary group and no world-writable socket is permitted. `$HOME` in the socket
+defaults is `factory-control`'s HOME, `/var/lib/factory/control`. The canonical control
+path is therefore
+`/var/lib/factory/control/.local/state/factory/supervisor/control.sock`, owned by
+`factory-control`. Its ancestors are owned by `factory-control` with owner rwx and a named
+`factory-foreman` ACL entry of execute-only (`u:factory-foreman:--x`) on each directory
+from `/var/lib/factory/control` through `supervisor/`; the directory list bit is not
+granted, so the foreman can traverse but cannot enumerate. The socket itself is created
+with umask 077, then receives `u:factory-foreman:rw-` before `listen(2)`; its base owner
+mode remains owner-only and the effective access is owner plus that named UID. Startup
+reads back `getfacl` and fails closed with `SOCKET_ACCESS_UNSUPPORTED` if ACLs are
+unavailable, the mask is widened beyond the named entries, or any ancestor lacks
+traversal. The socket is never recreated without re-applying and re-reading the ACL.
+
+The node-broker socket `/run/factory/node-broker/secrets.sock` is owned by
+`factory-node-broker` and grants only `factory-control` the installer ACL
+`u:factory-control:rw-`; the control-broker socket is owned and used by
+`factory-control` and grants no foreman or worker entry. `factory-foreman` has no ACL on
+either secret socket. `factory-worker` has no ACL on any control, broker or peer socket
+and no mount that contains one. Authentication is still SO_PEERCRED plus the live fence,
+registration generation, role and exact operation; the ACL only makes the connect
+possible. On restart the socket inode is recreated, the ACL is re-applied before accept,
+and a missing ACL leaves readiness false. On role revocation the named ACL entry is
+removed, the supervisor closes matching peer sessions and rejects the next request; a
+reissued role requires a new ACL generation recorded in the readiness receipt.
+
+A signed profile may instead select the preconnected-descriptor mode
+(`execution.socket_access=preconnected-fd`): the trusted launcher creates the connection,
+passes one close-on-exec end to the intended role, and the supervisor authenticates the
+launcher-issued capability and exact launch identity. The descriptor is not inherited by
+the worker, is closed on role exit and is invalid after restart. If neither a valid ACL
+path nor a valid preconnected descriptor is available, readiness is false; there is no
+implicit fallback from one mode to the other.
 
 The signed `factory-adapter-capabilities.v1` artifact named by Part V is the required
 resource registry. It contains `schema_version`, `registry_digest`, `release_lock_digest`,
@@ -1721,8 +1815,15 @@ the named failure branches; each branch has one accounting effect and no duplica
 || definitive execution or required gate failure | attempt `fail`; same-worker correction owns the task until terminal disposition or allowance/deadline exhaustion |
 || execution passes and publication definitively fails | execution remains `pass`, task/round `partial`; no settled success |
 || commit/push/gate verdict or remote readback is uncertain | task `unverified`, round `unverified`; no closeout and no inferred commit |
+|| all required evidence is uniformly unverified and the reconciliation window closes without new execution | round `unverified`; `settled_unverified`, a dedicated terminal with no success counter and no fresh execution |
+|| cancellation wins before start with proof | attempt `cancelled`; `settled_cancelled`; only the proven never-started reservation is refunded |
+|| cancellation wins for a native run and quiescence is proven | attempt `cancelled`; `settled_cancelled`; capacity releases after quiescence and no later result replaces it |
+|| start expired with no process (`EXPIRED_START`) | attempt `fail`; `settled_failure`; no worker credit |
+|| start deadline expired but process existence is unknown | attempt `unknown`, quarantined; `unknown` |
+|| empty authorized task scope | round `pass` with consumed 0; `settled_success` with zero work and no worker launch |
+|| zero allowance with nonempty task scope | round `fail` with `BUDGET_EXHAUSTED`; `settled_failure`; no success counter |
 || required memory sync is pending after local commit | execution outcome is retained; CT-06 `awaiting_evidence`, internally `REPORTED_PENDING_MEMORY`; work may continue locally, next round is blocked |
-|| backup coordinator is lost | recover the same barrier while valid; lease expiry or backup deadline makes the cut `ABORTED`, permanently aborts upload, holds writers, and can never become complete |
+|| backup coordinator is lost | recover the same barrier while valid; lease expiry or backup deadline makes the operation `ABORTED`, permanently aborts upload, holds writers, and can never become complete |
 
 Task reduction uses `unknown` if any required outcome is unknown; otherwise `partial` for
 mixed pass/fail/unverified outcomes or publication partiality; otherwise `unverified` if
@@ -1736,7 +1837,11 @@ The internal-to-CT-06 mapping is fixed: `RETURNED` maps to `received`;
 `PROJECTIONS_PENDING` and VII's `REPORTED_PENDING_MEMORY` map to `awaiting_evidence`
 when memory/evidence is missing and to `postcheck_pending` when a required postcheck is
 unfinished; `CLOSED` maps to exactly one of `settled_success`, `settled_failure`,
-`settled_partial` according to the reduction; unresolved `UNKNOWN` maps to `unknown`.
+`settled_partial`, `settled_unverified` or `settled_cancelled` according to the
+reduction; unresolved `UNKNOWN` maps to `unknown`. `settled_unverified` is the
+truth-preserving terminal for a uniformly unverified round; `settled_cancelled` is the
+truth-preserving terminal for a cancellation winner. Neither is an alias for failure or
+success, and neither is inferred from process absence.
 Physical slots release only after process quiescence, independently of logical pending
 state. Allowance is never replenished, and the next round remains blocked until a terminal
 settlement revision. POST hooks use the pinned plan's 1..5 attempts, default five for
@@ -1759,7 +1864,7 @@ This subsection is the normative first-registration contract. It specializes §1
 §1.9.3a for a fresh Bunker; it does not replace their offline operator-key, certificate,
 nonce, revocation or authority-ledger rules. The authority is the only actor that may
 issue a bootstrap grant or mint a Bunker principal. The Crier registrar is the only actor
-that may admit `register.v1` and allocate a node identity. The operator, provisioner,
+that may admit `register.v1` and allocate `node_id` and `registration_generation`. The operator, provisioner,
 Scheduler, Crier worker, Gateway and any other third party may relay or verify these
 objects but may not mint either credential or identity.
 
@@ -1779,9 +1884,14 @@ The `register.v1` enrollment request is a closed body with exactly these require
 members: `registration_id`, `agent_id`, `project_id`, `operation_id`,
 `expected_generation: UInt` (the first registration sends `0`), `profile_id`,
 `public_identity {certificate_der, key_id}`, `capabilities` (unique, at least one),
-and `idempotency_key`. The caller never supplies `generation`; the registrar allocates
-`registration_generation=1` for the first accepted registration and returns exactly
-`{registration_id, registration_generation, expires_at, credential_ref}`.
+`idempotency_key` and `request_digest`. The caller never supplies `generation`; the
+registrar allocates `registration_generation=1` for the first accepted registration and
+returns exactly
+`{registration_id, node_id, registration_generation, expires_at, credential_ref}`.
+`registration_id` is already durable before this request. Its identity is
+`(registration_id, operation_id, expected_generation, request_digest)`, where the
+generation component is the caller's request value, never a value the caller has not yet
+received.
 
 The first exchange is ordered and has one wire/version pair only:
 
@@ -1791,12 +1901,17 @@ The first exchange is ordered and has one wire/version pair only:
    authority fail before allocation.
 2. The Crier registrar accepts the authenticated `cf2a.v1` envelope with the closed
    `register.v1` body at `POST /v1/factory/registrations` (CT-22). The first request
-   carries `expected_generation=0`; the registrar atomically allocates exactly one
-   `node_id` and `registration_generation=1`. CT-21's `credential.install` then
-   installs the returned class-`crier` `credential_ref` for that node. No worker-class
-   principal, child identity or second allocation is permitted. The registrar exposes that
-   durable registration at the single read route `GET /v1/factory/registrations/{registration_id}`,
-   returning `{registration_id, node_id, registration_generation, state, expires_at, credential_ref}`;
+   carries `expected_generation=0`. The registrar performs a durable duplicate lookup on
+   `(registration_id, operation_id)` and `request_digest` before any first-generation CAS:
+   an existing accepted record returns its original `node_id`, `registration_generation`,
+   `expires_at` and `credential_ref` bytes and reopens no allocation. Only when no record
+   exists does it compare `expected_generation` to the durable generation, then atomically
+   allocate exactly one `node_id` and `registration_generation=1`. CT-21's
+   `credential.install` then installs the returned class-`crier` `credential_ref` for that
+   node. No worker-class principal, child identity or second allocation is permitted. The
+   registrar exposes that durable registration at the single read route
+   `GET /v1/factory/registrations/{registration_id}`, returning
+   `{registration_id, node_id, registration_generation, state, expires_at, credential_ref}`;
    it is distinct from the authority's certificate-metadata read `GET /v1/registrations/{id}` and
    never returns secret material.
 3. The node resolves the returned reference through the broker, installs the credential,
@@ -1822,16 +1937,20 @@ signed-read failure after the registration and credential are durably present pr
 `DEGRADED`, closes M9 schedulability and retains the one allocated identity for
 readback/recovery; it is not a second enrollment opportunity. Loss or removal of a
 Bunker fences and revokes the identity and ends in `REMOVED` only after the revocation
-and negative resource probe are recorded. Recovery resumes the same
-`(registration_id, operation_id, generation)` request, re-sending the observed
-`expected_generation`, and reads back its existing
-registration before retrying a missing step.
+and negative resource probe are recorded. A lost reply is not a new enrollment. Recovery
+performs the durable duplicate lookup by `(registration_id, operation_id)` and
+`request_digest`; if the accepted record exists it reads back the existing
+`{registration_id,node_id,registration_generation,expires_at,credential_ref}` and resumes
+the missing CT-21/read-proof step, otherwise it replays the original request bytes with
+`expected_generation=0`. A first registration never resends an observed generation `1`
+as `expected_generation`; that value belongs only to a separate certificate-renewal or
+reissue operation, which names the observed generation in its own request type.
 
-The idempotency tuple is `(registration_id, operation_id, generation)`, where
-`generation` is the registrar-allocated registration generation, together with the
-canonical request digest. An exact repeat of the same tuple and digest returns
-the original `node_id`, `registration_id`, generation and credential reference and
-performs no allocation or installation. A changed tuple or request digest returns `REGISTRATION_CONFLICT`
+The idempotency tuple is `(registration_id, operation_id, expected_generation)` together
+with the canonical request digest, where `expected_generation` is the caller's request
+value. An exact repeat of the same tuple and digest returns the original `node_id`,
+`registration_id`, registration generation and credential reference and performs no
+allocation or installation. A changed tuple or request digest returns `REGISTRATION_CONFLICT`
 (compare-and-swap refusal), and the registrar does not mutate state. If the reply is lost, the authority or Crier reads
 back `GET /v1/factory/registrations/{registration_id}` and resumes the missing CT-21/read-proof
 step; it never allocates a second identity.

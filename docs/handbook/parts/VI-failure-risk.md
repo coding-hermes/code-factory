@@ -723,8 +723,7 @@ data loss on restart is a negative control, not production readiness (M10 review
 restored-delivery checks, not by daemon liveness. The supported backup profile is
 `schema: cf.backup.v1`: a scheduler/Crier durable backend, the per-project board and
 events, evidence objects, configuration generations, and pending Git-backed memory
-entries are captured only after writers checkpoint at one consistency marker. The
-manifest records `backup_id`, source repository/ref commits, board revision, custody
+entries are captured only after writers checkpoint at one consistency marker. The immutable content object records `backup_id`, source repository/ref commits, board revision, custody
 transaction boundary, memory commit, marker time, destination, artifact digests,
 retention, encryption-key reference, revocation snapshot and excluded/loss windows.
 RPO/RTO and schedule are declared per store; a target policy may be daily with a
@@ -734,9 +733,10 @@ The barrier ordering and manifest vocabulary in F15.1 are authoritative here: th
 manager closes scheduler admission, drains/checkpoints the round, freezes broker
 writes, checkpoints Crier custody, flushes memory writers, and checkpoints its own
 journal before any snapshot is captured. The resulting `consistency_marker` carries
-one receipt per participant; `cf.backup.v1` is the only backup schema. A missing
-participant or failed digest/readback aborts a complete cut rather than silently
-turning an exclusion into success.
+one receipt per participant; the backup family is `cf.backup.v1` immutable content,
+`cf.backup-operation.v1` lifecycle state and the signed publication/release receipts.
+A missing participant or failed digest/readback aborts a complete cut rather than
+silently turning an exclusion into success.
 
 Restore is isolated and starts with the independently retained authority, not the
 backup-local watermark. It imports newer fences and revocations, then reconciles
@@ -1127,22 +1127,27 @@ its exact identity and digest; the round allowance never resets on recovery.
 
 **What fails.** Independent copies of configuration, board/events, evidence, scheduler/Crier custody and local pending memory can restore to mutually inconsistent states. A backup-created artifact is not a validated backup, and a restore drill is not proved by service liveness.
 
-**Normative contract.** A backup manifest is `schema: cf.backup.v1` with `backup_id`, source revisions, consistency marker, capture time, destination, artifact digests, included stores, excluded/loss windows, retention, encryption-key reference and revocation snapshot. Capture drains or checkpoints writers, records the board/git revision, scheduler transaction boundary, Crier custody boundary, evidence manifest and pending memory entries, then validates every artifact digest before off-host publication. Secrets are references, not plaintext; key recovery and revocation state are included.
+**Normative contract.** A backup has one immutable content object, `schema: cf.backup.v1`, with `backup_id`, source revisions, consistency marker, capture time, destination, artifact digests, included stores, excluded/loss windows, retention, encryption-key reference and revocation snapshot. The mutable operation record and the signed publication/release receipts are separate objects and never mutate the content bytes. Capture drains or checkpoints writers, records the board/git revision, scheduler transaction boundary, Crier custody boundary, evidence manifest and pending memory entries, then validates every artifact digest before off-host publication. Secrets are references, not plaintext; key recovery and revocation state are included.
 
-Restore occurs in an isolated scope: restore artifacts, verify manifests and key/revocation state, reconcile board/claims/custody/memory identities, fence stale owners, then run readiness and admission checks. A missing unsynchronized entry is reported at the actual recovery boundary and is never reconstructed from partial scheduler or Git history. Recovery objectives state RPO/RTO per store and name unsupported windows.
+Restore occurs in an isolated scope: restore artifacts from the immutable content object, read the operation and signed publication/release receipts, verify manifests and key/revocation state, reconcile board/claims/custody/memory identities, fence stale owners, then run readiness and admission checks. A missing unsynchronized entry is reported at the actual recovery boundary and is never reconstructed from partial scheduler or Git history. Recovery objectives state RPO/RTO per store and name unsupported windows.
 
 **Signal and proof.** Metrics expose backup age, validation failures, last successful restore drill and per-store recovery lag. A restore case loses the controller or Bunker mid-round and verifies the round/task/claim/budget/custody/memory view without resurrecting acknowledged work or revoked credentials. Until this drill is run on the selected deployment, the recovery state remains `UNVERIFIED`.
 
 ### 35.1 One coordinated-cut lifecycle and manifest (P5-C-26; P6-06; SC-08)
 
-Backup is a manager operation with one authority-owned barrier and one manifest. The closed
+Backup is a manager operation with one authority-owned barrier, one immutable captured
+content object and one mutable operation record. `cf.backup.v1` is the immutable content
+object (captured inventory and cut manifest); `cf.backup-operation.v1` is the mutable
+lifecycle record; `cf.backup-publication.v1` and `cf.backup-release.v1` are separately
+signed receipts. A mutable field never lives in `cf.backup.v1`. The closed operation
 state relation is `REQUESTED → FROZEN → CAPTURED → VALIDATED → PUBLISHED → RELEASED`;
 `REQUESTED|FROZEN|CAPTURED|VALIDATED|PUBLISHED → ABORTED` is the failure relation, and
 `FROZEN|CAPTURED|VALIDATED → INCOMPLETE` is available only under an explicitly selected
-partial-offline policy. `PUBLISHED` means the encrypted archive and manifest have been
-uploaded and read back off-host. `RELEASED` means every participant has acknowledged the
-release after that readback. `ABORTED` and `INCOMPLETE` can never transition to a complete
-or published state, and a replay with changed state/digest is `BACKUP_CONFLICT`.
+partial-offline policy. `PUBLISHED` means the encrypted archive, immutable content object
+and publication receipt have been uploaded and read back off-host. `RELEASED` means every
+participant has acknowledged the signed release receipt after that readback. `ABORTED`
+and `INCOMPLETE` can never transition to a complete or published state, and a replay
+with changed state/digest is `BACKUP_CONFLICT`.
 
 The manager closes new admissions, asks supervisors to quiesce rounds, and creates
 `{backup_id,barrier_seq,authority_id,config_generation,operation_id,idempotency_key}`.
@@ -1157,12 +1162,16 @@ Capture, local validation and off-host publication are three distinct commit poi
 
 1. `CAPTURED`: every required store has an immutable local snapshot and acknowledgement.
    Writers remain frozen; local capture is not permission to release.
-2. `VALIDATED`: native readers, hashes, object closure and watermarks pass and the signed
-   manifest is immutable. Writers remain frozen while upload/readback proceeds.
+2. `VALIDATED`: native readers, hashes, object closure and watermarks pass, the immutable
+   `cf.backup.v1` content object is signed and its `content_digest` is recorded in the
+   operation record. Writers remain frozen while upload/readback proceeds.
 3. `PUBLISHED`: conditional-create upload finishes and an independent off-host readback
-   returns the same manifest and artifact digests. Only now does the coordinator call
-   `POST /v1/backups/{backup_id}/release`; each writer resumes on the same barrier release
-   receipt and returns a final acknowledgement, producing `RELEASED`.
+   returns the same content digest and artifact digests; the signed
+   `cf.backup-publication.v1` receipt names that content digest and the remote object.
+   Only now does the coordinator call `POST /v1/backups/{backup_id}/release`; each writer
+   resumes on the same barrier release and returns a signed
+   `cf.backup-release.v1` receipt naming the content digest, barrier sequence and
+   `released` or `aborted`, producing `RELEASED`.
 
 The overall backup deadline is Part V's 3600-second default. Coordinator restart first
 reads `GET /v1/backups/{backup_id}` and resumes the recorded stage with the same identity.
@@ -1199,19 +1208,46 @@ reachable writers. It cannot certify project readiness or a full restore.
 || each Bunker pending memory/local journal | supervisor freezes the local writer and bundles all pending branches and launch/result ledgers; absence is an explicit exclusion, never an empty store |
 || independent authority | signed checkpoint reference only; backup never replaces the live epoch/revocation store |
 
-The canonical `cf.backup.v1` manifest is a closed object with these required members:
-`schema_version`, `backup_id:ID`, `operation_id:ID`, `barrier_seq:PosInt`,
+The immutable `cf.backup.v1` content object is a closed object with these required
+members: `schema_version`, `backup_id:ID`, `operation_id:ID`, `barrier_seq:PosInt`,
 `authority_id:ID`, `authority_checkpoint_digest:SHA`, `config_generation:PosInt`,
 `consistency_marker:{authority_seq:PosInt,writer_watermarks:[{store_id,last_transaction,root_digest}]}`,
-`captured_at:Time`, `validated_at:Time|null`, `published_at:Time|null`,
-`released_at:Time|null`, `destination_ref:ID`, `key_ref:SecretRef`,
+`captured_at:Time`, `destination_ref:ID`, `key_ref:SecretRef`,
 `stores:Store[1..1024]`, `inventory:Artifact[1..1048576]`,
 `exclusions:Exclusion[]`, `retention_until:Time`, `rpo_s:PosInt`, `rto_s:PosInt`,
-`revocation_snapshot_ref:EvidenceRef`, `state:REQUESTED|FROZEN|CAPTURED|VALIDATED|PUBLISHED|RELEASED|ABORTED|INCOMPLETE`,
-`offhost_readback_ref:EvidenceRef|null`, `release_receipts:ReleaseReceipt[]`,
-`manifest_digest:SHA`, and `signature:Base64url64`. Nullable timestamps and off-host ref
-are null until their named commit point. `PUBLISHED` requires nonnull published time and
-readback ref; `RELEASED` additionally requires every writer's release receipt.
+`revocation_snapshot_ref:EvidenceRef`, `content_digest:SHA`, and `signature:Base64url64`.
+It contains no operation state, no `validated_at`/`published_at`/`released_at`, no
+`offhost_readback_ref` and no release receipt. Those fields are in the separate records
+below. `content_digest` hashes RFC8785 JSON of the complete content object excluding only
+`content_digest` and `signature`; the offline-enrolled backup signer signs
+`CF2A-BACKUP-1\n` plus that digest's lowercase hex bytes. The content object and its
+signature are byte-identical from `VALIDATED` through retention and restore.
+
+`cf.backup-operation.v1` is the mutable lifecycle record:
+`schema_version:"cf.backup-operation.v1"`, `backup_id`, `operation_id`,
+`barrier_seq`, `content_digest:SHA|null` (null before `VALIDATED`), `state`,
+`requested_at:Time`, `frozen_at:Time|null`, `captured_at:Time|null`,
+`validated_at:Time|null`, `published_at:Time|null`, `released_at:Time|null`,
+`aborted_at:Time|null`, `offhost_readback_ref:EvidenceRef|null`,
+`publication_receipt_ref:EvidenceRef|null`, `release_receipt_refs:EvidenceRef[]`,
+`operation_version:PosInt`, `updated_at:Time`. Each transition appends a durable
+operation revision and never rewrites the content object. `PUBLISHED` requires a
+nonnull publication receipt ref; `RELEASED` requires one release receipt ref per writer
+and the operation's `released_at`; `ABORTED` and `INCOMPLETE` retain the operation and
+all writer holds.
+
+`cf.backup-publication.v1` is a separately signed receipt:
+`{schema_version,backup_id,content_digest,archive_digest,remote_object,uploaded_at,
+readback_at,offhost_readback_ref,signer_key_id,receipt_digest,signature}`. The receipt
+digest covers the complete receipt excluding itself and `signature`; the signature binds
+the immutable content digest and the exact off-host object. It never embeds or mutates
+`cf.backup.v1`.
+
+`cf.backup-release.v1` is a separately signed per-writer receipt:
+`{schema_version,backup_id,content_digest,barrier_seq,store_id,state:released|aborted,
+acknowledged_at,signer_key_id,receipt_digest,signature}`. The receipt digest covers the
+complete receipt excluding itself and `signature`. The operation stores its reference,
+not a mutable copy; a changed receipt under the same identity is `BACKUP_CONFLICT`.
 
 Store is `{store_id:ID,kind:jsonl|git|sqlite|postgres|objects|local-journal,
 source_revision:Text,last_transaction:Text,artifact_path:relative-path,sha256:SHA,
@@ -1219,24 +1255,26 @@ bytes:UInt,root_digest:SHA,validated:boolean}`. Artifact is `{path:relative-path
 sha256:SHA,bytes:UInt,store_id:ID}` and inventory is sorted by path bytes with unique
 paths. Exclusion is `{store_id:ID,reason:ErrorCode,last_synced_at:Time|null,
 loss_start:Time|null,loss_end:Time|null}`; null time means unknown loss, never zero loss.
-ReleaseReceipt is `{store_id,barrier_seq,state:released|aborted,receipt_digest:SHA,
-acknowledged_at:Time}`. `manifest_digest` hashes RFC8785 JSON of the complete object
-excluding only `manifest_digest` and `signature`; the offline-enrolled backup signer signs
-`CF2A-BACKUP-1\n` plus that digest's lowercase hex bytes. Unknown keys, a missing store,
-changed bytes or invalid state/refusal combination is `BACKUP_MANIFEST_INVALID`.
+Unknown keys, a missing store, changed bytes or invalid state/refusal combination is
+`BACKUP_MANIFEST_INVALID`.
 
 The archive uses authenticated encryption to the backup public-key recipient; the recovery
 private key remains with the offline custodian. Secret-free archives contain credential
 references and revocation metadata, never credential values. Publication uses a unique
 backup-ID object, conditional create, then remote hash readback and a signature/schema
-validation receipt. Partial uploads are not listed as validated backups. Defaults are
+validation receipt. The off-host readback names both the immutable `content_digest` and
+the archive object digest; the operation record points to that receipt, never back into
+the content. Partial uploads are not listed as validated backups. Defaults are
 hourly capture, 30-day retention, RPO 3600 seconds, RTO 7200 seconds and overall deadline
-3600 seconds. Destination and key remain required owner inputs. Retention deletes only
-validated expired generations with no hold and always retains the latest validated
-generation.
+3600 seconds. Destination and key remain required owner inputs. Retention and restore
+identify the immutable content object by `content_digest`; an operation's later state or
+release receipt cannot change that object. Retention deletes only validated expired
+generations with no hold and always retains the latest validated content generation.
 
 DECISION SLOT C-BACKUP offers `refuse` (the fail-closed default) or `partial`; no silent
-partial capture is permitted. Restore decrypts in an isolated network, verifies signature,
+partial capture is permitted. Restore reads the immutable `cf.backup.v1` content object
+named by `content_digest`, plus the operation and signed publication/release receipt
+references. It decrypts in an isolated network, verifies signature,
 hashes, schema, object closure and store watermarks, restores with native readers,
 reconciles identities, then executes §35.2 before enabling credentials, writes or dispatch.
 A timed restore drill reports actual per-store loss/recovery time; declared objectives are

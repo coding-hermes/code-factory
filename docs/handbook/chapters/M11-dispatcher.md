@@ -271,32 +271,41 @@ Hermes directly, allocate a second execution key or consume the same round throu
 parallel path. `execution_mode=resident` is the only target mode.
 
 The control protocol is exactly M5 §16.1's `supervisor.v1` on
-`$HOME/.local/state/factory/supervisor/control.sock`, mode 0600 with peer-UID
-verification. The foreman issues HTTP-shaped `PUT /v1/launches/{launch_id}`;
+`$HOME/.local/state/factory/supervisor/control.sock` (where `$HOME` is
+`factory-control`'s `/var/lib/factory/control`). The socket has a base owner-only
+mode, the named `u:factory-foreman:rw-` ACL and ancestor traversal ACLs from M1
+§17.5, and peer-UID verification; the worker has no entry. The foreman issues
+HTTP-shaped `PUT /v1/launches/{launch_id}`;
 journal and result reads use GET on that launch resource and its result
 subresource, and cancellation uses the registered cancellation subresource.
 `cf.supervisor.v1`, `submit.sock`, the retired submit/status/output/cancel/drain/
 resume verb set and fd-3/fd-4 harness channels return `UNSUPPORTED_VERSION`.
 There is no translation to a second supervisor implementation.
 
-M2 §15.4 owns identity. A cold CT-02 uses the deterministic foreman launch ID
-and creates no future worker IDs. CT-05 creates `attempt_id` immediately before
-the worker launch. `launch_id` addresses the control resource and cancellation;
-`execution_key = SHA256(JCS({launch_id,input_digest}))` addresses budget/result
-dedupe. Recovery lookup uses `execution_key`, exact `native_name` and
-`input_digest`, then `native_session_id` plus boot ID and `/proc` start ticks to
-identify one process incarnation. A duplicate launch with the same digest
-performs lookup only. Changed input under any existing identity is
-`LAUNCH_CONFLICT`.
+M2 §15.4 owns identity under LCR-1. A cold CT-02 preallocates `launch_id` and a nonce
+and creates no future worker IDs. CT-05 preallocates the worker `launch_id` and
+`attempt_id` immediately before the worker launch. The L0 commitment carries
+`input_digest`; the supervisor derives
+`execution_key = SHA-256(UTF-8("cf.execution-key.v1\n") || launch_id || "\n" || input_digest)`
+and `dispatch_id = "d-" || SHA-256(UTF-8("cf.dispatch-id.v1\n") || launch_id || "\n" || input_digest)`
+once. The materialized launch carries those values but never recomputes `input_digest`
+over itself. `launch_id` addresses the control resource and cancellation;
+`execution_key` addresses budget/result dedupe. Recovery lookup uses `execution_key`,
+exact `native_name` and the commitment `input_digest`, then `native_session_id` plus boot
+ID and `/proc` start ticks to identify one process incarnation. A duplicate launch with
+the same digest performs lookup only. Changed input under any existing identity is
+`LAUNCH_CONFLICT`; no consumer iterates a digest to a fixed point.
 
 The `Launch` fields from the retired interface are projections of the supervisor
 journal: `accepted` is `RESERVED`, `starting` is `START_INTENT`, `running` is
 `STARTED|RUNNING`, `cancelling` is `CANCELLED` pending quiescence, `terminal` is
 the durable typed result, `never_started` requires authoritative
 `NEVER_ACCEPTED`, and `quarantined` is `START_UNKNOWN|STOP_UNKNOWN`.
-`NEVER_ACCEPTED` is returned only after complete journal and native-backend
-replay; an unavailable journal is `START_UNKNOWN`, not absence. Result plus
-delivery outbox commit atomically before Crier ack.
+`NEVER_ACCEPTED` is returned only after complete journal and native-backend replay; an
+unavailable journal is `START_UNKNOWN`, not absence. A current `LaunchResponse` carries
+`state=unknown` with `resolution=quarantined` for those cases and an immutable `outcome`
+as M5 §16.1 defines; a quarantined launch is never rewritten as `failed` merely because a
+process is absent. Result plus delivery outbox commit atomically before Crier ack.
 
 The native adapter receives one `cf.native-input.v1` JCS line on stdin and emits
 `cf.native-event.v1` on stdout under M5. Started, progress and exactly one result use
@@ -317,11 +326,16 @@ restart. Parent-death signals are diagnostic only. Native IDs contain the enroll
 node/backend identity and are rejected by every other backend, preventing cross-backend
 cancel, output or result operations.
 
-Cancellation persists the state CAS, denies new tool/inference admissions, sends TERM to
-the exact process group/cgroup, waits 10 seconds, sends KILL, then requires an empty
-cgroup within another 5 seconds. Surviving descendants or unavailable readback produce
-`STOP_UNKNOWN` and block replacement. Deadline, lease loss and revocation use that same
-path without extending the round. Output and heartbeat polling occur every 5 seconds in
+Cancellation uses the phase-discriminated `cancellation.v1` request, not a fabricated
+native identity. For proven `RESERVED`/`START_INTENT` work it persists the non-signalling
+state CAS and releases no budget after a winning cancel; for a durable
+`STARTED`/`RUNNING` record it persists cancellation, denies new tool/inference
+admissions, sends TERM to the exact process group/cgroup, waits 10 seconds, sends KILL,
+then requires an empty cgroup within another 5 seconds; for `START_UNKNOWN` or incomplete
+identity it records `ambiguous`, retains the cancel request and quarantines without
+signalling. Surviving descendants or unavailable readback produce `STOP_UNKNOWN` and
+block replacement. Deadline, lease loss and revocation use that same phase selection
+without extending the round; a late result cannot replace a winning `CANCELLED`. Output and heartbeat polling occur every 5 seconds in
 execution-key order and never serialize one launch behind another. A 30-second heartbeat
 gap is suspect/unknown, not proof of death.
 
