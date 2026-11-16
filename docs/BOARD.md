@@ -138,6 +138,14 @@ scripts/boardctl validate
 bash tests/selftest.sh | grep -E 'rows parse|^SELFTEST'
 ```
 
+- **Re-measured 2026-11-16T16:31Z at tip `93922d61`:** **536 task rows, 826 events**. Status split:
+  168 `complete`, 15 `in_progress`, 351 `pending`, 2 `blocked`. `scripts/boardctl validate` prints
+  `RESULT: OK (89 warning(s))`; the only complete rows with no commit hash at all are still **CF-245**
+  and **P5G-34**. Rows CF-455..CF-459 were appended to the shared cache by sibling lanes at
+  16:14–16:22Z and are published in this commit: `scripts/ownership.py status` reported
+  `unowned-changes`, `lock: null`, and no live process, so the cache had stopped moving and its rows
+  belonged on `origin/main`. **CF-450 is complete at this tip** — attributed to the handbook review,
+  tier-2 verdict `PASS` (see the CI block below).
 - **Re-measured 2026-11-16T14:45Z at tip `74c973af`:** **528 task rows, 817 events** (max event id 816).
   `scripts/board_drift.py check --workdir . --ref origin/main` prints `RESULT: OK` — byte parity,
   `528 vs 528 rows; 0 divergent ids`, HEAD == `origin/main`, 0 ahead / 0 behind. `scripts/boardctl
