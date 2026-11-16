@@ -543,7 +543,12 @@ fields normative for the request envelope (§15.2's CAS retry and §15.3's readb
 depend on them) and names the gap rather than inventing a contrary record: the
 conformance bundle must grow either a request-envelope type carrying them or a
 `transition` member on the claim record, and until it does, the machine form covers
-creation only. Everything else below describes that envelope.
+creation only. A second, smaller mismatch sits inside the same file: its
+`schema_version` constant still reads `cf.group-claim.v1` while CT-10 and
+`conformance/fixtures/board-group-claim.json` both read `cf.board-group-claim.v1`. The
+two-of-three value is the one named here, and the constant is the copy to correct —
+a schema whose fixture cannot validate against it proves nothing about the contract.
+Everything else below describes that envelope.
 
 `transition` is the one discriminator. Group **creation** is `claim` and is the only
 transition that allocates: `operation_id` is the `claim_group_id`, the broker
