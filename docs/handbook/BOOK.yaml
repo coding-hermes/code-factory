@@ -82,7 +82,7 @@ figures:
   # Codes are QUOTED strings on purpose: unquoted `2.10` is a YAML float and parses
   # to 2.1, which collided with F1's code and printed F10's figure as "FIGURE 2.1"
   # (and Module M10 as "3.1"). A code is an identifier, never a number.
-  - {code: "0.1", file: figures/system-map.svg, caption: "System map — 33 components, 6 layers, 16 flows, 31 typed contracts; five host/trust enclosures; edges keyed CT-01…CT-30 plus CT-06R; model 034ea224… d62555."}
+  - {code: "0.1", file: figures/system-map.svg, caption: "System map — 33 components, 6 layers, 16 flows, 31 typed contracts; five host/trust enclosures; edges keyed CT-01…CT-30 plus CT-06R; model f73bd68a… 3f81a2."}
   - {code: "0.2", file: figures/board-lifecycle.svg, caption: "Board row lifecycle — the open→claim→integrate→close path plus the exits that are not forward (refused, superseded, blocked), each exit naming who may take it."}
   - {code: "0.3", file: figures/tick-lifecycle.svg, caption: "Scheduler tick lifecycle — admission, spawn, execution, settlement and the abandoned-tick path, with the readback that decides each transition."}
   # Part III — per-module centered views, one per module chapter, mounted as its hero
