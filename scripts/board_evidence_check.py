@@ -1,11 +1,49 @@
 #!/usr/bin/env python3
-"""Check that complete board rows point at locally inspectable evidence runs."""
+"""Check that complete board rows point at locally inspectable evidence runs.
+
+A complete row is only evidence when it names a run that can be inspected here.
+Two shapes are findings:
+
+* ``UNRESOLVED <id> <run>`` — the row names a run that is in neither
+  ``events.jsonl`` nor any GitReins history store;
+* ``ZERO-EVIDENCE <id>`` — the row's ``detail.evidence`` is empty or yields no
+  run id at all, so there is nothing to resolve (CF-438).  An empty pointer is
+  not a resolved pointer: without this finding the row is silently counted as
+  satisfied and the gate cannot fail on it.
+
+The accepted debt is an EXPLICIT DATED ALLOWLIST of row ids, never a number
+derived from the rows being graded.  ``expected_unresolved`` is therefore the
+number of findings the allowlist names, which stays below the reported count the
+moment a complete row nobody accepted appears — that disagreement is what the
+CF-398 selftest arm fails on.  The summary line's ``cleared`` count is allowlist
+ids that no longer fail: good news, so it is reported for pruning rather than
+failed on.
+"""
 
 import argparse
 import json
 import os
 import subprocess
 import sys
+
+# Accepted complete-row evidence debt, measured on tip 8b9148c5 (2026-11-16):
+# 58 rows naming a run that is absent from this store, plus the 4 rows whose
+# evidence pointer is empty — CF-289, CF-305, P5G-34, CF-422.  Ids, not a count:
+# a new zero-evidence or unresolvable row is reported as new, not absorbed by a
+# baseline that was computed from the very findings it grades.  Adding an id here
+# is a dated act of acceptance; removing one is what closing a row looks like.
+ACCEPTED_UNRESOLVED_DATE = "2026-11-16"
+ACCEPTED_UNRESOLVED = frozenset(
+    """
+    CF-008 CF-011 CF-012 CF-013 CF-034 CF-037 CF-038 CF-041 CF-050 CF-051
+    CF-052 CF-064 CF-082 CF-089 CF-090 CF-092 CF-096 CF-097 CF-114 CF-115
+    CF-127 CF-128 CF-141 CF-150 CF-153 CF-157 CF-167 CF-182 CF-192 CF-197
+    CF-198 CF-219 CF-226 CF-230 CF-244 CF-245 CF-257 CF-259 CF-270 CF-275
+    CF-277 CF-280 CF-289 CF-291 CF-303 CF-305 CF-307 CF-320 CF-354 CF-370
+    CF-378 CF-379 CF-382 CF-401 CF-402 CF-404 CF-411 CF-422 P5G-34 PERF-012
+    PERF-014 QA-CODE-FACTORY-2
+    """.split()
+)
 
 
 def _default_history_roots(root):
@@ -133,6 +171,12 @@ def _evidence_ids(row):
 
 
 def check(root, history_root=None):
+    """Return (complete rows, findings, ignored lines, history roots).
+
+    Each finding is ``(row_id, kind, run_ids)`` with ``kind`` either
+    ``"unresolved"`` (named runs that resolve nowhere) or ``"zero-evidence"``
+    (the row names no run at all, so nothing can be inspected).
+    """
     board_root = os.path.join(root, ".coding-hermes", "board")
     tasks_path = os.path.join(board_root, "tasks.jsonl")
     events_path = os.path.join(board_root, "events.jsonl")
@@ -145,14 +189,19 @@ def check(root, history_root=None):
     findings = []
     complete_rows = [row for row in rows if row.get("status") == "complete"]
     for row in complete_rows:
+        row_id = row.get("id", "<missing-id>")
+        evidence_ids = _evidence_ids(row)
+        if not evidence_ids:
+            findings.append((row_id, "zero-evidence", []))
+            continue
         unresolved = [
             run_id
-            for run_id in _evidence_ids(row)
+            for run_id in evidence_ids
             if run_id not in events_text
             and not any(_run_directory_exists(base, run_id) for base in history_bases)
         ]
         if unresolved:
-            findings.append((row.get("id", "<missing-id>"), unresolved))
+            findings.append((row_id, "unresolved", unresolved))
 
     return complete_rows, findings, ignored, history_bases
 
@@ -160,22 +209,23 @@ def check(root, history_root=None):
 DEFAULT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-def expected_unresolved(root=None):
-    """Return how many complete rows the accepted board leaves unresolved.
+def allowlist_report(findings):
+    """Split findings into allowlisted, new, and allowlist entries now cleared."""
+    failing = {row_id for row_id, _kind, _runs in findings}
+    accepted = sorted(failing & ACCEPTED_UNRESOLVED)
+    new = sorted(failing - ACCEPTED_UNRESOLVED)
+    cleared = sorted(ACCEPTED_UNRESOLVED - failing)
+    return accepted, new, cleared
 
-    Derived from the board on every call, so it cannot drift the way a stored
-    literal does.  It exists so the expected count has exactly one named source,
-    which the selftest arm asserts against the reported count.
+
+def expected_unresolved(findings):
+    """Return how many of today's findings the dated allowlist accepts.
+
+    Derived from ACCEPTED_UNRESOLVED and the findings, never from the findings
+    alone: a complete row nobody has accepted cannot raise this number, so it
+    stays below the reported count and the selftest's equality check fails.
     """
-    _complete_rows, findings, _ignored, _bases = check(
-        os.path.abspath(root or DEFAULT_ROOT), None
-    )
-    return len(findings)
-
-
-# Single named source for the expected count: recomputed per process from the
-# board, never a frozen number, and never duplicated in another file.
-EXPECTED_UNRESOLVED = expected_unresolved()
+    return len(allowlist_report(findings)[0])
 
 
 def main(argv=None):
@@ -188,7 +238,7 @@ def main(argv=None):
     parser.add_argument(
         "--strict",
         action="store_true",
-        help="exit 1 when an unresolved complete row is found",
+        help="exit 1 when a complete row's evidence does not resolve (including a row that names no evidence at all)",
     )
     parser.add_argument(
         "--history-root",
@@ -210,11 +260,16 @@ def main(argv=None):
         print(f"board evidence check failed: {exc}", file=sys.stderr)
         return 2
 
+    accepted, new, cleared = allowlist_report(findings)
+
     if ignored:
         print(f"ignored {ignored} invalid or non-object board lines")
     if not args.quiet_findings:
-        for row_id, run_ids in findings:
-            print(f"UNRESOLVED {row_id} {','.join(run_ids)}")
+        for row_id, kind, run_ids in findings:
+            if kind == "zero-evidence":
+                print(f"ZERO-EVIDENCE {row_id}")
+            else:
+                print(f"UNRESOLVED {row_id} {','.join(run_ids)}")
     print(
         f"stores: events={os.path.join(os.path.abspath(args.root), '.coding-hermes', 'board', 'events.jsonl')} "
         + " ".join(
@@ -222,9 +277,18 @@ def main(argv=None):
             for base in history_bases
         )
     )
+    print(
+        f"allowlist: dated {ACCEPTED_UNRESOLVED_DATE},"
+        f" {len(ACCEPTED_UNRESOLVED)} accepted ids,"
+        f" {len(accepted)} accepted findings of {len(findings)} findings,"
+        f" new={','.join(new) if new else 'none'},"
+        f" cleared={len(cleared)}"
+    )
     if os.path.abspath(args.root) == DEFAULT_ROOT:
         print(
-            f"expected_unresolved={EXPECTED_UNRESOLVED} (derived from the board, not stored)"
+            f"expected_unresolved={expected_unresolved(findings)}"
+            f" (accepted by the {ACCEPTED_UNRESOLVED_DATE} allowlist, not derived"
+            " from the findings)"
         )
     print(f"checked {len(complete_rows)} complete rows, {len(findings)} unresolved")
     if args.strict and findings:

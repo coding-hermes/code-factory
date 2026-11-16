@@ -139,7 +139,7 @@ ch:trace row=CF-048 spec=docs/handbook/chapters/M4-board.md#board-integrity wave
 | semantic validate | `scripts/boardctl validate` | RESULT OK with named warnings | 2026-11-14 | **PASS** — `513 tasks, 774 events, 0 fixtures`, `key uniformity 511/513 (2 drift: acceptance/chapter/created/model)`, `RESULT: OK (89 warning(s))` |
 | lock adjudication | `scripts/board_lock.py` on an absent / unheld / unreadable / held lock | ABSENT / HELD / RESIDUE / ERROR named (`board_lock.py:166-185`) | 2026-11-14 | **PASS** — absent → `ABSENT` exit 0; 0-byte → `RESIDUE consumers=0 commits_after_mtime=unknown` exit 0; chmod-000 → `ERROR … probe=open-failed … UNKNOWN` exit 3 (CF-259); HELD arm is `tests/selftest.sh` §33 |
 | duplicate id refusal | `boardctl create --id CF-289 --title x` (scratch board root) | refused, board unchanged | 2026-11-14 | **PASS** — `task id "CF-289" already exists … create aborted` exit 1, 513 rows before and after |
-| evidence census | `python3 scripts/board_evidence_check.py` | every complete row names re-runnable evidence | 2026-11-14 | **PARTIAL** — `checked 153 complete rows, 57 unresolved` (equal to `expected_unresolved=57`), but **4 complete rows carry zero evidence** (CF-289, CF-305, P5G-34, CF-422); the instrument reports neither them nor their absence — see CF-438 |
+| evidence census | `python3 scripts/board_evidence_check.py` | every complete row names re-runnable evidence, and a row that names none is named | 2026-11-16 | **PARTIAL** — `checked 173 complete rows, 62 unresolved` against `expected_unresolved=62` drawn from the dated allowlist; the 4 rows with zero evidence (CF-289, CF-305, P5G-34, CF-422) are now reported as `ZERO-EVIDENCE <id>` instead of being counted resolved, and a new zero-evidence or unresolvable row fails the CF-398 arm (CF-438). The 62 accepted rows still fail `--strict`, so closing them is board work, not instrument work |
 | selftest arms | `bash tests/selftest.sh` | `SELFTEST: PASS` | 2026-11-14 | **RED before this tick, green after** — §67 `tests/test_lane_config_readonly.py` failed `cannot read projects table: no such column: cooldown_s` at `70519fcc`; fixture repaired in this tick (see CF-439) |
 
 **Re-measured 2026-11-14 (sync lane, tip `70519fcc`).** The 2026-11-07 values this table used to
@@ -151,10 +151,32 @@ parity and 0 divergent ids, because the CF-150 working-copy transition it descri
 from historical ticks, headerless board), and warnings are still distinct from failures.
 
 Two findings from the same measurement, both filed rather than silently repaired: the evidence census
-cannot see a complete row whose evidence is empty (CF-438), and the CF-304 fixture had been stale
+could not see a complete row whose evidence is empty (CF-438, repaired 2026-11-16 — see the allowlist
+policy below), and the CF-304 fixture had been stale
 since `8d6b303b` (2026-11-14 11:19) added cooldown columns to `read_rows()`, leaving the selftest red
 on the published tip with no gate that noticed (CF-439). The fixture is repaired here so the arm's
 evidence runs again.
+
+**Evidence-allowlist policy (2026-11-16, CF-438).** The expected count is no longer derived from the
+rows the checker grades — that is what let an empty `detail.evidence` raise the baseline by being
+omitted. `scripts/board_evidence_check.py:ACCEPTED_UNRESOLVED` is an explicit list of row ids dated
+2026-11-16: the 58 complete rows naming an evidence run that is absent from this store, plus the 4
+rows whose evidence pointer is empty (CF-289, CF-305, P5G-34, CF-422) — 62 accepted ids. A complete
+row with no run id is reported as `ZERO-EVIDENCE <id>`, never counted as resolved. The summary line
+carries the accounting:
+
+```
+allowlist: dated 2026-11-16, 62 accepted ids, 62 accepted findings of 62 findings, new=none, cleared=0
+expected_unresolved=62 (accepted by the 2026-11-16 allowlist, not derived from the findings)
+checked 173 complete rows, 62 unresolved
+```
+
+`expected_unresolved` is the number of findings the allowlist names, so a complete row nobody has
+accepted appears under `new=` and leaves the expected number below the reported one; the CF-398 arm in
+`tests/selftest.sh` fails on that disagreement. Proven by appending one zero-evidence row to a copy of
+the board: `checked 174 complete rows, 63 unresolved`, `new=CF-438-NEW-ZERO-EVIDENCE`, arm
+`FAIL CF-398 evidence checker (exit 0, strict 1)`. Adding an id is a dated act of acceptance;
+`cleared=<n>` counts accepted ids that no longer fail and is the prompt to prune the list.
 
 
 **Drift re-measured.** The CF-270

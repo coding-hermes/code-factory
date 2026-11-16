@@ -1,0 +1,1 @@
+{"id":"FIXTURE-EMPTY-EVIDENCE","status":"complete","detail":{"evidence":[]},"reasoning":"complete row whose detail.evidence is empty; the row is named by an event, so a gate that only looks for the id in events would call it resolved (CF-438)"}
