@@ -1466,6 +1466,24 @@ def main() -> int:
         raise RuntimeError("BOOK.yaml FIGURE 0.1 caption did not resolve exactly once")
     book_path.write_text(book_text)
 
+    # The Part 0 prose cites the model digest in full. It is the same identity the figure
+    # caption and the system map carry, so it is refreshed here rather than by hand: a
+    # model edit that left the prose citing an older digest was exactly the drift this
+    # row exists to prevent, and hand-copying it drifts again on the next model change.
+    overview = ROOT / "docs/handbook/parts/00-overview.md"
+    overview_text = overview.read_text()
+    overview_text, cited = re.subn(
+        r"(from model SHA-256\s*`)[0-9a-f]{64}(`)",
+        lambda m: m.group(1) + model_digest + m.group(2),
+        overview_text,
+    )
+    if cited != 1:
+        raise RuntimeError(
+            "docs/handbook/parts/00-overview.md does not cite the model digest exactly "
+            f"once (found {cited}); the model identity must have exactly one home in prose"
+        )
+    overview.write_text(overview_text)
+
     index = [
         "# Figures",
         "",

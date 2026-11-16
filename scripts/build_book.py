@@ -679,34 +679,50 @@ def _git_oid(ref: str) -> str:
 
 
 def _dispositions() -> dict[str, object]:
+    """Read the disposition log's tables into the sidecar.
+
+    Column order is the log's own: id, source finding, disposition, resolving commit /
+    proof, specification completeness, verification, runtime conformance, owner
+    acceptance. Reading `state` from any other index silently mislabels every row — the
+    earlier version took it from the specification-completeness cell, so all sixteen
+    P6 rows were recorded as open with prose where their state belonged (P6-ISSUE-01).
+
+    Both passes are read: the pass-6 rows are history, the pass-7 rows are the current
+    stable set.
+    """
     rows = []
     log = HB / "parts/IX-disposition-log.md"
     for line in log.read_text().splitlines():
         cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
-        if len(cells) < 8 or not re.fullmatch(r"P6-\d{2}", cells[0]):
+        if len(cells) < 8 or not re.fullmatch(r"P[67]-\d{2}", cells[0]):
             continue
-        state = cells[4]
-        resolution = cells[5]
+        pid, source, state, resolution = cells[0], cells[1], cells[2], cells[3]
+        spec, verification, runtime, owner = cells[4], cells[5], cells[6], cells[7]
         adopted = state == "ADOPTED"
+        commit = re.search(r"[0-9a-f]{40}", resolution)
         rows.append(
             {
-                "id": cells[0],
-                "severity": cells[1],
+                "id": pid,
+                "pass": pid[:2].lower(),
+                "severity": source,
                 "state": state,
-                "resolving_commit": resolution if adopted else None,
+                "resolving_commit": commit.group(0) if (adopted and commit) else None,
                 "replacement_refs": [],
-                "reason": cells[3] if adopted else resolution,
-                "owner": "CF2A-01-wave4",
+                "reason": spec if adopted else (resolution or spec),
+                "owner": owner,
                 "waiver_ref": None,
-                "source_page": cells[2],
-                "built_page": cells[6],
-                "visual_readback": cells[7],
+                "source_page": source,
+                "specification_completeness": spec,
+                "built_page": verification,
+                "runtime_conformance": runtime,
+                "visual_readback": runtime,
             }
         )
     open_ids = [row["id"] for row in rows if row["state"] != "ADOPTED"]
     return {
         "log": "docs/handbook/parts/IX-disposition-log.md",
         "rows": rows,
+        "current_pass": "P7",
         "open_count": len(open_ids),
         "open_ids": open_ids,
     }
