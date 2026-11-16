@@ -407,8 +407,9 @@ effects. Resource is `{name:ID,mode:exclusive/shared}` with unique names.
 
 Criterion is exactly the canonical closed `cf.criterion.v1` object frozen by
 `docs/SYSTEM-MODEL.yaml` and `conformance/schemas/cf2a.criterion.schema.json`:
-`{id:ID,description:Text,argv:string[1..64],cwd:string,timeout_s:integer[1,1800],
-expected_exit:integer[0,255],oracle_digest:SHA}`. This chapter declares no local
+`{schema_version:"cf.criterion.v1",id:ID,description:Text,argv:string[1..64],
+cwd:string,timeout_s:integer[1,1800],expected_exit:integer[0,255],oracle_digest:SHA}`.
+This chapter declares no local
 criterion field list and adds no serialized alias. `description` is the one human
 text field; `text` and `verification` are **legacy projection names** that survive
 only as migration evidence and are never executable canonical fields. A legacy

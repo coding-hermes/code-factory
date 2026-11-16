@@ -353,8 +353,9 @@ created_at:Time}`. Its immutable revision binds one attempt's staged evidence; i
 not another name for a board revision. **Criterion** is exactly the canonical closed
 `cf.criterion.v1` object from M0 §16.2, `docs/SYSTEM-MODEL.yaml` and
 `conformance/schemas/cf2a.criterion.schema.json`:
-`{id:ID,description:Text,argv:string[1..64],cwd:string,timeout_s:UInt,
-expected_exit:Int,oracle_digest:SHA256}`. `description` is the one human text field;
+`{schema_version:"cf.criterion.v1",id:ID,description:Text,argv:string[1..64],
+cwd:string,timeout_s:UInt,expected_exit:Int,oracle_digest:SHA256}`. `description` is the
+one human text field;
 `text` and `verification` are legacy projection names kept only as migration evidence
 and are never executable fields, and M3 declares no local criterion field list. A
 legacy `{id,text,verification}` object is accepted only through the named lossless

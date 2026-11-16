@@ -496,8 +496,9 @@ artifact URI.
 
 **Criterion** is exactly the canonical closed `cf.criterion.v1` object frozen in
 `docs/SYSTEM-MODEL.yaml` and `conformance/schemas/cf2a.criterion.schema.json`:
-`{id:ID,description:Text,argv:string[1..64],cwd:string,timeout_s:UInt,
-expected_exit:Int,oracle_digest:SHA256}`. `description` is the one human text field;
+`{schema_version:"cf.criterion.v1",id:ID,description:Text,argv:string[1..64],
+cwd:string,timeout_s:UInt,expected_exit:Int,oracle_digest:SHA256}`. `description` is
+the one human text field;
 `text` and `verification` are legacy projection names retained as migration evidence
 and are never executable canonical fields. `common_identities.criterion` (CV-04-A) is
 the complete fixture. There is one storage projection — this object — and one display
@@ -529,10 +530,23 @@ finished_at:Time|null}` and records only mechanical checks. Every later record c
 staged record naming a commit OID, a source judgment naming the closure commit — is
 invalid and is refused rather than migrated silently.
 
+The machine-readable form of this family is `conformance/schemas/cf2a.evidence.schema.json`
+(`cf.evidence.v1`): one record carrying `phase ∈ {staged, source, integrated,
+publication, closure}`, `subject`, `claim:{claim_id,claim_generation}`,
+`criterion_results`, `verdict:{kind,reason}` and `evidence_refs`, with the phase
+selecting which subject fields are permitted. Its `verdict.kind` set is
+`pass|fail|unverified`; `unverified` is exactly the state this handbook calls `unknown`
+for a mechanical check, and a record stores the schema value. The schema is normative
+for machine form; this section is normative for the phase/subject rule it encodes, and
+the two are required to agree.
+
 **cf.verdict.v1** is `{run_id:ID,reviewer_id:ID,target:{change_id:ID,tree_digest:SHA},
 criterion_results:[{id:ID,status:pass/fail/unknown,evidence:EvidenceRef[]}],
 overall:accept/needs_work/uncertain,claims:string[],limitations:string[],created_at:Time}`.
-It does not execute a gate or push and never converts unknown evidence to pass.
+It does not execute a gate or push and never converts unknown evidence to pass. Inside
+`cf.evidence.v1` the same per-criterion pair serializes as
+`{criterion_id,result}` with `result ∈ pass/fail/unverified`; the two spellings name the
+same two values, and the schema names are what a machine record stores.
 
 **publication.v1** is `{run_id,change_id,base_oid:GitOID,expected_oid:GitOID,
 observed_oid:GitOID|null,remote_tree_digest:SHA|null,ancestry:boolean,
