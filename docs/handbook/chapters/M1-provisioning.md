@@ -177,6 +177,9 @@ ch:trace row=CF-298 spec=docs/handbook/chapters/M1-provisioning.md test=tests/te
 | `ROLE_DEFAULTS` | `{"worker": 5, "builder": 10, "full": 20}` GiB (`disk_floor.py:40`) | 1..4096 GiB (`MIN_GIB`/`MAX_GIB`) | admission floor per role | a value outside the range is refused (`:85-91`); role-table parity is gated by `tests/selftest.sh` section 65 |
 | `DEFAULT_ROLE` | `"worker"` (`:41`) | one of the role keys | which floor applies when no role is named | an **unknown explicit role is refused**, not defaulted (F1-2; raise at `:123-125`) |
 
+<a id="III.M1.S2"></a>
+### III.M1.S2 — create the container and its configuration
+
 **`bunker-provision.sh` (S2):**
 
 | Setting | Default | Range | Governs | What breaks if changed |
