@@ -568,20 +568,26 @@ launch has null wave/task/worker/attempt IDs and cannot mint them.
 `GET /v1/launches/{launch_id}` reads the durable launch journal.
 `GET /v1/launches/{launch_id}/result` reads only committed result evidence.
 `POST /v1/launches/{launch_id}/cancellation` accepts the closed `cancellation.v1`
-body `{request_id:ID,idempotency_key:ID,request_digest:SHA,
-expected_state_version:PosInt,reason:Text,launch_id:ID,phase:unstarted|native|
-ambiguous,execution_key:SHA|null,boot_id:ID|null,process_instance_id:ID|null,
-native_session_id:ID|null}`. `unstarted` is a non-signalling state CAS for proven
-`RESERVED`/`START_INTENT` work and requires no native identity. `native` requires a
-durable `STARTED`/`RUNNING` record and every identity member to match that exact
-incarnation before TERM/KILL. `ambiguous` records a durable cancel request and
-quarantines `START_UNKNOWN` or an unprovable identity without signalling. The
-start-release CAS and cancellation CAS compete on the same `state_version`: a winning
-prestart cancel prevents release; a winning release makes a later cancel `native`. A
-stale version, wrong identity or PID-reused process is refused without signalling. The
-result is `{launch_id,phase,state:accepted|already_terminal|quarantined,state_version,
-cancel_requested_at,quiesced,quarantine_ref,terminal_reason}`, replayed by the same
-key/digest; a late result cannot replace `CANCELLED`. Retired submit/status/output/
+body `{schema_version:"cf.cancellation.v1",cancellation_id:ID,request_id:ID,
+idempotency_key:ID,request_digest:SHA,expected_state_version:PosInt,reason:Text,
+launch_id:ID,requested_phase:pre_admission|prestart|running|terminal|ambiguous,
+execution_key:SHA|null,boot_id:ID|null,process_instance_id:ID|null,
+native_session_id:ID|null}`. The record names the applied phase, never a stage later
+than the one where cancellation landed. `pre_admission` returns `refused_no_launch`;
+`prestart` is a non-signalling CAS on a proven `RESERVED` launch and never consumes the
+start permit; `running` requires a durable `STARTED`/`RUNNING` record and every identity
+member to match that exact incarnation before TERM/KILL, and is complete only at
+quiescence; `terminal` records `already_terminal` without changing state; `ambiguous`
+records a durable request and quarantines `START_UNKNOWN` or an unprovable identity
+without signalling. The start-release CAS and cancellation CAS compete on the same
+`state_version`: a winning prestart cancel prevents release; a winning release makes a
+later cancellation `running`. A stale version, wrong identity or PID-reused process is
+refused without signalling. The result is
+`{cancellation_id,launch_id,requested_phase,applied_phase,terminal_effect,
+journal_state_before,journal_state_after,permit_consumed,state_version,requested_at,
+applied_at,signal:{kind,sent_at,quiescence_at},evidence_refs,quarantine_ref,reason}`,
+replayed by the same `(cancellation_id,requested_phase,request_digest)`; a late result
+cannot replace `CANCELLED`. Retired submit/status/output/
 cancel/drain/resume verbs and fd-3/fd-4 channels return `UNSUPPORTED_VERSION`.
 Responses use Part IV ResponseBody. LaunchResponse is
 `{execution_key:SHA,launch_id:ID,input_digest:SHA,native_session_id:ID|null,

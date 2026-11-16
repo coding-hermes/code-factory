@@ -1586,16 +1586,20 @@ body `B`, let `B′` be RFC 8785 JCS of `B` with `request_digest`, `replay_diges
 `config.update.operation_id` removed:
 
 ```text
-request_digest = SHA-256(UTF-8("cf.request-digest.v1\n") || B′)
-replay_digest  = SHA-256(UTF-8("cf.replay-digest.v1\n") || UTF-8(message_type) || "\n" || B′)
+request_digest = SHA-256(B′)
+replay_digest  = SHA-256(UTF-8(message_type) || B′)
 ```
 
-The excluded-field list travels with every readback and deduplication record, together
-with both digest values. An operation that deliberately uses one identity instead of two
-must name which formula it uses and publish the mapping; the default is two values. This
-rule applies to certificate, capability, enrollment-grant, dispatch-grant, binding,
-secret-transfer, configuration and cancellation requests and to their readback records.
-No consumer may recompute a digest over a body containing the digest being checked.
+The formula names are distinct domains even though neither adds a byte prefix to the
+canonical body. `B′` is the RFC 8785 canonical body, not a pretty-printed or re-encoded
+form. The excluded-field list travels with every readback and deduplication record,
+together with both digest values; an operation that uses one value for both names the
+formula and records the pairing, while the default is two values. This rule applies to
+certificate, capability, enrollment-grant, dispatch-grant, binding, secret-transfer,
+configuration and cancellation requests and to their readback records. No consumer may
+recompute a digest over a body containing the digest being checked. A same-key retry
+with a fresh outer request ID is the same replay identity; a changed body is
+`DIGEST_MISMATCH` or `IDEMPOTENCY_KEY_REUSED`, never a new effect.
 
 **Launch identity under LCR-1 (P7-01).** The launching foreman preallocates `launch_id`
 and a nonce before admission. The L0 `LaunchCommitment` contains the immutable
@@ -1808,7 +1812,7 @@ the named failure branches; each branch has one accounting effect and no duplica
 || Observed branch | Execution/round outcome and required disposition |
 ||---|---|
 || input refused or native launcher proves `NEVER_ACCEPTED` | attempt `fail` with phase `launch`; one proven never-started reservation refund; no commit or board close |
-|| native acceptance unknown, process existence unknown, or control dies before start acknowledgement | attempt `unknown`/`START_UNKNOWN`; reservation stays held, execution quarantined, no retry until native readback and fence |
+|| native acceptance unknown, process existence unknown, or control dies before start acknowledgement | attempt `unknown`/`START_UNKNOWN`; reservation stays held, execution quarantined, no retry until native readback and fence; settlement `settled_unknown` |
 || worker exits 0 without a schema-valid durable result | `UNKNOWN_RESULT`, round `unknown`; exit status is not a third verdict and not success |
 || worker dies after result and evidence are fsynced | adopt the original result; replay outbox only; no native relaunch |
 || worker/control dies after native start but before durable evidence | `unknown`, quarantine and reconcile native/board/Git/memory side effects before any new attempt |
@@ -1818,38 +1822,41 @@ the named failure branches; each branch has one accounting effect and no duplica
 || all required evidence is uniformly unverified and the reconciliation window closes without new execution | round `unverified`; `settled_unverified`, a dedicated terminal with no success counter and no fresh execution |
 || cancellation wins before start with proof | attempt `cancelled`; `settled_cancelled`; only the proven never-started reservation is refunded |
 || cancellation wins for a native run and quiescence is proven | attempt `cancelled`; `settled_cancelled`; capacity releases after quiescence and no later result replaces it |
-|| start expired with no process (`EXPIRED_START`) | attempt `fail`; `settled_failure`; no worker credit |
-|| start deadline expired but process existence is unknown | attempt `unknown`, quarantined; `unknown` |
-|| empty authorized task scope | round `pass` with consumed 0; `settled_success` with zero work and no worker launch |
-|| zero allowance with nonempty task scope | round `fail` with `BUDGET_EXHAUSTED`; `settled_failure`; no success counter |
+|| start expired with no process (`EXPIRED_START`) | attempt `fail`; `settled_expired`; no worker credit |
+|| start deadline expired but process existence is unknown | attempt `unknown`, quarantined; `settled_unknown` |
+|| empty authorized task scope or zero allowance | `settled_empty` with consumed 0; no worker launch and no success counter |
 || required memory sync is pending after local commit | execution outcome is retained; CT-06 `awaiting_evidence`, internally `REPORTED_PENDING_MEMORY`; work may continue locally, next round is blocked |
 || backup coordinator is lost | recover the same barrier while valid; lease expiry or backup deadline makes the operation `ABORTED`, permanently aborts upload, holds writers, and can never become complete |
 
-Task reduction uses `unknown` if any required outcome is unknown; otherwise `partial` for
-mixed pass/fail/unverified outcomes or publication partiality; otherwise `unverified` if
-any required evidence is unverified; otherwise `fail` if no criterion passes; otherwise
-`pass` only when every criterion and required publication passes. Wave reduction applies
-the same ordered rule to its tasks. Round reduction applies it to waves, then preserves a
-`partial` caused by any publication/projection failure even if execution hooks later pass.
-`stop_reason` explains why scheduling stopped and never changes this outcome.
+Task reduction uses `unknown` if any required outcome is unknown; otherwise `fail` if any
+required outcome fails; otherwise `partial` when verified and unverified outcomes are
+both present or publication is partial; otherwise `unverified` if every required evidence
+is unverified; otherwise `pass` only when every criterion and required publication passes.
+Wave reduction applies the same ordered rule to its tasks. Round reduction applies it to
+waves, then preserves a `partial` caused by any publication/projection failure even if
+execution hooks later pass. `stop_reason` explains why scheduling stopped and never
+changes this outcome.
 
 The internal-to-CT-06 mapping is fixed: `RETURNED` maps to `received`;
 `PROJECTIONS_PENDING` and VII's `REPORTED_PENDING_MEMORY` map to `awaiting_evidence`
 when memory/evidence is missing and to `postcheck_pending` when a required postcheck is
 unfinished; `CLOSED` maps to exactly one of `settled_success`, `settled_failure`,
-`settled_partial`, `settled_unverified` or `settled_cancelled` according to the
-reduction; unresolved `UNKNOWN` maps to `unknown`. `settled_unverified` is the
-truth-preserving terminal for a uniformly unverified round; `settled_cancelled` is the
-truth-preserving terminal for a cancellation winner. Neither is an alias for failure or
-success, and neither is inferred from process absence.
+`settled_partial`, `settled_unverified`, `settled_empty`, `settled_cancelled`,
+`settled_expired`, `settled_unknown` or `settled_verified_then_reopened` according to the
+reduction; unresolved `UNKNOWN` maps to `settled_unknown`. `settled_unverified`,
+`settled_empty`, `settled_cancelled`, `settled_expired`, `settled_unknown` and
+`settled_verified_then_reopened` are distinct terminal outcomes; none is an alias for
+failure or success, and none is inferred from process absence or a fresh execution.
 Physical slots release only after process quiescence, independently of logical pending
 state. Allowance is never replenished, and the next round remains blocked until a terminal
 settlement revision. POST hooks use the pinned plan's 1..5 attempts, default five for
 read-only POST verification, at 30-second intervals within the original deadline.
 Exhaustion settles failure with `POSTCHECK_FAILED`; it does not leave an indefinite retry
 loop. Late evidence or an authorized retry appends a new reconciliation revision keyed by
-`(round_id,report_digest,settlement_revision)`, reruns only readback/hooks, and never
-reruns work or changes the immutable execution outcome.
+keyed by `(round_id,report_digest,settlement_revision)`, reruns only readback/hooks, and never
+reruns work or changes the immutable execution outcome. The original settlement stands;
+`revisions` increments and the closure outcome is `settled_verified_then_reopened` when
+the late evidence changes completeness.
 
 Every operation above emits `factory.telemetry.v1` under Part V §V.10 with its Factory
 identity, durable source sequence and typed network failure. Read-only lookup success does

@@ -707,13 +707,14 @@ for launch/transfer/cleanup reserves returns `DEADLINE_INSUFFICIENT` before gran
 request.
 
 Scheduler cancellation, lease loss and initiative stop use M2's phase-discriminated
-`cancellation.v1`, never a fabricated native identity. For `RESERVED`/`START_INTENT` it
-sends `phase=unstarted` and persists the non-signalling CAS; for a durable
-`STARTED`/`RUNNING` record it sends `phase=native` with the exact incarnation; for
-`START_UNKNOWN` or incomplete identity it sends `phase=ambiguous` and retains the
-quarantine/readback. The cancel CAS and the start-release CAS share `state_version`, so a
-winning prestart cancel prevents release. Scheduler settles the outcome from the
-returned phase/state, never from process absence.
+`cf.cancellation.v1`, never a fabricated native identity. For a proven `RESERVED` launch
+it sends `requested_phase=prestart` and persists the non-signalling CAS; for a durable
+`STARTED`/`RUNNING` record it sends `requested_phase=running` with the exact incarnation;
+for a terminal launch it sends `requested_phase=terminal` and records
+`already_terminal`; for `START_UNKNOWN` it sends `ambiguous` and retains the
+quarantine/readback. The cancellation CAS and the start-release CAS share
+`state_version`, so a winning prestart cancel prevents release. Scheduler settles the
+outcome from the returned applied phase/terminal effect, never from process absence.
 
 The §15 lifecycle names are projections, not a second state machine. The scheduler
 applies the Wave 1 total projection table mechanically; no chapter may coerce an
@@ -722,29 +723,33 @@ unverified or ambiguous execution into success. The module rows are:
 | Execution / round source | LaunchResponse projection | CT-06 settlement projection |
 |---|---|---|
 | `RESERVED`, no native identity | `state=accepted`, `resolution=none`, `outcome=null` | `received`; no success counter |
-| `START_INTENT` without native proof | `state=unknown`, `resolution=quarantined`, `outcome=null` | `unknown`; reconciliation, no retry |
+| `START_INTENT` without native proof | `state=unknown`, `resolution=quarantined`, `outcome=null` | `settled_unknown`; reconciliation, no retry |
 | `STARTED` or `RUNNING` | `state=running`, `resolution=none`, `outcome=null` | `received` or `awaiting_evidence` |
 | terminal result `pass`, every required task passes and publication is verified | `state=succeeded`, `outcome=pass` | `settled_success` |
-| terminal result `fail`, no unknown/unverified remainder | `state=failed`, `outcome=fail` | `settled_failure` |
-| mixed pass/fail, or execution pass with definitive publication failure | terminal `state`, immutable `outcome=partial` | `settled_partial`; never success |
-| uniform or any required `unverified`, including uncertain commit, push or gate readback | terminal `state`, immutable `outcome=unverified` | `settled_unverified` (dedicated terminal; no success counter and no fresh execution) |
-| `START_UNKNOWN`, `STOP_UNKNOWN`, control death or ambiguous native identity | `state=unknown`, `resolution=quarantined`, `outcome=unknown` | `unknown`; quarantine and reconciliation, never a retry |
+| any required task fails | `state=failed`, `outcome=fail` | `settled_failure`; verified members keep evidence |
+| verified and unverified members together, or execution pass with definitive publication failure | terminal `state`, immutable `outcome=partial` | `settled_partial`; never success |
+| uniform or every required member `unverified`, including uncertain commit, push or gate readback | terminal `state`, immutable `outcome=unverified` | `settled_unverified` (dedicated terminal; no success counter and no fresh execution) |
+| `START_UNKNOWN`, `STOP_UNKNOWN`, control death or ambiguous native identity | `state=unknown`, `resolution=quarantined`, `outcome=unknown` | `settled_unknown`; quarantine retained, no settlement of the work |
 | cancelled before start with proof | `state=cancelled`, `resolution=none`, `outcome=null` | `settled_cancelled`; refund only the proven never-started reservation |
 | cancelled native and quiescent | `state=cancelled`, `resolution=none`, `outcome=null` | `settled_cancelled`; capacity releases after quiescence |
-| expired start with no process | `state=expired`, `resolution=none`, `outcome=fail` with `EXPIRED_START` | `settled_failure`; no worker credit |
-| expired start with unknown process | `state=unknown`, `resolution=quarantined`, `outcome=unknown` | `unknown` |
-| empty task scope | `state=succeeded`, `outcome=pass`, consumed 0 | `settled_success` with zero work; no worker launch |
-| zero allowance with nonempty task scope | `state=accepted`, `outcome=null` | `settled_failure` with `BUDGET_EXHAUSTED`; no success counter |
+| expired start with no process | `state=expired`, `resolution=none`, `outcome=fail` with `EXPIRED_START` | `settled_expired`; no worker credit |
+| expired start with unknown process | `state=unknown`, `resolution=quarantined`, `outcome=unknown` | `settled_unknown` |
+| empty task scope or zero allowance | `state=accepted`, `outcome=null`, consumed 0 | `settled_empty`; nothing was spent and no worker launched |
 | required POST hook exhaustion | execution outcome retained | `settled_failure` with `POSTCHECK_FAILED` |
-| late evidence or authorized retry after settlement | execution projection unchanged | new `settlement_revision` only; reruns readback/hooks, never work |
+| late evidence or authorized retry after settlement | execution projection unchanged | settlement stands; `revisions` increments and `settled_verified_then_reopened` reopens closure; readback/hooks only, never work |
 
 `RETURNED` is CT-06 `received`; `PROJECTIONS_PENDING` for memory/evidence is
 `awaiting_evidence` (also named `REPORTED_PENDING_MEMORY` in VII);
 `PROJECTIONS_PENDING` for a required POST hook is `postcheck_pending`; `CLOSED` is one
-of `settled_success`, `settled_failure`, `settled_partial`, `settled_unverified` or
-`settled_cancelled` from this total mapping; unresolved `UNKNOWN` is CT-06 `unknown`.
-`settled_unverified` and `settled_cancelled` are dedicated terminal states in the Wave 1
-CT-06 record, not aliases for failure or unknown.
+of `settled_success`, `settled_failure`, `settled_partial`, `settled_unverified`,
+`settled_empty`, `settled_cancelled`, `settled_expired`, `settled_unknown` or
+`settled_verified_then_reopened` from this total mapping; unresolved `UNKNOWN` is CT-06
+`settled_unknown`, not a placeholder. The settlement record carries six disjoint counts
+`verified`, `unverified`, `failed`, `cancelled`, `expired`, `unknown` and no `total`;
+`revisions` counts late evidence revisions without rewriting the settlement.
+`settled_unverified`, `settled_empty`, `settled_cancelled`, `settled_expired`,
+`settled_unknown` and `settled_verified_then_reopened` are distinct terminal outcomes;
+none is an alias for success, failure or unknown, and none triggers a fresh execution.
 Execution status remains immutable while settlement revisions change. Capacity releases
 only after native quiescence, even while projections remain pending. Worker allowance is
 not credited back except for the one proven never-started refund, and no next round

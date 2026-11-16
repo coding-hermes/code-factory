@@ -327,15 +327,16 @@ node/backend identity and are rejected by every other backend, preventing cross-
 cancel, output or result operations.
 
 Cancellation uses the phase-discriminated `cancellation.v1` request, not a fabricated
-native identity. For proven `RESERVED`/`START_INTENT` work it persists the non-signalling
-state CAS and releases no budget after a winning cancel; for a durable
-`STARTED`/`RUNNING` record it persists cancellation, denies new tool/inference
+native identity. For a proven `RESERVED` launch it persists the non-signalling
+`prestart` state CAS and releases no budget after a winning cancel; for a durable
+`STARTED`/`RUNNING` record it persists `running`, denies new tool/inference
 admissions, sends TERM to the exact process group/cgroup, waits 10 seconds, sends KILL,
-then requires an empty cgroup within another 5 seconds; for `START_UNKNOWN` or incomplete
-identity it records `ambiguous`, retains the cancel request and quarantines without
-signalling. Surviving descendants or unavailable readback produce `STOP_UNKNOWN` and
-block replacement. Deadline, lease loss and revocation use that same phase selection
-without extending the round; a late result cannot replace a winning `CANCELLED`. Output and heartbeat polling occur every 5 seconds in
+then requires an empty cgroup within another 5 seconds; for a terminal launch it records
+`terminal`/`already_terminal`; for `START_UNKNOWN` or incomplete identity it records
+`ambiguous`, retains the cancel request and quarantines without signalling. Surviving
+descendants or unavailable readback produce `STOP_UNKNOWN` and block replacement.
+Deadline, lease loss and revocation use that same phase selection without extending the
+round; a late result cannot replace a winning `CANCELLED`. Output and heartbeat polling occur every 5 seconds in
 execution-key order and never serialize one launch behind another. A 30-second heartbeat
 gap is suspect/unknown, not proof of death.
 

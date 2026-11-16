@@ -467,33 +467,40 @@ expired/unstarted cancellation reports fail with the specific reason, not pass.
 
 **Phase-discriminated cancellation (P7-17).** The
 `POST /v1/launches/{launch_id}/cancellation` request is one closed
-`cancellation.v1` body: `{schema_version, request_id, idempotency_key,
-expected_state_version, reason, launch_id, phase, execution_key, boot_id,
-process_instance_id, native_session_id, request_digest}`. `phase` is
-`unstarted`, `native` or `ambiguous`; the identity members are nullable only where the
-chosen phase does not yet have them.
+`cancellation.v1` body: `{schema_version, cancellation_id, request_id,
+idempotency_key, request_digest, expected_state_version, reason, launch_id,
+requested_phase, execution_key, boot_id, process_instance_id, native_session_id}`.
+`requested_phase` is `pre_admission`, `prestart`, `running`, `terminal` or `ambiguous`.
+The response records the phase where the cancellation actually landed; it never rewrites
+a later phase as an earlier one.
 
-- `unstarted` is for proven `RESERVED` or `START_INTENT` work with no native identity.
-  It performs a non-signalling state CAS to `CANCELLED`; no TERM/KILL is sent and no
-  reservation is released after a winning cancel.
-- `native` requires `STARTED` or `RUNNING` plus the exact `execution_key`, `boot_id`,
-  `process_instance_id` and `native_session_id`. It persists cancellation, then TERM,
-  10-second wait, KILL and an empty-cgroup check. Surviving descendants or unavailable
-  readback is `STOP_UNKNOWN`, quarantined and blocks replacement.
-- `ambiguous` is for `START_UNKNOWN` or a start whose identity cannot be proved. It
-  records a durable cancel request without signalling, quarantines the launch and
-  returns `quarantine_ref`; absent proof is never treated as “not running”.
+- `pre_admission` has no launch row and returns `refused_no_launch`; the permit is never
+  consumed.
+- `prestart` is a non-signalling state CAS for proven `RESERVED` work; it moves
+  `RESERVED → CANCELLED`, returns `cancelled_before_start`, and never consumes the start
+  permit. No TERM/KILL is sent and no reservation is released after a winning cancel.
+- `running` requires a durable `STARTED`/`RUNNING` record plus the exact
+  `execution_key`, `boot_id`, `process_instance_id` and `native_session_id`. It sends
+  TERM, waits 10 seconds, sends KILL, requires an empty cgroup, and returns
+  `signalled_quiesced` only at quiescence. Surviving descendants or unavailable readback
+  is `STOP_UNKNOWN`, quarantined and blocks replacement.
+- `terminal` records `already_terminal` without changing the terminal state; an operator
+  who pressed cancel after completion receives a truthful record, not an error.
+- `ambiguous` is for `START_UNKNOWN` or an unprovable incarnation. It records a durable
+  cancel request without signalling, quarantines the launch and returns
+  `quarantined`; absence of proof is never treated as “not running”.
 
-The start-release CAS and cancel CAS compete on the same `state_version`. A prestart
-cancel that wins prevents the first release and no process may start; a release that
-wins makes a subsequent cancel `native` and requires the incarnation identity. The
-result is `{launch_id,phase,state:accepted|already_terminal|quarantined,state_version,
-cancel_requested_at,quiesced,quarantine_ref,terminal_reason}`. Repeating the same
-`(idempotency_key,request_digest)` returns the original result. A late result is retained
-as late evidence and cannot replace a terminal `CANCELLED`; a mismatched identity or
-stale version returns `STATE_CONFLICT` or `STALE_OWNER` without signalling. The
-state-version record and this request are the only cancellation identity; retired
-alternate cancel verbs are refused.
+The start-release CAS and cancellation CAS compete on the same `state_version`. A
+prestart cancel that wins prevents the first release and no process may start; a release
+that wins makes a later cancellation `running` and requires the incarnation identity. The
+result is `{cancellation_id,launch_id,requested_phase,applied_phase,terminal_effect,
+journal_state_before,journal_state_after,permit_consumed,state_version,
+requested_at,applied_at,signal:{kind,sent_at,quiescence_at},evidence_refs,
+quarantine_ref,reason}`. Repeating the same `(cancellation_id,requested_phase,
+request_digest)` returns the original result. A late result is retained as late evidence
+and cannot replace a terminal `CANCELLED`; a mismatched identity or stale version returns
+`STATE_CONFLICT` or `STALE_OWNER` without signalling. The state-version record and this
+request are the only cancellation identity; retired alternate cancel verbs are refused.
 
 Return transport states are `pending`, `delivered`, `acked`; delivery retries use
 the same envelope/result bytes at 5,10,20,40,80,160,300 s (then 300 s), through 24 h.
