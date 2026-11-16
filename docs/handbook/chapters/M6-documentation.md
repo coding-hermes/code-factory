@@ -393,8 +393,14 @@ consistency check against Part IV §IV.2.4 and the pinned source inventory. Exis
 `handbook_spine.py` is a source-coverage aid until it consumes that registry; its
 hardcoded legacy count cannot certify the target. Build runs
 `python3 scripts/build_book.py --out <output_directory>/<document_id>-<issue>.pdf`
-in the locked environment and requires fit/furniture/checker output. The command
-currently needs implementation reconciliation to emit the full target receipt.
+in the locked environment and requires fit/furniture/checker output. The command emits
+that receipt today: it measures the declared body/table/code floors and the drawing-label
+floor on the rendered pages, writes a real PDF outline so every contents entry is a live
+destination, and records the seven acceptance results with their own evidence class
+(`source-static`, `rendered-artifact`, `rendered-readback`, `cross-contract-closure`,
+`runtime-execution`, `owner-decision`) alongside source, model, fixture and build
+identities. The external sidecar (`<document_id>.record.json`) is written after final
+pagination and names the exact bytes, pages and SHA-256 of the delivered artifact.
 Semantic/evidence reviewers independently inspect cross-contract behavior and
 source-bound claims. Visual review examines every 300 dpi tile, not a sample.
 

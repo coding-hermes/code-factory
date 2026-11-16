@@ -10,9 +10,13 @@ owner of its metrics. Each flow also states its preconditions and inputs, and en
 with named verification scenarios — to specify and run, not results claimed by this
 handbook — after the minimum contract every flow must satisfy. Section 2.17 maps
 the twelve required scenario families to the flows that carry their normative
-sequences. A figure is mounted at its reading position — hero-sized on
-the flow's own sheet where it fits; a figure too large for a text sheet gets its
-own sheet with a reference line in its place, and the flow id is repeated on every
+sequences. A figure is mounted at its reading position — hero-sized on the flow's own
+sheet, where the caption and the opening of its explanatory paragraph sit directly
+beneath the drawing. A figure too tall to share a sheet with those keeps its printed
+scale and takes the sheet alone, its explanation continuing on the immediately adjacent
+sheet with the flow id repeated in the running head; no reference-line placard, no
+caption-only sheet and no scaled drawing is used, because scaling the drawing would
+scale its labels under the 2.05 mm legibility floor. The flow id is repeated on every
 continuation head. Target steps cite the normative contract or refinement that
 requires them. Measured legacy deviations remain separately labeled; they never
 substitute for target steps in the CF2A-01/P5-A model. Where the handbook has no measured metric for a flow,

@@ -237,20 +237,47 @@ Delivery is seven separate results, each with its own evidence; no single line c
 more than its own stage (V2-DLV-01). A process cap, a no-new-defect-class STOP, or the
 build's OK line cannot alone establish acceptance:
 
-| # | Result | What it closes | Evidence | Closed by |
-|---|---|---|---|---|
-| 1 | Source validation | the markdown sources are valid, citable and lint-clean | gate 1 exit 0 (VIII.2) | mechanical |
-| 2 | Artifact build/render | the PDF exists, paginated, furniture complete | the OK line (gates 2–11) | mechanical |
-| 3 | Visual QA | rendered pages actually show what the sources say — layout semantics, labels, adjacency | the layout-semantics battery (VIII.12) on 300 dpi tiles | review, page-evidenced |
-| 4 | Specification/interface completeness | the book specifies a buildable system — schemas, contracts, settings, flows | the acceptance-package map (VIII.13) checked against the product definition | review, page-evidenced |
-| 5 | Cross-section consistency | parts, chapters, register and figures agree | the spine gate (M6 §5) + the same-commit amend rule + cross-page reconciliation | mechanical + review |
-| 6 | Operational conformance | the specified behavior is implementable against the measured sources — states, contracts, settings map to real surfaces | source locators verified against measured revisions; UNVERIFIED contract rows named, not hidden | review with source evidence |
-| 7 | Owner acceptance | the owner accepts the release | the recorded decision bound to the release identity (VIII.6) — CT-18 | human, external to this pipeline |
+| # | Result | What it closes | Evidence | Closed by | Evidence class |
+|---|---|---|---|---|---|
+| 1 | Source validation | the markdown sources are valid, citable and lint-clean | gate 1 exit 0 (VIII.2) | mechanical | `source-static` |
+| 2 | Artifact build/render | the PDF exists, paginated, furniture complete | the OK line (gates 2–11) | mechanical | `rendered-artifact` |
+| 3 | Visual QA | rendered pages actually show what the sources say — layout semantics, labels, adjacency | the layout-semantics battery (VIII.12) on 300 dpi tiles | review, page-evidenced | `rendered-readback` |
+| 4 | Specification/interface completeness | the book specifies a buildable system — schemas, contracts, settings, flows | the acceptance-package map (VIII.13) checked against the product definition | review, page-evidenced | `cross-contract-closure` |
+| 5 | Cross-section consistency | parts, chapters, register and figures agree | the spine gate (M6 §5) + the same-commit amend rule + cross-page reconciliation | mechanical + review | `cross-contract-closure` |
+| 6 | Operational conformance | the specified behavior is implementable against the measured sources — states, contracts, settings map to real surfaces | source locators verified against measured revisions; UNVERIFIED contract rows named, not hidden | review with source evidence | `runtime-execution` |
+| 7 | Owner acceptance | the owner accepts the release | the recorded decision bound to the release identity (VIII.6) — CT-18 | human, external to this pipeline | `owner-decision` |
 
 Results 1–2 are mechanical; 3–6 are review results with page or source evidence; 7 is an
 external decision. A release claims a stage only with that stage's recorded result, and
 the working-draft/accepted distinction of VIII.6 governs which of them a delivered
 artifact may cite.
+
+### VIII.9.0 What each class can and cannot prove
+
+The class column is not decoration: it bounds the claim. A result may only be reported in
+the class its evidence belongs to, and no result may be promoted by another result's
+evidence.
+
+| Class | Proves | Does NOT prove |
+|---|---|---|
+| `source-static` | the markdown parses, cites and lints clean | anything about the rendered page |
+| `rendered-artifact` | the exact bytes exist, paginate and carry complete furniture | that the pages say the right thing |
+| `rendered-readback` | what the delivered pages read back as — adjacency, labels, floors, destinations | that any component behaves as described |
+| `cross-contract-closure` | the named closure checks across contracts, states and references hold | execution, upstream qualification or owner intent |
+| `runtime-execution` | a qualified execution record exists for the behaviour | anything about behaviour without one |
+| `owner-decision` | the owner accepted the exact digest | technical correctness |
+
+Two consequences are normative for this issue. First, **a page readback is rendered-source
+evidence and never a runtime result**: locating text on a page, or reading a receipt back
+out of the rendered PDF, cannot move `operational_conformance` off `UNVERIFIED`. Absent a
+qualified execution record the runtime column stays `UNVERIFIED`/`NOT RUN`, and the
+disposition log says so row by row (§IX.12). Second, **independent completeness means the
+cross-contract closure checks**, not the presence of prose that describes them: locating a
+sentence is `rendered-readback`, and only the closure checks are `cross-contract-closure`.
+
+Owner acceptance is **OPEN** for this issue. It is withheld while any unwaived blocker
+remains, and it is never implied by stages 1–6, by a green build, or by this book's own
+rendering of these results.
 
 ### VIII.9.1 Six build stages mapped to seven acceptance results
 
@@ -279,21 +306,32 @@ was claimed about it (V2-DLV-01, V2-DLV-02):
 {
   "schema_version": "handbook-release.v1",
   "doc_id": "CF2A-01",
-  "revision": "vd",
+  "revision": "2",
+  "issue": "2026-11-07",
+  "change": "2026-11-15",
   "source_commit": "<full sha of the tree the build ran against>",
+  "source_tree": "<full sha of that tree>",
   "document_sha256": "<hash of the delivered PDF>",
-  "artifacts": [{"path": "CF2A-01-vd.pdf", "pages": 182}],
+  "artifacts": [{"path": "CF2A-01.pdf", "sha256": "<same hash>", "bytes": 0, "pages": 0}],
+  "identities": {
+    "source":  {"commit": "<sha>", "tree": "<sha>", "manifest_files": 0, "manifest_digest": "<sha256 over every source file>"},
+    "model":   {"path": "docs/SYSTEM-MODEL.yaml", "sha256": "<sha256>"},
+    "fixtures": {"contract_vectors": "<sha256>", "conformance_bundle": "<sha256>"},
+    "figures": {"count": 0, "digest": "<sha256>"},
+    "build":   {"tool": "scripts/build_book.py", "sha256": "<sha256>", "style_sha256": "<sha256>", "generator_sha256": "<sha256>", "python": "3.14", "pymupdf": "<version>"}
+  },
   "checks": [
-    {"stage": "lint",          "tool": "handbook_lint.py", "result": "pass", "exit": 0},
-    {"stage": "build",         "tool": "build_book.py",    "result": "pass", "ok_line": "<the verbatim OK line>"},
-    {"stage": "visual_qa",     "tool": "layout-semantics battery", "result": "<pass|fail|pending>", "findings": []},
-    {"stage": "completeness",  "result": "pending", "open": ["V2-* dispositions not yet adopted"]},
-    {"stage": "cross_section_consistency", "result": "pending", "findings": []},
-    {"stage": "operational_conformance", "result": "pending", "findings": []},
-    {"stage": "owner_acceptance", "result": "pending", "note": "human decision; never implied by any check"}
+    {"stage": "lint",          "evidence_class": "source-static",          "result": "pass",    "exit": 0},
+    {"stage": "build",         "evidence_class": "rendered-artifact",      "result": "pass",    "exit": 0, "ok_line": "<the verbatim OK line>"},
+    {"stage": "visual_qa",     "evidence_class": "rendered-readback",      "result": "pending", "findings": []},
+    {"stage": "completeness",  "evidence_class": "cross-contract-closure", "result": "pending", "findings": []},
+    {"stage": "cross_section_consistency", "evidence_class": "cross-contract-closure", "result": "pending"},
+    {"stage": "operational_conformance",   "evidence_class": "runtime-execution",      "result": "pending", "runtime": "NOT_RUN"},
+    {"stage": "owner_acceptance",          "evidence_class": "owner-decision",         "result": "pending", "findings": ["owner acceptance OPEN"]}
   ],
-  "dispositions": {"log": "change/redline disposition log", "open_count": 0,
-                   "open_ids": []}
+  "dispositions": {"log": "change/redline disposition log", "open_count": 0, "open_ids": []},
+  "history": [{"record": "<earlier sidecar>", "document_sha256": "<sha>", "pages": 0}],
+  "build_errors": 0
 }
 ```
 

@@ -125,6 +125,14 @@ F_BODY = 11.0  # 2.75 mm
 F_HEAD = 13.0  # 3.25 mm
 F_TITLE = 17.0  # 4.25 mm
 
+# The builder shares a flow's heading, figure, caption and first paragraph on ONE
+# sheet while the printed figure stays inside the body budget, and it scales the SVG
+# down when it does not — which scales every label with it. F_TINY is 2.10 mm at 1.0
+# scale, only 0.05 mm over the 2.05 mm floor, so there is no room for any shrink: a
+# flow sheet must print at exactly 1.0. 816 units = 204 mm = the 244 mm body area
+# minus a 40 mm reserve for the heading, figure caption and first paragraph.
+FLOW_MAX_UNITS = 816
+
 
 class Sheet:
     """A sheet designed at 170 mm print width: viewBox units are quarter-millimetres,
@@ -134,7 +142,6 @@ class Sheet:
     UPX = 4  # user units per mm at print scale
     W = int(PRINT_W_MM * UPX)  # 680 units = 170 mm
     FLOOR_U = 8.2
-
     def __init__(self, h_units: float):
         self.h = h_units
         self.body: list[str] = []
@@ -1199,14 +1206,24 @@ def seq_sheet(model, flow) -> Sheet:
     # 52-char labels a 4-lifeline sheet can, without the texts colliding
     w_self = max(18, int(cell * 2.4 / (F_SMALL * 0.62)))
     w_pair = max(18, int(cell * 1.9 / (F_SMALL * 0.62)))
-    top = 120  # title band above; leaves room for a first step's stacked label
+    top = 108  # title band above; leaves room for a first step's stacked label
     note_lines = wrap(flow["note"], 116)[:2] if flow.get("note") else []
     extra = len(note_lines)
     need = len(steps) + extra
-    # keep the sheet within the 250 mm figure band so the print-scale label
-    # floor (2.05 mm = 8.2 units) is not silently scaled below itself
-    rowh = min(46, max(34, (990 - 40 - top) // max(need, 1)))
+    # The sheet must print at 1.0 scale: the builder shares a flow's heading, figure,
+    # caption and first paragraph on one sheet up to a 200 mm figure band, and any
+    # scale below 1 shrinks labels proportionally — a 2.05 mm label in the file then
+    # prints at 1.97 mm, under the floor. So the emitted height is bounded by the
+    # band, not by the old 250 mm maximum (which produced a 212.5 mm F1 that the
+    # builder silently scaled to 0.94). FLOW_MAX_UNITS = 780 = 195 mm at 4 units/mm.
+    rowh = min(46, max(30, (FLOW_MAX_UNITS - top - 40) // max(need, 1)))
     h = top + rowh * need + 40
+    if h > FLOW_MAX_UNITS:
+        raise SystemExit(
+            f"{flow['id']}: {need} rows need {h / Sheet.UPX:.1f} mm, over the "
+            f"{FLOW_MAX_UNITS / Sheet.UPX:.0f} mm flow band — split the flow or shorten "
+            "its step labels; never let the builder scale the sheet below 1.0"
+        )
     sh = Sheet(h)
     ax = {a: margin + i * cell + cell / 2 for i, a in enumerate(actors)}
     lifeline_end = h - 20 if not extra else top + rowh * len(steps) - 6
@@ -1441,7 +1458,7 @@ def main() -> int:
         f"model {model_digest[:8]}… {model_digest[-6:]}."
     )
     book_text, replacements = re.subn(
-        r'(?m)^(\s*- \{code: 0\.1, file: figures/system-map\.svg, caption: ")[^"]*("\})$',
+        r'(?m)^(\s*- \{code: "0\.1", file: figures/system-map\.svg, caption: ")[^"]*("\})$',
         lambda match: match.group(1) + map_caption + match.group(2),
         book_text,
     )

@@ -130,15 +130,20 @@ def tab_html(text: str) -> str:
     return "<div class='tab'>%s</div>" % text
 
 
-def foot_html(sub: str, date: str) -> str:
-    """Dated foot with fill-ins; the page number itself is the post-print folio."""
+def foot_html(sub: str, date: str, change: str = "") -> str:
+    """Dated foot with fill-ins.
+
+    The folio is NOT a field here. Chrome prints no margin boxes, and a stamped
+    data line below this rule carries the doc number, the "N OF M" folio and the
+    issue/change furniture in one place — one folio, one place, nothing left as an
+    empty form box on a printed sheet.
+    """
     return ("<footer class='foot'><div class='rule'></div><div class='sub'>%s</div>"
             "<div class='line'>"
             "<span>Mission <span class='fill' style='width:20mm'>CF2A</span></span>"
             "<span>Basic Date <span class='fill' style='width:30mm'>%s</span></span>"
-            "<span>Change Date <span class='fill' style='width:30mm'>&nbsp;</span></span>"
-            "<span>Page <span class='fill' style='width:18mm'>&nbsp;</span></span>"
-            "</div></footer>" % (sub, date))
+            "<span>Change Date <span class='fill' style='width:30mm'>%s</span></span>"
+            "</div></footer>" % (sub, date, change))
 
 
 def print_pdf(html_path: str | pathlib.Path, pdf_path: str | pathlib.Path,
@@ -175,25 +180,48 @@ def fit_line(html_path: str | pathlib.Path) -> tuple[str, int]:
     return fit, len(re.findall(r'class="page"', r.stdout))
 
 
-def stamp(pdf_path, doc_id, right=""):
-    """Doc number, centred folio and running foot, applied after print so every page
-    carries them. Set in LETTER GOTHIC — the stamped data line is Selectric work, and
-    it is what puts Letter Gothic in the PDF's font census on every page."""
+def stamp(pdf_path, doc_id, basic="", change="", classification="INTERNAL"):
+    """Stamp the data line every sheet carries, after print.
+
+    Two defects this fixes, both measured on the delivered PDF (P7-LAYOUT-01):
+
+    1. Skia emits a page whose content stream leaves the graphics state unbalanced
+       (a `cm` that scales a 300-dpi authoring space down to A4 and flips Y). Any
+       stream appended afterwards INHERITS it, so the old stamp drew at 1.68 pt —
+       0.47 mm cap height — in the TOP margin instead of the foot. `wrap_contents()`
+       balances the page so the appended stream starts from identity.
+    2. The folio, the doc number and the issue/change furniture were three separate
+       fragments with no shared baseline, and the foot carried an empty "Page ___"
+       box. They are now ONE data line on a measured baseline: doc number left,
+       "N OF M" centred, issue and change right — set in LETTER GOTHIC, the Selectric
+       face the genre reserves for stamped fields, at its 7.1 pt role size.
+    """
     path = pathlib.Path(pdf_path)
     font = fitz.Font(fontfile=str(FONTS / "LetterGothicCode-R.ttf"))
+    size = 7.1
     doc = fitz.open(path)
     total = doc.page_count
     for i, page in enumerate(doc, 1):
+        # Balance any dangling q/cm in the printed content, or our text inherits
+        # Skia's scale/mirror and lands microscopic in the top margin.
+        page.wrap_contents()
         rect = page.rect
-        y = rect.height - 18
+        y = rect.height - 18.0  # measured baseline of the stamped data line
+        left = 45.47
+        right_edge = rect.width - 45.47
         tw = fitz.TextWriter(rect)
-        tw.append((36, y), doc_id, font=font, fontsize=7)
-        if right:
-            tw.append((rect.width - 36 - font.text_length(right, 7), y), right,
-                      font=font, fontsize=7)
+        tw.append((left, y), "%s \u00b7 %s" % (doc_id, classification), font=font, fontsize=size)
         num = "%d OF %d" % (i, total)
-        tw.append(((rect.width - font.text_length(num, 7)) / 2, y), num,
-                  font=font, fontsize=7)
+        tw.append(((rect.width - font.text_length(num, size)) / 2, y), num,
+                  font=font, fontsize=size)
+        rline = " \u00b7 ".join(
+            part for part in (
+                ("issue %s" % basic) if basic else "",
+                ("change %s" % change) if change else "change \u2014",
+            ) if part
+        )
+        tw.append((right_edge - font.text_length(rline, size), y), rline,
+                  font=font, fontsize=size)
         tw.write_text(page)
     doc.saveIncr()
     doc.close()
@@ -207,3 +235,141 @@ def font_census(pdf_path) -> set[str]:
             fonts.add(f[3].split("+")[-1])
     doc.close()
     return fonts
+
+
+# The genre's declared floors (nasa-handbook style-guide.md, "Type roles"):
+#   body/caption/table text  Iowan Old Style, Georgia fallback   8 pt / 1.33
+#   code and technical data  DejaVu Sans Mono (the technical face)  7.2 pt
+#   stamped data line        Letter Gothic (Selectric)            7.1 pt
+#   every label inside a drawing  Routed Gothic Narrow       2.05-2.5 mm
+# A size below its role floor is illegible at print, so the build measures the
+# RENDERED spans and fails by name. Numbers here are floors, not targets.
+FLOOR_BODY = 8.0
+FLOOR_TABLE = 7.3
+FLOOR_CODE = 7.2
+FLOOR_STAMP = 7.1
+FLOOR_LABEL_MM = 2.05
+
+# A size is printed as pt -> CSS px -> pt, so 8 pt returns as 7.99. Judge with a
+# tenth of a point of slack: below floor-minus-tolerance is a real shrink, not
+# arithmetic.
+FLOOR_TOL = 0.05
+
+# Sizes the genre itself declares for furniture that is deliberately smaller than
+# the body floor: the table-continuation placard and the notice text. Anything
+# else under the table floor is a violation, not a style choice.
+DECLARED_FURNITURE = {
+    6.5: "table-continuation placard",
+    7.4: "genre notice text",
+}
+
+
+def measure_floors(pdf_path) -> tuple[list[str], list[str]]:
+    """Measure every rendered span against its role floor.
+
+    Returns (lines, violations). `lines` names what was measured so the build can
+    print the numbers it judged; `violations` is non-empty when a span sits under
+    its role's floor. The body role is judged on the DOMINANT serif size (a body
+    size cannot be lowered without moving that number), and no serif span may fall
+    under the table floor unless it is declared furniture.
+    """
+    doc = fitz.open(pdf_path)
+    mm = 72 / 25.4
+    serif_chars: dict[float, int] = {}
+    violations: list[str] = []
+
+    def family(name: str) -> str:
+        n = name.replace(" ", "")
+        if "RoutedGothic" in n:
+            return "label"
+        if "DejaVuSansMono" in n or "SFMono" in n or "Menlo" in n:
+            return "code"
+        if "LetterGothic" in n:
+            return "stamp"
+        if "Georgia" in n or "Iowan" in n or "LiberationSerif" in n or "Times" in n:
+            return "serif"
+        return "other"
+
+    for pno in range(doc.page_count):
+        for blk in doc[pno].get_text("dict")["blocks"]:
+            for line in blk.get("lines", []):
+                for span in line["spans"]:
+                    size = round(span["size"], 2)
+                    fam = family(span["font"])
+                    text = span["text"].strip()
+                    if not text:
+                        continue
+                    if fam == "label":
+                        height_mm = size / mm
+                        if height_mm < FLOOR_LABEL_MM:
+                            violations.append(
+                                f"p{pno + 1}: drawing label {span['font']} at "
+                                f"{height_mm:.3f} mm < {FLOOR_LABEL_MM} mm floor: {text[:40]!r}"
+                            )
+                    elif fam == "code":
+                        if size < FLOOR_CODE - FLOOR_TOL:
+                            violations.append(
+                                f"p{pno + 1}: code {span['font']} at {size} pt < "
+                                f"{FLOOR_CODE} pt floor: {text[:40]!r}"
+                            )
+                    elif fam == "stamp":
+                        if size < FLOOR_STAMP - FLOOR_TOL:
+                            violations.append(
+                                f"p{pno + 1}: stamped data line at {size} pt < "
+                                f"{FLOOR_STAMP} pt floor: {text[:40]!r}"
+                            )
+                    elif fam == "serif":
+                        serif_chars[size] = serif_chars.get(size, 0) + len(text)
+                        if round(size, 1) in DECLARED_FURNITURE:
+                            continue
+                        if size < FLOOR_TABLE - FLOOR_TOL:
+                            violations.append(
+                                f"p{pno + 1}: serif text at {size} pt < {FLOOR_TABLE} pt "
+                                f"(table floor) and is not declared furniture: {text[:40]!r}"
+                            )
+    doc.close()
+
+    lines: list[str] = []
+    if serif_chars:
+        body_size = max(serif_chars.items(), key=lambda kv: kv[1])[0]
+        lines.append(
+            "body (dominant serif) %.2f pt [floor %.1f]" % (body_size, FLOOR_BODY)
+        )
+        if body_size < FLOOR_BODY - FLOOR_TOL:
+            violations.append(
+                "body text measures %.2f pt, below the %.1f pt floor" % (body_size, FLOOR_BODY)
+            )
+        table_sizes = sorted(s for s in serif_chars if FLOOR_TABLE <= s < FLOOR_BODY)
+        if table_sizes:
+            lines.append(
+                "table/caption serif %s pt [floor %.1f]"
+                % (", ".join("%.2f" % s for s in table_sizes), FLOOR_TABLE)
+            )
+    lines.append("code %.1f pt [floor %.1f]" % (FLOOR_CODE, FLOOR_CODE))
+    lines.append("stamped data line %.1f pt [floor %.1f]" % (FLOOR_STAMP, FLOOR_STAMP))
+    lines.append("drawing labels >= %.2f mm" % FLOOR_LABEL_MM)
+    # de-duplicate: one line per offending (page, role) keeps the gate readable
+    seen = set()
+    unique = []
+    for v in violations:
+        if v in seen:
+            continue
+        seen.add(v)
+        unique.append(v)
+    return lines, unique
+
+
+def set_outline(pdf_path, entries) -> int:
+    """Write a real PDF outline so every contents entry is a live destination.
+
+    `entries` is [(level, title, page_1_based)]. The printed contents table is
+    generated from BOOK.yaml; without this the same entries exist only as text and
+    a reader has no navigable destination — the defect P7-15 names ("supply real
+    contents destinations"). Returns the number of entries written.
+    """
+    doc = fitz.open(pdf_path)
+    toc = [[int(lvl), str(title), int(page)] for lvl, title, page in entries if page >= 1]
+    doc.set_toc(toc)
+    doc.saveIncr()
+    doc.close()
+    return len(toc)

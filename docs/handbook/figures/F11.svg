@@ -1,60 +1,60 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="170.0mm" height="178.0mm" viewBox="0 0 680 712.0" preserveAspectRatio="xMidYMid meet"><rect width="680" height="712.0" fill="#ffffff"/><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#000000"/></marker></defs><g font-family="Routed Gothic Narrow, Routed Gothic, sans-serif"><text x="12.0" y="22.0" font-size="17.00" fill="#000000" text-anchor="start">F11 — SCHEDULING ADMISSION</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="170.0mm" height="175.0mm" viewBox="0 0 680 700.0" preserveAspectRatio="xMidYMid meet"><rect width="680" height="700.0" fill="#ffffff"/><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#000000"/></marker></defs><g font-family="Routed Gothic Narrow, Routed Gothic, sans-serif"><text x="12.0" y="22.0" font-size="17.00" fill="#000000" text-anchor="start">F11 — SCHEDULING ADMISSION</text>
 <text x="668.0" y="22.0" font-size="8.40" fill="#000000" text-anchor="end">TIME FLOWS DOWN · EVERY STEP CITES ITS CHAPTER OR CONTRACT · DASHED = CONDITIONAL BRANCH</text>
 <rect x="67.0" y="36.0" width="172.7" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="153.3" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">SCHEDULER</text>
-<polyline points="153.3,70.0 153.3,574.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<polyline points="153.3,70.0 153.3,562.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <rect x="253.7" y="36.0" width="172.7" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="340.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">BOARD</text>
-<polyline points="340.0,70.0 340.0,574.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<polyline points="340.0,70.0 340.0,562.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <rect x="440.3" y="36.0" width="172.7" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="526.7" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">CRIER (bus)</text>
-<polyline points="526.7,70.0 526.7,574.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
-<text x="10.0" y="123.0" font-size="9.50" fill="#000000" text-anchor="start">1</text>
-<polyline points="153.3,120.0 340.0,120.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<rect x="353.0" y="90.9" width="319.5" height="10.9" fill="#ffffff"/>
-<text x="356.0" y="99.0" font-size="9.50" fill="#000000" text-anchor="start">REFRESH BEFORE ELIGIBILITY: REPO + BOARD COPIES, REVISION</text>
-<rect x="353.0" y="103.9" width="50.0" height="10.9" fill="#ffffff"/>
-<text x="356.0" y="112.0" font-size="9.50" fill="#000000" text-anchor="start">RECORDED</text>
-<text x="10.0" y="169.0" font-size="9.50" fill="#000000" text-anchor="start">2</text>
-<polyline points="340.0,166.0 153.3,166.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<rect x="95.0" y="149.9" width="215.0" height="10.9" fill="#ffffff"/>
-<text x="310.0" y="158.0" font-size="9.50" fill="#000000" text-anchor="end">READ RESULT: BOARD VERSION + OWNERSHIP</text>
-<text x="10.0" y="215.0" font-size="9.50" fill="#000000" text-anchor="start">3</text>
-<polyline points="145.3,210.0 167.3,210.0 167.3,236.0 145.3,236.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<rect x="174.3" y="195.9" width="352.5" height="10.9" fill="#ffffff"/>
-<text x="177.3" y="204.0" font-size="9.50" fill="#000000" text-anchor="start">LOCAL: ADMISSION MODE — OVERRIDE → NAMESPACE → COOLDOWN (M9 §3)</text>
-<text x="10.0" y="261.0" font-size="9.50" fill="#000000" text-anchor="start">4</text>
-<polyline points="145.3,256.0 167.3,256.0 167.3,282.0 145.3,282.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<rect x="174.3" y="241.9" width="363.5" height="10.9" fill="#ffffff"/>
-<text x="177.3" y="250.0" font-size="9.50" fill="#000000" text-anchor="start">LOCAL: BOARD-STASIS GATE — A SCHEDULER DECISION FROM OBSERVATIONS</text>
-<text x="10.0" y="307.0" font-size="9.50" fill="#000000" text-anchor="start">5</text>
-<polyline points="153.3,304.0 340.0,304.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<rect x="353.0" y="274.9" width="319.5" height="10.9" fill="#ffffff"/>
-<text x="356.0" y="283.0" font-size="9.50" fill="#000000" text-anchor="start">WORKABILITY: WORK / NO-WORK / UNREADABLE ARE DISTINCT (M9</text>
-<rect x="353.0" y="287.9" width="22.5" height="10.9" fill="#ffffff"/>
-<text x="356.0" y="296.0" font-size="9.50" fill="#000000" text-anchor="start">§3)</text>
-<text x="10.0" y="353.0" font-size="9.50" fill="#000000" text-anchor="start">6</text>
-<polyline points="145.3,348.0 167.3,348.0 167.3,374.0 145.3,374.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<rect x="174.3" y="333.9" width="363.5" height="10.9" fill="#ffffff"/>
-<text x="177.3" y="342.0" font-size="9.50" fill="#000000" text-anchor="start">LOCAL: USAGE POOLS RESERVED, OR A CAPACITY DENIAL EMITTED (M9 §3)</text>
-<text x="10.0" y="399.0" font-size="9.50" fill="#000000" text-anchor="start">7</text>
-<polyline points="145.3,394.0 167.3,394.0 167.3,420.0 145.3,420.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<rect x="174.3" y="379.9" width="380.0" height="10.9" fill="#ffffff"/>
-<text x="177.3" y="388.0" font-size="9.50" fill="#000000" text-anchor="start">IMPL EVIDENCE: NOOP-PACING SPACES A NO-ARTIFACT LANE, 2× TO 8× FLOOR</text>
-<text x="10.0" y="445.0" font-size="9.50" fill="#000000" text-anchor="start">8</text>
-<polyline points="153.3,442.0 526.7,442.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<rect x="216.0" y="425.9" width="248.0" height="10.9" fill="#ffffff"/>
-<text x="340.0" y="434.0" font-size="9.50" fill="#000000" text-anchor="middle">ADMITTED: THE ENVELOPE IS DISPATCHED (CT-02)</text>
-<text x="10.0" y="491.0" font-size="9.50" fill="#000000" text-anchor="start">9</text>
-<polyline points="145.3,486.0 167.3,486.0 167.3,512.0 145.3,512.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<rect x="174.3" y="471.9" width="341.5" height="10.9" fill="#ffffff"/>
-<text x="177.3" y="480.0" font-size="9.50" fill="#000000" text-anchor="start">DEFERRED: NAMED REASON + NEXT ELIGIBLE WAKEUP — NEVER DROPPED</text>
-<text x="10.0" y="537.0" font-size="9.50" fill="#000000" text-anchor="start">10</text>
-<polyline points="153.3,534.0 340.0,534.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<rect x="353.0" y="504.9" width="308.5" height="10.9" fill="#ffffff"/>
-<text x="356.0" y="513.0" font-size="9.50" fill="#000000" text-anchor="start">AFTER SETTLEMENT: FINAL REFRESH + BOARD-CHECK VERIFIER,</text>
-<rect x="353.0" y="517.9" width="165.5" height="10.9" fill="#ffffff"/>
-<text x="356.0" y="526.0" font-size="9.50" fill="#000000" text-anchor="start">DURABLE INCOMPLETE ON FAILURE</text>
-<polyline points="6.0,574.0 674.0,574.0" fill="none" stroke="#000000" stroke-width="0.7"/>
-<text x="10.0" y="588.0" font-size="9.50" fill="#000000" text-anchor="start">NOTE. refused means a named reason — budget hold, cooldown, load gate, fairness, namespace allocation (OUTLINE F11); an</text>
-<text x="10.0" y="603.0" font-size="9.50" fill="#000000" text-anchor="start">      unreadable board is never treated as no work</text></g></svg>
+<polyline points="526.7,70.0 526.7,562.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<text x="10.0" y="111.0" font-size="9.50" fill="#000000" text-anchor="start">1</text>
+<polyline points="153.3,108.0 340.0,108.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<rect x="353.0" y="78.9" width="319.5" height="10.9" fill="#ffffff"/>
+<text x="356.0" y="87.0" font-size="9.50" fill="#000000" text-anchor="start">REFRESH BEFORE ELIGIBILITY: REPO + BOARD COPIES, REVISION</text>
+<rect x="353.0" y="91.9" width="50.0" height="10.9" fill="#ffffff"/>
+<text x="356.0" y="100.0" font-size="9.50" fill="#000000" text-anchor="start">RECORDED</text>
+<text x="10.0" y="157.0" font-size="9.50" fill="#000000" text-anchor="start">2</text>
+<polyline points="340.0,154.0 153.3,154.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<rect x="95.0" y="137.9" width="215.0" height="10.9" fill="#ffffff"/>
+<text x="310.0" y="146.0" font-size="9.50" fill="#000000" text-anchor="end">READ RESULT: BOARD VERSION + OWNERSHIP</text>
+<text x="10.0" y="203.0" font-size="9.50" fill="#000000" text-anchor="start">3</text>
+<polyline points="145.3,198.0 167.3,198.0 167.3,224.0 145.3,224.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<rect x="174.3" y="183.9" width="352.5" height="10.9" fill="#ffffff"/>
+<text x="177.3" y="192.0" font-size="9.50" fill="#000000" text-anchor="start">LOCAL: ADMISSION MODE — OVERRIDE → NAMESPACE → COOLDOWN (M9 §3)</text>
+<text x="10.0" y="249.0" font-size="9.50" fill="#000000" text-anchor="start">4</text>
+<polyline points="145.3,244.0 167.3,244.0 167.3,270.0 145.3,270.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<rect x="174.3" y="229.9" width="363.5" height="10.9" fill="#ffffff"/>
+<text x="177.3" y="238.0" font-size="9.50" fill="#000000" text-anchor="start">LOCAL: BOARD-STASIS GATE — A SCHEDULER DECISION FROM OBSERVATIONS</text>
+<text x="10.0" y="295.0" font-size="9.50" fill="#000000" text-anchor="start">5</text>
+<polyline points="153.3,292.0 340.0,292.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<rect x="353.0" y="262.9" width="319.5" height="10.9" fill="#ffffff"/>
+<text x="356.0" y="271.0" font-size="9.50" fill="#000000" text-anchor="start">WORKABILITY: WORK / NO-WORK / UNREADABLE ARE DISTINCT (M9</text>
+<rect x="353.0" y="275.9" width="22.5" height="10.9" fill="#ffffff"/>
+<text x="356.0" y="284.0" font-size="9.50" fill="#000000" text-anchor="start">§3)</text>
+<text x="10.0" y="341.0" font-size="9.50" fill="#000000" text-anchor="start">6</text>
+<polyline points="145.3,336.0 167.3,336.0 167.3,362.0 145.3,362.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<rect x="174.3" y="321.9" width="363.5" height="10.9" fill="#ffffff"/>
+<text x="177.3" y="330.0" font-size="9.50" fill="#000000" text-anchor="start">LOCAL: USAGE POOLS RESERVED, OR A CAPACITY DENIAL EMITTED (M9 §3)</text>
+<text x="10.0" y="387.0" font-size="9.50" fill="#000000" text-anchor="start">7</text>
+<polyline points="145.3,382.0 167.3,382.0 167.3,408.0 145.3,408.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<rect x="174.3" y="367.9" width="380.0" height="10.9" fill="#ffffff"/>
+<text x="177.3" y="376.0" font-size="9.50" fill="#000000" text-anchor="start">IMPL EVIDENCE: NOOP-PACING SPACES A NO-ARTIFACT LANE, 2× TO 8× FLOOR</text>
+<text x="10.0" y="433.0" font-size="9.50" fill="#000000" text-anchor="start">8</text>
+<polyline points="153.3,430.0 526.7,430.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<rect x="216.0" y="413.9" width="248.0" height="10.9" fill="#ffffff"/>
+<text x="340.0" y="422.0" font-size="9.50" fill="#000000" text-anchor="middle">ADMITTED: THE ENVELOPE IS DISPATCHED (CT-02)</text>
+<text x="10.0" y="479.0" font-size="9.50" fill="#000000" text-anchor="start">9</text>
+<polyline points="145.3,474.0 167.3,474.0 167.3,500.0 145.3,500.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<rect x="174.3" y="459.9" width="341.5" height="10.9" fill="#ffffff"/>
+<text x="177.3" y="468.0" font-size="9.50" fill="#000000" text-anchor="start">DEFERRED: NAMED REASON + NEXT ELIGIBLE WAKEUP — NEVER DROPPED</text>
+<text x="10.0" y="525.0" font-size="9.50" fill="#000000" text-anchor="start">10</text>
+<polyline points="153.3,522.0 340.0,522.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<rect x="353.0" y="492.9" width="308.5" height="10.9" fill="#ffffff"/>
+<text x="356.0" y="501.0" font-size="9.50" fill="#000000" text-anchor="start">AFTER SETTLEMENT: FINAL REFRESH + BOARD-CHECK VERIFIER,</text>
+<rect x="353.0" y="505.9" width="165.5" height="10.9" fill="#ffffff"/>
+<text x="356.0" y="514.0" font-size="9.50" fill="#000000" text-anchor="start">DURABLE INCOMPLETE ON FAILURE</text>
+<polyline points="6.0,562.0 674.0,562.0" fill="none" stroke="#000000" stroke-width="0.7"/>
+<text x="10.0" y="576.0" font-size="9.50" fill="#000000" text-anchor="start">NOTE. refused means a named reason — budget hold, cooldown, load gate, fairness, namespace allocation (OUTLINE F11); an</text>
+<text x="10.0" y="591.0" font-size="9.50" fill="#000000" text-anchor="start">      unreadable board is never treated as no work</text></g></svg>

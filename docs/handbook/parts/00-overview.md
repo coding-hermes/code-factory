@@ -120,7 +120,7 @@ lease, the foreman's durable return.
 The map is generated from `docs/SYSTEM-MODEL.yaml`, not drawn as a second
 inventory. This issue derives 33 components, six layers, 16 flows and 31 typed
 contracts (`CT-01` through `CT-30`, plus return leg `CT-06R`) from model SHA-256
-`d386d1da44b5c527eb71b46844dcf5b870bef9682bbafbdb28e07b8964936caf`. The figure
+`11621ec8c7ebbd829342b2c1cc183930562315fce4522dd4f3014e852066ad70`. The figure
 and BOOK caption carry that identity so a model edit cannot silently leave a
 stale map.
 

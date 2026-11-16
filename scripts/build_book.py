@@ -58,13 +58,17 @@ FIG_MARK = re.compile(r"^__FIG__\t(.+)$")
 # a Part II flow heading: "<h2>2.7 F7 — MONITORING</h2>"; §2.17 (subflow families)
 # gets its own sheet the same way
 FLOW_HEAD = re.compile(r"^<h2>2\.\d+\s+(F\d+|Subflows)\b")
-# a figure ≤ INLINE_FIG_MAX_MM rides on the flow's sheet directly above its
-# explanatory paragraph; a taller one gets its own sheet (hero-sized) with the
-# prose continuing on the immediately following sheet, flow id repeated (V2-LAYOUT-01)
-INLINE_FIG_MAX_MM = 200.0
-# measured: content starts ~28 mm below the page top and the budget ends ~272 mm,
-# so heading + reference + figure + caption share one sheet only up to ~200 mm
-SEP_FIG_MAX_MM = 200.0
+# A flow's heading, figure, dated caption and first explanatory paragraph share ONE
+# sheet. The body area is ~244 mm between the running head and the foot rule, and a
+# heading + caption + three-line paragraph costs ~40 mm, so a figure may occupy 204 mm
+# and still share its sheet. These ceilings are PRINT-SCALE ceilings: the generator
+# bounds every flow sheet to 204 mm precisely so this branch never scales the SVG (a
+# scaled SVG scales its labels under the 2.05 mm floor). A taller figure keeps 1.0
+# scale and gives up the paragraph instead — see the separated branch below.
+SHEET_BODY_MM = 244.0
+FLOW_UNIT_RESERVE_MM = 40.0
+INLINE_FIG_MAX_MM = SHEET_BODY_MM - FLOW_UNIT_RESERVE_MM
+SEP_FIG_MAX_MM = SHEET_BODY_MM - 28.0
 
 # The fit gate: body blocks must end above the footer band (275 mm guidance, ~0.35 mm
 # PDF block rounding -> 276). The template's own data-fit check is the finer gate.
@@ -525,6 +529,43 @@ def body_blocks(text: str, inline_figs: bool = False) -> tuple[list[str], list]:
     return blocks, figs
 
 
+def split_lead(html: str, limit: int = 240) -> tuple[str, str]:
+    """Split a `<p>…</p>` block into (lead, rest) at a sentence boundary.
+
+    A 13-step flow sheet cannot hold a 48 mm opening paragraph under its drawing, so
+    the paragraph used to move to the next sheet whole and the figure sat with nothing
+    but its caption beneath it — the defect P6-LAYOUT-01 names. The lead sentences stay
+    directly below the image and the remainder continues on the following sheet as an
+    ordinary paragraph break, which is what a page break in flowing text looks like
+    anyway. Sentence terminators are only honoured OUTSIDE tags, so inline markup
+    (`<code>`, `<b>`) is never cut open.
+    """
+    m = re.match(r"^<p(?:\s[^>]*)?>(.*)</p>$", html, re.S)
+    if not m:
+        return html, ""
+    body = m.group(1)
+    cuts = []
+    in_tag = False
+    for i, ch in enumerate(body):
+        if ch == "<":
+            in_tag = True
+        elif ch == ">":
+            in_tag = False
+        elif not in_tag and ch in ".!?" and i + 1 < len(body):
+            if body[i + 1] == " " and (i + 2 >= len(body) or body[i + 2].isupper()):
+                cuts.append(i + 1)
+    if not cuts:
+        return html, ""
+    before = [c for c in cuts if c <= limit]
+    cut = before[-1] if before else (cuts[0] if len(cuts) > 1 else 0)
+    if not cut or cut >= len(body):
+        return html, ""
+    lead, rest = body[:cut].strip(), body[cut:].strip()
+    if not rest:
+        return html, ""
+    return f"<p>{lead}</p>", f"<p>{rest}</p>"
+
+
 def flow_sheets(
     p: dict, blocks: list[str], fig_codes: dict[str, str], today: str, tab: str
 ) -> list[tuple[str, list[str], str]]:
@@ -580,28 +621,35 @@ def flow_sheets(
             para_i = i + 1
             while para_i < len(fblocks):
                 candidate = fblocks[para_i]
-                if candidate.startswith("<p>"):
+                if re.match(r"^<p(?:\s[^>]*)?>", candidate):
                     para = candidate
                     break
                 if FLOW_HEAD.match(candidate) or FIG_MARK.match(candidate):
                     break
                 para_i += 1
             if fig_scaled_h(fig) <= INLINE_FIG_MAX_MM:
-                intro = [svg_fit(fig), cap]
+                # Both the figure and the OPENING of its explanatory paragraph share
+                # this sheet: the lead sentences sit directly below the picture
+                # (P6-LAYOUT-01), and the figure prints at 1.0 scale so its labels keep
+                # the 2.05 mm floor. A paragraph too long to share is split at a
+                # sentence boundary; its remainder continues on the next sheet, in
+                # reading order and without losing a word.
+                intro = [svg_fit(fig, h_max=INLINE_FIG_MAX_MM), cap]
+                rest = ""
                 if para is not None:
-                    intro.append(para)
+                    lead, rest = split_lead(para)
+                    intro.append(lead)
                 sheet.append('<div class="flow-intro">' + "".join(intro) + "</div>")
                 i = para_i + 1 if para is not None else i + 1
+                if rest:
+                    sheet.append(rest)
+                    flush()
                 continue
 
-            # Explicit adjacent spread: the flow's running head identifies both
-            # sheets, the first carries the diagram/caption, and the next starts
-            # with the explanation before the ordered steps. This prevents a
-            # title-only or caption-only sheet and keeps reading order unambiguous.
-            sheet.append(
-                f"<p>FIGURE {code} is a tall hero; its explanation continues on the "
-                "immediately adjacent F1 spread sheet.</p>"
-            )
+            # Separated spread: the figure keeps 1.0 scale (no label shrinkage) and the
+            # explanation continues on the adjacent sheet, whose running head repeats
+            # the flow id. No caption-only sheet is produced: this sheet carries the
+            # drawing and its dated caption.
             sheet.extend([svg_fit(fig, h_max=SEP_FIG_MAX_MM), cap])
             flush()
             if para is not None:
@@ -664,6 +712,55 @@ def _dispositions() -> dict[str, object]:
     }
 
 
+def _sha256_path(p: pathlib.Path) -> str:
+    h = hashlib.sha256()
+    with p.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _digest_paths(paths) -> str | None:
+    """One digest over an ordered list of (relative path, file digest) pairs."""
+    entries = []
+    for p in paths:
+        p = pathlib.Path(p)
+        if p.is_file():
+            entries.append([str(p.relative_to(ROOT)) if ROOT in p.parents else str(p),
+                            _sha256_path(p)])
+        elif p.is_dir():
+            for f in sorted(x for x in p.rglob("*") if x.is_file()):
+                entries.append([str(f.relative_to(ROOT)) if ROOT in f.parents else str(f),
+                                _sha256_path(f)])
+    if not entries:
+        return None
+    return hashlib.sha256(_canonical_json(entries)).hexdigest()
+
+
+# The seven release results, EACH with its own evidence class. Collapsing them into one
+# verdict is what let a rendered readback stand in for a runtime test: a page readback
+# can prove what the book SAYS, never that a component WORKS. `result` stays inside the
+# schema's pass/fail/pending/waived vocabulary; `evidence_class` is what the result is
+# allowed to mean (P7-EVIDENCE-GRADE-01).
+RELEASE_STAGES = (
+    # stage,                    evidence_class,          result,     runtime
+    ("lint",                    "source-static",         "pass",     "NOT_APPLICABLE"),
+    ("build",                   "rendered-artifact",     "pass",     "NOT_APPLICABLE"),
+    ("visual_qa",               "rendered-readback",     "pending",  "NOT_APPLICABLE"),
+    ("completeness",            "cross-contract-closure", "pending", "NOT_APPLICABLE"),
+    ("cross_section_consistency", "cross-contract-closure", "pending", "NOT_APPLICABLE"),
+    ("operational_conformance", "runtime-execution",     "pending",  "NOT_RUN"),
+    ("owner_acceptance",        "owner-decision",        "pending",  "NOT_APPLICABLE"),
+)
+
+STAGE_MEANING = {
+    "rendered-readback": "what the delivered pages read back as; says nothing about behaviour",
+    "cross-contract-closure": "the cross-contract closure checks named in the review, not text location",
+    "runtime-execution": "a qualified execution record; absent one the result stays unverified",
+    "owner-decision": "owner acceptance; withheld while any unwaived blocker remains",
+}
+
+
 def write_build_record(
     out_path: pathlib.Path, book: dict, page_count: int, ok_line: str
 ) -> pathlib.Path:
@@ -672,35 +769,98 @@ def write_build_record(
     source_commit = _git_oid("HEAD")
     source_tree = _git_oid("HEAD^{tree}")
     recorded_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
-    stages = (
-        "lint",
-        "build",
-        "visual_qa",
-        "completeness",
-        "cross_section_consistency",
-        "operational_conformance",
-        "owner_acceptance",
-    )
+
+    # ---- identity of everything the artifact was made from ----------------------
+    manifest_files = [
+        HB / rel for part in book["parts"] for rel in part["files"]
+    ]
+    identities = {
+        "source": {
+            "commit": source_commit,
+            "tree": source_tree,
+            "manifest_files": len(manifest_files),
+            "manifest_digest": _digest_paths(manifest_files),
+        },
+        "model": {
+            "path": "docs/SYSTEM-MODEL.yaml",
+            "sha256": _sha256_path(ROOT / "docs/SYSTEM-MODEL.yaml"),
+        },
+        "fixtures": {
+            "contract_vectors": _digest_paths([HB / "contract-vectors.json"]),
+            "conformance_bundle": _digest_paths([HB / "conformance"]),
+        },
+        "figures": {
+            "count": len(book.get("figures", [])),
+            "digest": _digest_paths(
+                [HB / str(f["file"]) for f in book.get("figures", [])]
+            ),
+        },
+        "build": {
+            "tool": "scripts/build_book.py",
+            "sha256": _sha256_path(pathlib.Path(__file__).resolve()),
+            "style_sha256": _sha256_path(pathlib.Path(__file__).resolve().parent / "book_style.py"),
+            "generator_sha256": _sha256_path(
+                pathlib.Path(__file__).resolve().parent / "gen_handbook_figures.py"
+            ),
+            "python": "%d.%d" % sys.version_info[:2],
+            "pymupdf": getattr(fitz, "__version__", getattr(fitz, "VersionBind", "unknown")),
+        },
+    }
+
     checks = []
-    for stage in stages:
-        passed = stage == "build"
+    for stage, evidence_class, result, runtime in RELEASE_STAGES:
+        passed = result == "pass"
         check = {
             "stage": stage,
-            "result": "pass" if passed else "pending",
+            "result": result,
+            "evidence_class": evidence_class,
+            "runtime": runtime,
             "evidence_refs": [out_path.name] if passed else [],
             "reviewer": "build_book.py" if passed else "unassigned",
             "source_tree": source_tree,
             "document_sha256": document_sha256,
             "recorded_at": recorded_at,
-            "findings": [] if passed else ["not evaluated by build_book.py"],
+            "findings": [] if passed else [
+                STAGE_MEANING.get(evidence_class, "not evaluated by build_book.py")
+            ],
         }
+        if stage == "operational_conformance":
+            check["findings"] = [
+                "runtime NOT RUN — only rendered-source evidence exists; the page readback "
+                "is not a conformance record"
+            ]
+        if stage == "owner_acceptance":
+            check["findings"] = ["owner acceptance OPEN"]
         if passed:
             check.update({"exit": 0, "ok_line": ok_line})
         checks.append(check)
+
+    # ---- history: earlier sidecars are retained, never overwritten --------------
+    history = []
+    for prior in sorted(out_path.parent.glob("*.record.json")):
+        if prior == out_path.with_suffix(".record.json"):
+            continue
+        try:
+            rec = json.loads(prior.read_text())
+            art = rec.get("artifacts", [{}])[0]
+            history.append({
+                "record": prior.name,
+                "doc_id": rec.get("doc_id"),
+                "document_sha256": rec.get("document_sha256"),
+                "bytes": art.get("bytes"),
+                "pages": art.get("pages"),
+                "recorded_at": rec.get("checks", [{}])[0].get("recorded_at"),
+                "payload_digest": rec.get("memory", {}).get("payload_digest"),
+            })
+        except (OSError, ValueError, KeyError, IndexError, json.JSONDecodeError):
+            continue
+
     payload = {
         "schema_version": "handbook-release.v1",
         "doc_id": book["doc"]["id"],
         "revision": str(book["doc"].get("revision", book["doc"]["issue"])),
+        "issue": str(book["doc"]["issue"]),
+        "change": str(book["doc"].get("change") or ""),
         "source_commit": source_commit,
         "source_tree": source_tree,
         "document_sha256": document_sha256,
@@ -712,8 +872,10 @@ def write_build_record(
                 "pages": page_count,
             }
         ],
+        "identities": identities,
         "checks": checks,
         "dispositions": _dispositions(),
+        "history": history,
         "build_errors": 0,
     }
     payload_digest = hashlib.sha256(_canonical_json(payload)).hexdigest()
@@ -837,6 +999,11 @@ def main() -> int:
     doc = book["doc"]
     doc_id = doc["id"]
     today = str(doc["issue"])
+    # Revision furniture: a reissued book names BOTH the basic issue it supersedes and
+    # the change date that carried the corrections. An empty change date prints as an
+    # em dash, so the field is never silently blank (P6-ISSUE-01).
+    change_date = str(doc.get("change") or "").strip()
+    revision = str(doc.get("revision") or "").strip()
     # Figure codes live in BOOK.yaml, not in filenames: one id resolves to one object.
     fig_codes = {str(f["file"]): str(f["code"]) for f in book.get("figures", [])}
     fig_captions = {str(f["file"]): str(f.get("caption", "")) for f in book.get("figures", [])}
@@ -870,17 +1037,35 @@ def main() -> int:
     issue_epoch = time.mktime(time.strptime(today, "%Y-%m-%d"))
 
     def changed_since_issue(f: pathlib.Path) -> bool:
-        if f.stat().st_mtime > issue_epoch:  # uncommitted working-tree edits
-            return True
+        """Did this file change after the basic issue date?
+
+        mtime is NOT evidence: a checkout stamps every file with "now", so trusting it
+        marks the entire book as changed and the change bar stops meaning anything. Ask
+        git instead — the last commit that touched the file, plus (only) an uncommitted
+        modification. mtime is the fallback when git cannot answer at all.
+        """
         try:
             out = subprocess.run(
                 ["git", "-C", str(ROOT), "log", "-1", "--format=%at", "--", str(f)],
                 capture_output=True,
                 text=True,
             ).stdout.strip()
-            return bool(out) and int(out) > issue_epoch
+            if out:
+                if int(out) > issue_epoch:
+                    return True
+                dirty = subprocess.run(
+                    ["git", "-C", str(ROOT), "status", "--porcelain", "--", str(f)],
+                    capture_output=True,
+                    text=True,
+                ).stdout.strip()
+                return bool(dirty)
+            # untracked/never committed: fall back to mtime
+            return f.stat().st_mtime > issue_epoch
         except (ValueError, OSError):
-            return False
+            try:
+                return f.stat().st_mtime > issue_epoch
+            except OSError:
+                return False
 
     def mark_changed(blocks: list[str]) -> list[str]:
         out = []
@@ -1020,10 +1205,29 @@ def main() -> int:
                     continue
                 rel_fig = str(fig.relative_to(HB))
                 code = fig_codes.get(rel_fig, fig.stem.upper())
+                # A figure code's leading segment names the part that OWNS it (0.x front
+                # matter, 2.x flows, 3.x modules). Any mount outside that part is a
+                # deliberate reprint — the front matter previews the whole-system views.
+                # Label it, so two sheets carrying "FIGURE 2.1" read as an intentional
+                # reprint rather than a duplicate id (P6-LAYOUT-01).
+                owner_part = {"0": "FM", "2": "II", "3": "III"}.get(code.split(".")[0])
+                reprint_of = owner_part if owner_part and p["id"] != owner_part else None
                 title = f"PART {p['id']} · FIGURE {code}"
-                heading = f"<h2>FIGURE {code} — as of {today}</h2>"
+                if reprint_of:
+                    title += " · REPRINT"
+                    heading = (
+                        f"<h2>FIGURE {code} — REPRINT — as of {today}</h2>"
+                    )
+                else:
+                    heading = f"<h2>FIGURE {code} — as of {today}</h2>"
                 caption = fig_captions.get(rel_fig, "")
                 explanation = f"<p>{inline(caption)}</p>" if caption else ""
+                if reprint_of:
+                    explanation = (
+                        f"<p class='reprint'>REPRINT. The issued copy of FIGURE {code} is "
+                        f"mounted in Part {reprint_of} where it is read; this sheet repeats "
+                        "it so the front matter can be read on its own.</p>" + explanation
+                    )
                 if fig_scaled_h(fig) > SEP_FIG_MAX_MM:
                     # Keep the full-scale print floor. A tall hero gets an explicit
                     # adjacent spread instead of a title-only page created implicitly
@@ -1063,7 +1267,7 @@ def main() -> int:
     for s, b, t in sheets:
         pages_html += (
             f'<div class="page">{bs.head_html(doc_id, title_line, s)}{t}'
-            f"{chr(10).join(b)}{bs.foot_html(s, today)}</div>"
+            f"{chr(10).join(b)}{bs.foot_html(s, today, change_date)}</div>"
         )
     html_doc = (
         f"<!doctype html><html><head><meta charset='utf-8'><style>{bs.load_css()}"
@@ -1096,12 +1300,52 @@ def main() -> int:
         print(f"PAGE FAIL: {npages} .page divs but {pdf_page_count(a.out)} PDF pages")
         return 2
 
-    bs.stamp(a.out, doc_id, right=f"issue {today}")
+    bs.stamp(a.out, doc_id, basic=today, change=change_date,
+             classification=str(doc.get("classification", "INTERNAL")))
 
-    # Furniture check: every page after the cover must carry the running head in its top
-    # band (the stamp's doc number sits in the footer band and does not count) — a page
-    # without one is a page content flowed onto, headless and uncitable.
+    # A printed contents table is not a destination. Resolve every part and section
+    # heading in the RENDERED pages, in reading order, and write a real PDF outline so
+    # a reader can navigate to what the contents page promises (P6-LAYOUT-01).
+    def outline_entries(pdf_doc) -> list[tuple[int, str, int]]:
+        wanted: list[tuple[int, str]] = []
+        for s, b, _t in sheets:
+            for blk in b:
+                m = re.match(r"^<h([12])>(.*)</h\1>$", blk.strip(), re.S)
+                if not m:
+                    continue
+                text = re.sub(r"<[^>]+>", "", m.group(2))
+                text = re.sub(r"\s+", " ", text).strip()
+                if not text or text.startswith("FIGURE "):
+                    continue  # figure captions are locators, not sections
+                wanted.append((int(m.group(1)), text))
+                break
+        if not wanted:
+            return []
+        page_text = [re.sub(r"\s+", " ", p.get_text()) for p in pdf_doc]
+        out: list[tuple[int, str, int]] = []
+        cursor = 0
+        for lvl, text in wanted:
+            probe = text[:70]
+            for i in range(cursor, len(page_text)):
+                if probe in page_text[i]:
+                    out.append((lvl, text, i + 1))
+                    cursor = i
+                    break
+        return out
+
+    toc = outline_entries(fitz.open(a.out))
+    if not toc:
+        print("CONTENTS FAIL: no section heading resolved to a rendered page")
+        return 2
+    bs.set_outline(a.out, toc)
     pdf = fitz.open(a.out)
+    written = pdf.get_toc()
+    if not written:
+        print("CONTENTS FAIL: PDF outline is empty after writing it")
+        return 2
+    if len(written) != len(toc):
+        print(f"CONTENTS FAIL: wrote {len(toc)} entries, PDF holds {len(written)}")
+        return 2
     headless = []
     for i, pg in enumerate(pdf, 1):
         if i == 1:
@@ -1207,11 +1451,29 @@ def main() -> int:
         )
         return 2
 
+    # --- declared body/table/code floors, measured on the RENDERED pages ----------
+    # A floor that is only declared in CSS is not met: the printed size is what a
+    # reader gets, and a figure scaled by the builder shrinks its labels with it. The
+    # gate prints the number it measured and fails by page and role (P6-LAYOUT-01).
+    floor_lines, floor_bad = bs.measure_floors(a.out)
+    for line in floor_lines:
+        print(f"floor: {line}")
+    if floor_bad:
+        for v in floor_bad[:10]:
+            print(f"FLOOR FAIL: {v}")
+        print(
+            f"FLOOR FAIL: {len(floor_bad)} span(s) under a declared floor — "
+            "raise the size or the figure's print scale; never shrink type to fit"
+        )
+        return 2
+
     ok_line = (
         f"OK {a.out} ({out_path.stat().st_size} bytes) · {pdf.page_count} pages · "
+        f"sha256 {hashlib.sha256(out_path.read_bytes()).hexdigest()[:16]}… · "
         f"head + tab + dated foot on every page · fit clean ({fit}) · "
         f"{len(table_codes)} table codes · {placards} continuation unit counts · "
-        f"{notices} notice labels · check.py green · fonts: {sorted(census)}"
+        f"{notices} notice labels · {len(written)} contents destinations · "
+        f"body/table/code floors met · check.py green · fonts: {sorted(census)}"
     )
     record_path = write_build_record(out_path, book, pdf.page_count, ok_line)
     print(f"RECORD_OK: {record_path} (fsynced; local_commit=null; sync_commit=null)")
