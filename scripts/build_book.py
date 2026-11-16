@@ -1019,7 +1019,6 @@ def main() -> int:
     # the change date that carried the corrections. An empty change date prints as an
     # em dash, so the field is never silently blank (P6-ISSUE-01).
     change_date = str(doc.get("change") or "").strip()
-    revision = str(doc.get("revision") or "").strip()
     # Figure codes live in BOOK.yaml, not in filenames: one id resolves to one object.
     fig_codes = {str(f["file"]): str(f["code"]) for f in book.get("figures", [])}
     fig_captions = {str(f["file"]): str(f.get("caption", "")) for f in book.get("figures", [])}
