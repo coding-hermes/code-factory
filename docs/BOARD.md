@@ -138,6 +138,41 @@ scripts/boardctl validate
 bash tests/selftest.sh | grep -E 'rows parse|^SELFTEST'
 ```
 
+- **Re-measured 2026-11-16T14:45Z at tip `74c973af`:** **528 task rows, 817 events** (max event id 816).
+  `scripts/board_drift.py check --workdir . --ref origin/main` prints `RESULT: OK` — byte parity,
+  `528 vs 528 rows; 0 divergent ids`, HEAD == `origin/main`, 0 ahead / 0 behind. `scripts/boardctl
+  validate` prints `RESULT: OK (89 warning(s))` and key uniformity `526/528` — the same two rows carry
+  `acceptance`/`chapter`/`created`/`model`, so the warning count is still not a function of the board
+  bytes (**CF-154**). Status split: 167 `complete`, 15 `in_progress`, 344 `pending`, 2 `blocked`.
+  165 of the 167 complete rows bind a commit that is an ancestor of `origin/main`; the 2 with no hash
+  are again **CF-245** and **P5G-34**. `scripts/board_evidence_check.py` prints `checked 167 complete
+  rows, 57 unresolved` with `expected_unresolved=57` derived from the board, i.e. the store and the
+  board agree on the orphan count. The **CI observation in the 2026-11-14 block above is now
+  historical**: `.github/workflows/selftest.yml` exists at `origin/main` (added by `e51daff3`,
+  "ci: add the hosted self-test gate (CF-435)"), **CF-440 is complete**, and 10 recent runs are
+  visible to `gh run list`. It is not green now, and the shape of that is worth stating precisely:
+  the 10 most recent runs are 9 `failure` + 1 `success`, but the whole history (**49 runs**,
+  `gh run list --limit 200`) says the gate arrived clean and stayed clean for a day — **30 consecutive
+  `success` runs** from `e51daff3` (2026-11-15T01:15Z) to `176378c1` (2026-11-15T22:26Z) — then
+  **17 consecutive `failure`** plus one `cancelled`, from `228b7896` (2026-11-16T01:34Z) through
+  `7d1dac3e` (14:31Z), then `success` at `74c973af` (14:33Z). So CF-450's framing is right and the
+  red is bounded on both sides: the last green before it is `176378c1`, which is the very base the
+  leaked review note cites. Every red died on the same arm — item **61**, "the published tree does not
+  add absolute host-home paths (CF-050)",
+  row `publish paths — baseline 0, current 2; paths: docs/handbook/PASS7-PLAN.md
+  docs/handbook/conformance/manifest.json`. That is the atomic attribution **CF-450** said the log
+  could not produce. It can: the item header *is* in the log, immediately above its FAIL row — it just
+  never starts the line, because each Actions line is `<job>\t<step>\t<ISO-8601> <message>`, so an
+  anchored `^[0-9]+\. ` grep finds nothing while a bare `FAIL` grep finds 64 negative-control fixtures.
+  `docs/audits/cf450-ci-attribution.sh <red-run> <green-run>` now joins the two runs on verdict label:
+  against `43886556997` (red) and `43887027423` (green) it prints **574 labels each, one divergence —
+  `ATTRIBUTED publish paths (red=FAIL green=PASS)`**, and against a run compared with itself it prints
+  `NO DIVERGENCE` and exits 2, so the instrument can fail. The fix is `74c973af` (2 lines, both
+  absolute host paths spelled `$HOME`), and `43887027423` at exactly that head is the first green since
+  `176378c1`, with both jobs (`secrets (gitleaks)`, `selftest`) `success`. A local `bash
+  tests/selftest.sh` at `74c973af` reproduces it: 70 numbered items, 571 `PASS` rows, 64 `FAIL` rows —
+  every one of those a negative-control fixture, which is why a bare `FAIL` grep cannot read this log —
+  then `SELFTEST: PASS`, `EXIT=0`.
 - **Re-measured 2026-11-14T19:00Z at tip `70519fcc`:** **513 task rows, 774 events** at census time
   (max event id 773). `board_drift.py check --ref origin/main` returns `RESULT: OK` — byte parity,
   `513 vs 513 rows; 0 divergent ids`, HEAD == origin/main. `boardctl validate` returns
