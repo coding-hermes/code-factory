@@ -5,61 +5,55 @@
   "schema": "cf2a.board-claim.schema.json",
   "note": "P7-05/P7-06 group claim with its canonical criterion and the five phase-discriminated evidence records for the first member.",
   "group_claim": {
-    "schema_version": "cf.group-claim.v1",
-    "claim_id": "claim-grp-1",
-    "claim_generation": 1,
+    "schema_version": "cf.board-group-claim.v1",
+    "operation_id": "op-claim-grp-1",
+    "idempotency_key": "claim-grp-1-key",
     "project_id": "code-factory",
-    "claimant": {
-      "claimant_id": "foreman-1",
-      "owner_fence": {
-        "authority_id": "auth-1",
-        "epoch": 7,
-        "owner_id": "manager-1",
-        "project_id": "code-factory"
-      }
+    "board_id": "board-main",
+    "board_revision": "1111111111111111111111111111111111111111",
+    "owner_fence": {
+      "authority_id": "auth-1",
+      "epoch": 7,
+      "owner_id": "manager-1",
+      "project_id": "code-factory"
     },
-    "group": {
-      "max_members": 256,
-      "min_members": 1,
-      "member_count": 3
-    },
-    "ordering": {
-      "field": "task_id",
-      "direction": "ascending",
-      "comparison": "bytewise UTF-8"
-    },
-    "members": [
+    "ordering": "created_seq ASC, id ASC; dependencies must be settled; correction retains its original worker",
+    "claims": [
       {
         "task_id": "CF-1",
-        "board_row_revision": 2,
-        "criterion_digest": "4e7e486cd95ba75400b4e7faa54640d2e98a244b7d47d8ec3253c490bbab0dc4"
+        "created_seq": 1,
+        "expected_revision": 2,
+        "expected_status": "pending",
+        "claim_generation": 0
       },
       {
         "task_id": "CF-2",
-        "board_row_revision": 1,
-        "criterion_digest": "4e7e486cd95ba75400b4e7faa54640d2e98a244b7d47d8ec3253c490bbab0dc4"
+        "created_seq": 2,
+        "expected_revision": 1,
+        "expected_status": "pending",
+        "claim_generation": 0
       },
       {
         "task_id": "CF-3",
-        "board_row_revision": 4,
-        "criterion_digest": "4e7e486cd95ba75400b4e7faa54640d2e98a244b7d47d8ec3253c490bbab0dc4"
+        "created_seq": 3,
+        "expected_revision": 4,
+        "expected_status": "pending",
+        "claim_generation": 0
       }
     ],
-    "board": {
-      "ref": "refs/heads/main",
-      "base_oid": "1111111111111111111111111111111111111111",
-      "marker_path": ".coding-hermes/board/tasks.jsonl"
-    },
-    "claimed_at_seq": 41,
-    "lease_expires_at": "2026-11-11T19:33:00Z"
+    "lease_expires_at": "2026-11-11T19:33:00Z",
+    "transition": "claim",
+    "evidence_refs": []
   },
-  "group_claim_digest": "80b87a4dbf8b7ce41ad6b12d722b41701c0625c6119811eb3fa8f2afb59d5388",
+  "group_claim_digest": "454d46e9ed8f44023f130d6c2131790da8896413dd70c127b1b23257b43d1755",
   "bounds": {
-    "max_members": 256,
-    "min_members": 1,
-    "ordering": "ascending bytewise task_id",
-    "refusal_when_exceeded": "GROUP_TOO_LARGE",
-    "refusal_on_duplicate": "DUPLICATE_MEMBER"
+    "max_claims": 256,
+    "min_claims": 1,
+    "declared_by": "cf2a.board-claim.schema.json maxItems — the only home of the number",
+    "ordering": "created_seq ASC, id ASC; dependencies must be settled; correction retains its original worker",
+    "refusal_when_exceeded": "INVALID_FIELD",
+    "refusal_on_duplicate": "INVALID_FIELD",
+    "refusal_on_bad_object_id": "INVALID_FIELD"
   },
   "criterion": {
     "argv": [
@@ -277,47 +271,61 @@
     {
       "name": "group exceeds the bound",
       "mutate": {
-        "pointer": "/group_claim/members",
+        "pointer": "/group_claim/claims",
         "op": "repeat-to",
         "count": 257
       },
       "expected": {
         "accepted": false,
-        "refusal": "GROUP_TOO_LARGE"
+        "refusal": "INVALID_FIELD",
+        "detail": "the bound is one value, declared once, by the schema"
       }
     },
     {
-      "name": "duplicate member",
+      "name": "duplicate claim",
       "mutate": {
-        "pointer": "/group_claim/members/1/task_id",
+        "pointer": "/group_claim/claims/1/task_id",
         "value": "CF-1"
       },
       "expected": {
         "accepted": false,
-        "refusal": "DUPLICATE_MEMBER"
+        "refusal": "INVALID_FIELD"
       }
     },
     {
-      "name": "members out of order",
+      "name": "claims out of order",
       "mutate": {
-        "pointer": "/group_claim/members",
+        "pointer": "/group_claim/claims",
         "op": "reverse"
       },
       "expected": {
         "accepted": false,
-        "refusal": "ORDER_INVALID"
+        "refusal": "INVALID_FIELD",
+        "detail": "ordering is created_seq ASC then id ASC; a reversed list is not the declared ordering"
       }
     },
     {
       "name": "abbreviated commit id",
       "mutate": {
-        "pointer": "/group_claim/board/base_oid",
+        "pointer": "/group_claim/board_revision",
         "value": "1111111"
       },
       "expected": {
         "accepted": false,
-        "refusal": "GITOID_INVALID",
+        "refusal": "INVALID_FIELD",
         "detail": "a normal object id is 40 or 64 lowercase hex; an abbreviation or a flag is refused"
+      }
+    },
+    {
+      "name": "paraphrased ordering literal",
+      "mutate": {
+        "pointer": "/group_claim/ordering",
+        "value": "created_seq ascending, then id"
+      },
+      "expected": {
+        "accepted": false,
+        "refusal": "INVALID_FIELD",
+        "detail": "two orderings for one version is the defect; the literal is a single value"
       }
     },
     {

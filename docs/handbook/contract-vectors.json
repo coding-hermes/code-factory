@@ -2395,64 +2395,57 @@
         "SC-13"
       ],
       "kind": "positive",
-      "name": "canonical group claim with bound and ordering",
+      "name": "canonical group claim with one bound, one ordering and one object-id form",
       "group_claim": {
-        "schema_version": "cf.group-claim.v1",
-        "claim_id": "claim-grp-1",
-        "claim_generation": 1,
+        "schema_version": "cf.board-group-claim.v1",
+        "operation_id": "op-claim-grp-1",
+        "idempotency_key": "claim-grp-1-key",
         "project_id": "code-factory",
-        "claimant": {
-          "claimant_id": "foreman-1",
-          "owner_fence": {
-            "authority_id": "auth-1",
-            "epoch": 7,
-            "owner_id": "manager-1",
-            "project_id": "code-factory"
-          }
+        "board_id": "board-main",
+        "board_revision": "1111111111111111111111111111111111111111",
+        "owner_fence": {
+          "authority_id": "auth-1",
+          "epoch": 7,
+          "owner_id": "manager-1",
+          "project_id": "code-factory"
         },
-        "group": {
-          "max_members": 256,
-          "min_members": 1,
-          "member_count": 3
-        },
-        "ordering": {
-          "field": "task_id",
-          "direction": "ascending",
-          "comparison": "bytewise UTF-8"
-        },
-        "members": [
+        "ordering": "created_seq ASC, id ASC; dependencies must be settled; correction retains its original worker",
+        "claims": [
           {
             "task_id": "CF-1",
-            "board_row_revision": 2,
-            "criterion_digest": "4e7e486cd95ba75400b4e7faa54640d2e98a244b7d47d8ec3253c490bbab0dc4"
+            "created_seq": 1,
+            "expected_revision": 2,
+            "expected_status": "pending",
+            "claim_generation": 0
           },
           {
             "task_id": "CF-2",
-            "board_row_revision": 1,
-            "criterion_digest": "4e7e486cd95ba75400b4e7faa54640d2e98a244b7d47d8ec3253c490bbab0dc4"
+            "created_seq": 2,
+            "expected_revision": 1,
+            "expected_status": "pending",
+            "claim_generation": 0
           },
           {
             "task_id": "CF-3",
-            "board_row_revision": 4,
-            "criterion_digest": "4e7e486cd95ba75400b4e7faa54640d2e98a244b7d47d8ec3253c490bbab0dc4"
+            "created_seq": 3,
+            "expected_revision": 4,
+            "expected_status": "pending",
+            "claim_generation": 0
           }
         ],
-        "board": {
-          "ref": "refs/heads/main",
-          "base_oid": "1111111111111111111111111111111111111111",
-          "marker_path": ".coding-hermes/board/tasks.jsonl"
-        },
-        "claimed_at_seq": 41,
-        "lease_expires_at": "2026-11-11T19:33:00Z"
+        "lease_expires_at": "2026-11-11T19:33:00Z",
+        "transition": "claim",
+        "evidence_refs": []
       },
-      "group_claim_digest": "80b87a4dbf8b7ce41ad6b12d722b41701c0625c6119811eb3fa8f2afb59d5388",
+      "group_claim_digest": "454d46e9ed8f44023f130d6c2131790da8896413dd70c127b1b23257b43d1755",
       "expected": {
         "accepted": true,
-        "member_count": 3,
-        "max_members": 256,
-        "ordering": "ascending bytewise task_id",
-        "gitoid_form": "normal 40-hex, no flag, no abbreviation",
-        "group_claim_digest": "80b87a4dbf8b7ce41ad6b12d722b41701c0625c6119811eb3fa8f2afb59d5388"
+        "claims": 3,
+        "max_claims": 256,
+        "bound_declared_by": "cf2a.board-claim.schema.json maxItems",
+        "ordering": "created_seq ASC, id ASC",
+        "gitoid_form": "normal 40-hex string, no flag, no abbreviation",
+        "group_claim_digest": "454d46e9ed8f44023f130d6c2131790da8896413dd70c127b1b23257b43d1755"
       }
     },
     {
@@ -2462,18 +2455,18 @@
         "SC-13"
       ],
       "kind": "negative",
-      "name": "a 257-member group refuses at the bound",
+      "name": "a 257-claim group refuses at the bound",
       "base": "CV-19-A",
       "mutate": {
-        "pointer": "/group_claim/members",
+        "pointer": "/group_claim/claims",
         "op": "repeat-to",
         "count": 257
       },
       "expected": {
         "accepted": false,
-        "refusal": "GROUP_TOO_LARGE",
-        "detail": "the bound is one value; a wider group is a different record",
-        "claims_written": 0
+        "refusal": "INVALID_FIELD",
+        "detail": "the bound is one value declared once; a wider claim is a different record",
+        "candidate_trees_built": 0
       }
     },
     {

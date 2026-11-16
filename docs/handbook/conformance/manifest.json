@@ -9,11 +9,11 @@
   "normative_sources": {
     "model": {
       "path": "docs/SYSTEM-MODEL.yaml",
-      "sha256": "11621ec8c7ebbd829342b2c1cc183930562315fce4522dd4f3014e852066ad70"
+      "sha256": "034ea22475ff379b4be5373559ed5335fdbc28ee0ab64d08a560ad8aa9d62555"
     },
     "vectors": {
       "path": "docs/handbook/contract-vectors.json",
-      "sha256": "d087f9621d57358468be6c56443a38ec1eb1eef8fddba2142f94d75ba96bb9ad",
+      "sha256": "1e6a5a41acc3aec45bd8cd64ce99f268a7d33f54efe69d4743eda056bbbc8f69",
       "vector_count": 80,
       "note": "single normative source of executable cases; this bundle points at it and does not restate it"
     }
@@ -42,9 +42,9 @@
     },
     {
       "path": "docs/handbook/conformance/schemas/cf2a.board-claim.schema.json",
-      "sha256": "e0001baad2b05694179bba6df805df0e3849527a21c10f3a1aae6d67bf66cb8f",
+      "sha256": "9e99cddc4ec07bb6ee40753593b37c6f818746bd34f6cf4ee017d25c71dca1bb",
       "file": "cf2a.board-claim.schema.json",
-      "title": "cf.group-claim.v1",
+      "title": "cf.board-group-claim.v1",
       "id": "https://spec.coding-hermes.invalid/cf2a/1.0.0/schemas/cf2a.board-claim.schema.json"
     },
     {
@@ -90,7 +90,7 @@
     {
       "fixture_id": "cf2a.board-group-claim",
       "path": "docs/handbook/conformance/fixtures/board-group-claim.json",
-      "sha256": "43d3e7d099a22a7054a719929ae54961804018e6eaa5b8ff005abb62302e6b27",
+      "sha256": "326e15ee6f3507175300710e7924908f1f6bad6b5af236160fdbd614bee35d90",
       "kind": "positive-with-negative-arms",
       "file": "board-group-claim.json",
       "non_secret": "contains fixture identities and a public test key only; no credential value appears"
@@ -293,7 +293,7 @@
       "schema": "cf2a.board-claim.schema.json",
       "fixture": "board-group-claim.json",
       "base": "/group_claim",
-      "pointer": "/members",
+      "pointer": "/claims",
       "op": "array-repeat",
       "count": 257
     },
@@ -305,9 +305,21 @@
       "base": "/group_claim",
       "pointer": "/group_claim",
       "op": "set",
-      "parent": "/board",
-      "key": "base_oid",
+      "parent": "",
+      "key": "board_revision",
       "value": "1111111"
+    },
+    {
+      "name": "one ordering literal only",
+      "kind": "schema",
+      "schema": "cf2a.board-claim.schema.json",
+      "fixture": "board-group-claim.json",
+      "base": "/group_claim",
+      "pointer": "/group_claim",
+      "op": "set",
+      "parent": "",
+      "key": "ordering",
+      "value": "created_seq ascending, then id"
     },
     {
       "name": "a precommit record never names a commit",
@@ -498,7 +510,7 @@
       "kind": "record",
       "fixture": "board-group-claim.json",
       "object": "/group_claim",
-      "value": "80b87a4dbf8b7ce41ad6b12d722b41701c0625c6119811eb3fa8f2afb59d5388"
+      "value": "454d46e9ed8f44023f130d6c2131790da8896413dd70c127b1b23257b43d1755"
     },
     {
       "name": "criterion_digest",

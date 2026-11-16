@@ -129,7 +129,7 @@ the closed typed bodies and results; M1–M6 supply the referenced operation pro
 | `CT-07` | `model`, `provider`, `lane`, `policy_generation`; result selected model or `MODEL_NOT_ALLOWED` | allowlist and policy generation are checked before spend; selection is recorded with the session |
 | `CT-08` | `session_id`, `corr_id`, `message_ref`, `model`, `selection_id`; result `accepted`, `session_turn_id` | gateway acknowledges durable session custody; timeout is `DELIVERY_UNKNOWN` and replay uses the same idempotency key |
 | `CT-09` | canonical `memory-record.v1`: record/project/namespace/round ids, discriminated type, scoped ids, writer, local sequence, fence, body and payload_digest; result MemorySyncReceipt | local fsync is durable local-only acknowledgement; digest covers the complete record except payload_digest; sync is pending/qualified/failed/partial/conflict; same digest merges once, changed digest preserves conflict evidence |
-| `CT-10` | canonical `cf.board-group-claim.v1`: board revision, ordered task preconditions, owner fence, lease and operation identity | one protected CAS commits every row, event and marker or none; stale revision is `CLAIM_CONFLICT`; remote readback precedes native start and no partial wave launches |
+| `CT-10` | canonical `cf.board-group-claim.v1`: board revision, ordered claim preconditions, owner fence, lease and operation identity; at most 256 claims, `created_seq` then `task_id` | one protected CAS commits every row, event and marker or none; stale revision is `CLAIM_CONFLICT`; remote readback precedes native start and no partial wave launches; a duplicate claim, a reversed order, a paraphrased ordering or an abbreviated object id is refused (§IV.5.3) |
 | `CT-11` | `session_id`, `turn_id`, `model`, token usage, cost basis; result durable turn row | gateway writes the turn atomically or returns `PERSISTENCE_UNAVAILABLE`; no usage row is inferred from a transport receipt |
 | `CT-12` | staged-tree digest, exact commit candidate, guard version and criteria | guard emits a named verdict bound to the staged tree; missing gate is `GATE_UNAVAILABLE`; no verdict means no closeout |
 | `CT-13` | verdict `{run_id, criteria, outcome, evidence_refs, tree_digest}`; result board closeout | board accepts only an evidence-bound verdict whose tree digest matches the landed tree; duplicate closeout is a no-op, conflicting closeout is `CLOSEOUT_CONFLICT` |
@@ -270,7 +270,7 @@ and Part V §V.0, not the earlier card shorthand `desired_generation` aliases.
 | CT-07 / model.select / model-selection.v1 | project_id:ID, model:Text, provider:ID, lane:ID, policy_generation:PosInt | {model:Text,provider:ID,lane:ID,policy_generation:PosInt,selection_id:ID}; current allowlist checked before session cost |
 | CT-08 / session.deliver / session-delivery.v1 | session_id/corr_id:ID, message_ref:EvidenceRef, model:Text, selection_id:ID | {accepted:boolean,session_turn_id:ID}; same request identity on timeout, durable session before ACK |
 | CT-09 / memory.append / memory-record.v1 | record_id/project_id/namespace/round_id:ID, wave_id/attempt_id/task_id:ID or null, record_type:worker/wave/round/resolution/decision/finding, writer:{writer_id:ID,writer_role:owner/manager/foreman/worker/judge/reconciler,writer_generation:PosInt,owner_fence:Fence}, local_seq:PosInt, created_at:Time, body_kind:Text, body:discriminated MemoryBody, relations:[{kind,target}], payload_digest:SHA | MemorySyncReceipt below; local fsync then independent broker sync; digest covers the complete record except payload_digest, the sync receipt and the signature; nullable body fields are present and null, never omitted (§IV.5.4) |
-| CT-10 / board.claim / cf.group-claim.v1 | claim_id:ID, claim_generation:PosInt, project_id/board_id:ID, claimant:{claimant_id:ID,owner_fence:Fence}, group:{max_members:256,min_members:UInt,member_count:UInt}, ordering:{field:task_id,direction:ascending,comparison:bytewise UTF-8}, members:[{task_id:ID,board_row_revision:UInt,criterion_digest:SHA}][1..256], board:{ref:Text,base_oid:GitOID,marker_path:Text}, claimed_at_seq:UInt, lease_expires_at:Time | One protected CAS commits every row, event and operation marker or none; CLAIM_CONFLICT names current revision and changed tasks; remote readback precedes native start; a claimed group is at most 256 members and never partial (§IV.5.3) |
+| CT-10 / board.claim / cf.board-group-claim.v1 | operation_id/idempotency_key:ID, project_id/board_id:ID, board_revision:GitOID, owner_fence:Fence, ordering:literal, claims:ClaimPrecondition[1..256] where ClaimPrecondition={task_id:ID,created_seq:UInt,expected_revision:UInt,expected_status:pending/in_progress,claim_generation:UInt}, lease_expires_at:Time, transition:claim/renew/release, evidence_refs:EvidenceRef[] | One protected CAS commits every row, event and operation marker or none; CLAIM_CONFLICT names current revision and changed tasks; remote readback precedes native start; the member bound lives in cf2a.board-claim.schema.json maxItems (256) and nowhere else; a duplicate claim, a reversed order, a paraphrased ordering or an abbreviated object id is INVALID_FIELD (§IV.5.3) |
 | CT-11 / turn.record / turn-record.v1 | session_id/turn_id:ID, model:Text, input_tokens/output_tokens/cached_tokens:UInt, cost_microusd:UInt or null, cost_basis:list-price/provider-reported/unknown, observed_at:Time | {turn_id:ID,durable_seq:PosInt}; unique session/turn, changed usage is TURN_CONFLICT, unknown cost is null not zero |
 | CT-12 / gate.run / cf.gate-request.v1 | run_id:ID, candidate:GitOID, tree_digest:SHA, policy_ref:EvidenceRef, criteria:Criterion[1..100] | M3 §17.1 Verdict; no optional missing required gate |
 | CT-13 / board.close / cf.board-close.v1 | operation_id/project_id/board_id/task_id/claim_id:ID, claim_generation:PosInt, owner_fence:Fence, expected_revision:UInt, board_revision:GitOID, completion:Completion | {new_revision:PosInt,board_revision:GitOID,closure_receipt_ref:EvidenceRef}; M4 Completion + M3 §17.3 parent certification |
@@ -538,7 +538,7 @@ width or a canonical JSON string, so no separator is needed and none may be adde
 | `payload_digest` (memory) | none | JCS of `cf.memory-record.v1` | `payload_digest`, `sync`, `signature` |
 | `round_summary_digest` | none | JCS of the round-summary body | `round_summary_digest`, `report_digest`, its own memory ref, `signature` |
 | `report_digest` | none | JCS of the final report body | `report_digest`, `signature`, `closure_ref` |
-| `group_claim_digest` | none | JCS of `cf.group-claim.v1` | `group_claim_digest` |
+| `group_claim_digest` | none | JCS of `cf.board-group-claim.v1` | `group_claim_digest` |
 | `config_digest` | none | JCS of `cf.config.v1` | `config_digest` |
 | `settlement_digest` | none | JCS of `cf.settlement.v1` | `settlement_digest` |
 
@@ -774,7 +774,7 @@ record; it does not extend this one.
 | `cf.cancellation.v1` | execution | resident supervisor | `launch-confirmation.json` | `CV-22-A` |
 | `cf.criterion.v1` | board | board row | `board-group-claim.json` | `CV-19-A` |
 | `cf.evidence.v1` | evidence | judge / board | `board-group-claim.json` | `CV-25-A`, `CV-25-B` |
-| `cf.group-claim.v1` | board | claimant | `board-group-claim.json` | `CV-19-A`, `CV-19-B` |
+| `cf.board-group-claim.v1` | board | claimant | `board-group-claim.json` | `CV-19-A`, `CV-19-B` |
 | `cf.memory-record.v1` | memory | foreman / judge | `memory-round-summary.json` | `CV-20-A`–`CV-20-C` |
 | `cf.round-summary.v1` | memory | foreman | `memory-round-summary.json` | `CV-20-A` |
 | `cf.round-report.v1` | memory | foreman | `memory-round-summary.json` | `CV-01-C`, `CV-20-A` |
@@ -828,20 +828,27 @@ task; `CV-25-B` is the staged-names-a-commit refusal.
 
 ### IV.5.3 The canonical group claim
 
-A group claim has one bound, one ordering and one object-id form:
+A claim has one bound, one ordering literal and one object-id form, and each of them
+lives in exactly one place:
 
-* `group.max_members` is the literal `256`. A wider group is a different record, not a
-  larger claim; `CV-19-B` is the refusal, and the schema cannot represent 257.
-* Members are ordered ascending by `task_id`, compared bytewise over UTF-8. The ordering
-  is data, not a convention a reader may infer from array position. A repeated member is
-  `DUPLICATE_MEMBER`; a reversed list is `ORDER_INVALID`.
-* `board.base_oid` is a normal object id: 40 or 64 lowercase hex. No abbreviation, no
-  algorithm flag, no `^{commit}` suffix. An abbreviated id is `GITOID_INVALID`.
-* One protected CAS covers every row, event and marker of the group. A loser launches no
+* `claims` is non-empty and its maximum length is the bound declared by
+  `conformance/schemas/cf2a.board-claim.schema.json` `maxItems` — 256. M4 §15.2 and CT-10
+  repeat the number and declare none of their own; a prose copy that disagrees with the
+  schema is the defect, and a wider claim is a different record rather than a larger one.
+  `CV-19-B` is the refusal.
+* `ordering` is one literal: `created_seq ASC, id ASC; dependencies must be settled;
+  correction retains its original worker`. A paraphrase is a second ordering, so the
+  schema carries it as a `const` and a request with any other value is refused before a
+  candidate tree is built.
+* `board_revision` is a normal object id: 40 or 64 lowercase hex as a plain string. Never
+  a nested `{algorithm,value}` object, never abbreviated, never flagged with `^{commit}`.
+* One protected CAS covers every row, event and marker of the claim. A loser launches no
   partial wave, so a partially claimed group cannot exist.
 
-`member_count` must equal the number of members; the bundle self-check asserts it, and a
-claim that disagrees with itself is refused.
+The claims appear in `created_seq` then `task_id` order; that ordering is a property of
+the board, not of array position, so a reversed list is refused rather than silently
+re-sorted. A repeated `task_id` is refused for the same reason: the request would
+otherwise carry two preconditions for one row and leave the reader to pick.
 
 ### IV.5.4 One memory envelope, discriminated by role
 
@@ -1127,12 +1134,12 @@ bundle that must be re-frozen.
 ### CT-10 — node → board
 
 - **Carries:** row event with run_id and outcome
-- **Record frozen (pass 7):** `cf.group-claim.v1` — at most 256 members, ordered
-  ascending by bytewise `task_id`, normal-object-id only, one protected CAS for rows
-  events and marker (§IV.5.3), plus the phase-discriminated evidence chain
-  `staged → source → integrated → publication → closure` with a null `commit_oid` at
-  `staged` and an accepted object bound by digest at `publication` (§IV.5.2). Vectors
-  `CV-19-A`, `CV-19-B`, `CV-25-A`, `CV-25-B`.
+- **Record frozen (pass 7):** `cf.board-group-claim.v1` — at most 256 claims, ordered by
+  the immutable `created_seq` then `task_id`, one ordering literal, normal-object-id only,
+  one protected CAS for rows, events and marker (§IV.5.3), plus the phase-discriminated
+  evidence chain `staged → source → integrated → publication → closure` with a null
+  `commit_oid` at `staged` and an accepted object bound by digest at `publication`
+  (§IV.5.2). Vectors `CV-19-A`, `CV-19-B`, `CV-25-A`, `CV-25-B`.
 - **Mode:** append
 - **State:** BROKEN
 - **Sends because:** One project per node; repo clone, seeded prompts/skills, env, identity, bus worker (M2 §2)

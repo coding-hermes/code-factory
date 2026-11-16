@@ -46,7 +46,7 @@ python3 -c "$(jq -r '.runner.program' docs/handbook/conformance/manifest.json)" 
 Either form prints one line per failure and a verdict. The last line of a passing run is:
 
 ```
-conformance bundle: clean — 13 pinned artifacts, 18 bindings, 15 negative arms, 12 digest checks
+conformance bundle: clean — 13 pinned artifacts, 18 bindings, 16 negative arms, 12 digest checks
 ```
 
 Exit 0 means all four of these held:
