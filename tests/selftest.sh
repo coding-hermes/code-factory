@@ -7638,28 +7638,56 @@ else
 fi
 # CF-398 arm: keep this inside the existing section census; evidence pointers are an
 # additive board invariant, not a new numbered selftest section.
-cf398_out=$(python3 "$HERE/scripts/board_evidence_check.py" --quiet-findings 2>&1); cf398_rc=$?
-cf398_count=$(printf '%s\n' "$cf398_out" | tail -1)
-cf398_named=$(printf '%s\n' "$cf398_out" | sed -n 's/^expected_unresolved=\([0-9][0-9]*\) .*/\1/p')
-if printf '%s\n' "$cf398_count" | grep -Eq '^checked [0-9]+ complete rows, [0-9]+ unresolved$'; then
-  cf398_unresolved=$(printf '%s\n' "$cf398_count" | sed -E 's/^checked [0-9]+ complete rows, ([0-9]+) unresolved$/\1/')
-  python3 "$HERE/scripts/board_evidence_check.py" --strict --quiet-findings >/dev/null 2>&1; cf398_strict_rc=$?
-  cf398_expected_strict=0
-  [ "$cf398_unresolved" -gt 0 ] && cf398_expected_strict=1
+# CF-475: this arm grades the checker's CONTRACT on fixtures, never the live census.
+# A finding resolves against events.jsonl PLUS the git-untracked .gitreins/history
+# store, so the live derived count is a property of the checkout — 0 run dirs in a
+# fresh clone or in CI, more in the checkout that owns the run directories — and an
+# equality against it can only hold on the machine that measured it.
+cf398_fixtures="$HERE/tests/fixtures/board_evidence"
+cf398_scratch=$(mktemp -d)
+cf398_ok=1
+# The accepted id is read from the allowlist, so pruning the list cannot red the arm;
+# the history root lives inside the scratch tree, so no run resolves by accident.
+cf398_accepted_id=$(python3 -B -c 'import importlib.util, sys; spec = importlib.util.spec_from_file_location("bec", sys.argv[1]); module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module); print(sorted(module.ACCEPTED_UNRESOLVED)[0] if module.ACCEPTED_UNRESOLVED else "")' "$HERE/scripts/board_evidence_check.py")
+cf398_history="$cf398_scratch/no-history-store"
+cf398_proof="an allowlisted finding set exits 0 (1 under --strict), "
+if [ -n "$cf398_accepted_id" ]; then
+  mkdir -p "$cf398_scratch/accepted/.coding-hermes/board"
+  printf '%s\n' "{\"id\":\"$cf398_accepted_id\",\"status\":\"complete\",\"detail\":{\"evidence\":[{\"run_id\":\"cf398-accepted-unresolved-run\"}]}}" > "$cf398_scratch/accepted/.coding-hermes/board/tasks.jsonl"
+  # (a) a finding set the allowlist fully accepts: exit 0 plain, exit 1 under --strict.
+  cf398_acc_out=$(python3 -B "$HERE/scripts/board_evidence_check.py" --root "$cf398_scratch/accepted" --history-root "$cf398_history" --quiet-findings 2>&1); cf398_acc_rc=$?
+  python3 -B "$HERE/scripts/board_evidence_check.py" --root "$cf398_scratch/accepted" --history-root "$cf398_history" --strict --quiet-findings >/dev/null 2>&1; cf398_acc_strict=$?
+  [ "$cf398_acc_rc" -eq 0 ] || cf398_ok=0
+  [ "$cf398_acc_strict" -eq 1 ] || cf398_ok=0
+  printf '%s\n' "$cf398_acc_out" | grep -q '1 accepted findings of 1 findings, new=none, cleared=' || cf398_ok=0
+  printf '%s\n' "$cf398_acc_out" | grep -q 'checked 1 complete rows, 1 unresolved' || cf398_ok=0
 else
-  cf398_unresolved=-1
-  cf398_strict_rc=2
-  cf398_expected_strict=2
+  # An empty allowlist means every complete row is evidenced. There is no accepted set
+  # left to exercise, and the fixture arms below still carry the discrimination, so this
+  # branch must not red the last row of debt someone closes (CF-475).
+  cf398_proof="the allowlist is empty so no accepted set is exercised, "
 fi
-if [ "$cf398_rc" -eq 0 ] \
-  && [ "$cf398_strict_rc" -eq "$cf398_expected_strict" ] \
-  && [ "$cf398_unresolved" -ge 0 ] \
-  && [ -n "$cf398_named" ] \
-  && [ "$cf398_named" = "$cf398_unresolved" ]; then
-  cf398_display=${cf398_count#checked }
-  say "  PASS  CF-398 evidence checker reports a derived count ($cf398_display) and --strict matches it"
+# (b) a complete row with an empty evidence pointer that is NOT allowlisted: the row
+# is named and the strict run exits 1 (the CF-438 discrimination, fixture-driven).
+cf398_zero_out=$(python3 -B "$HERE/scripts/board_evidence_check.py" --root "$cf398_fixtures/empty_evidence" --history-root "$cf398_history" --strict 2>&1); cf398_zero_rc=$?
+# (c) one unresolvable run id that is NOT allowlisted: same shape.
+cf398_unres_out=$(python3 -B "$HERE/scripts/board_evidence_check.py" --root "$cf398_fixtures/unresolvable" --history-root "$cf398_history" --strict 2>&1); cf398_unres_rc=$?
+# (d) negative control: a run that resolves in events.jsonl is no finding, so neither
+# mode fails — the arms above cannot pass by failing everything.
+cf398_res_out=$(python3 -B "$HERE/scripts/board_evidence_check.py" --root "$cf398_fixtures/resolvable" --history-root "$cf398_history" --strict 2>&1); cf398_res_rc=$?
+rm -rf "$cf398_scratch"
+[ "$cf398_zero_rc" -eq 1 ] || cf398_ok=0
+printf '%s\n' "$cf398_zero_out" | grep -q '^ZERO-EVIDENCE FIXTURE-EMPTY-EVIDENCE$' || cf398_ok=0
+printf '%s\n' "$cf398_zero_out" | grep -q 'new=FIXTURE-EMPTY-EVIDENCE, cleared=' || cf398_ok=0
+[ "$cf398_unres_rc" -eq 1 ] || cf398_ok=0
+printf '%s\n' "$cf398_unres_out" | grep -q '^UNRESOLVED FIXTURE-UNRESOLVED missing-fixture-run$' || cf398_ok=0
+printf '%s\n' "$cf398_unres_out" | grep -q 'new=FIXTURE-UNRESOLVED, cleared=' || cf398_ok=0
+[ "$cf398_res_rc" -eq 0 ] || cf398_ok=0
+printf '%s\n' "$cf398_res_out" | grep -q 'checked 1 complete rows, 0 unresolved' || cf398_ok=0
+if [ "$cf398_ok" -eq 1 ]; then
+  say "  PASS  CF-398 evidence checker contract on fixtures: ${cf398_proof}an unaccepted empty-evidence row and an unaccepted unresolved run exit 1 naming the row, and a run that resolves in events.jsonl is no finding"
 else
-  say "  FAIL  CF-398 evidence checker (exit $cf398_rc, strict $cf398_strict_rc): $cf398_count"
+  say "  FAIL  CF-398 evidence checker contract on fixtures (accepted ${cf398_acc_rc:-skipped}/strict ${cf398_acc_strict:-skipped}, empty-evidence $cf398_zero_rc, unresolved $cf398_unres_rc, resolvable $cf398_res_rc)"
   fails=$((fails+1))
 fi
 

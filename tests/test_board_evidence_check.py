@@ -161,7 +161,18 @@ class BoardEvidenceCheck(unittest.TestCase):
         )
         self.assertIn("checked 1 complete rows, 1 unresolved", without_history.stdout)
 
-    def test_live_repo_uses_derived_count_and_strict_contract(self):
+    def test_live_repo_census_invariants_hold_in_any_checkout(self):
+        """The live census is a report; only checkout-independent invariants are graded.
+
+        Evidence resolves against ``events.jsonl`` plus the git-untracked
+        ``.gitreins/history`` store, so the derived finding count is a property of
+        the CHECKOUT (0 run dirs in a fresh clone or in CI, more where the run
+        directories exist) and an equality against it can only hold on the machine
+        that measured it (CF-475).  What holds everywhere, and is asserted here: the
+        accepted baseline never exceeds what the census derived, the allowlist
+        accounting adds up, ``--strict`` fails exactly when the run reported a
+        finding, and the store line names a history root with its run-dir count.
+        """
         result = self.run_checker(ROOT)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         count_line = self.count_line(result.stdout)
@@ -178,7 +189,9 @@ class BoardEvidenceCheck(unittest.TestCase):
         self.assertIsNotNone(allow, result.stdout)
         accepted_ids, accepted, total = (int(value) for value in allow.group(2, 3, 4))
         new_ids = [] if allow.group(5) == "none" else allow.group(5).split(",")
-        self.assertEqual(accepted, total)
+        # accepted <= derived in any checkout: the allowlist can only accept ids the
+        # census found, and every finding is either accepted or new.
+        self.assertLessEqual(accepted, total)
         self.assertEqual(total, unresolved_count)
         self.assertEqual(len(new_ids), total - accepted)
         self.assertGreaterEqual(accepted_ids, accepted)
@@ -194,8 +207,17 @@ class BoardEvidenceCheck(unittest.TestCase):
         )
         self.assertEqual(expected, accepted)
 
+        # The census names its population, so a reader can tell a checkout with 0 run
+        # dirs from the one that owns them.
+        store_line = [
+            line for line in result.stdout.splitlines() if line.startswith("stores:")
+        ]
+        self.assertEqual(len(store_line), 1, result.stdout)
+        history_roots = re.findall(r"history=(.+?) \((\d+) run dirs\)", store_line[0])
+        self.assertGreaterEqual(len(history_roots), 1, store_line[0])
+
         strict = self.run_checker(ROOT, "--strict")
-        self.assertEqual(strict.returncode, 1 if unresolved_count > 0 else 0)
+        self.assertEqual(strict.returncode, 1 if unresolved_count else 0)
 
     def test_allowlist_cannot_absorb_a_new_zero_evidence_row(self):
         """The accepted baseline is a dated allowlist, not a runtime-derived count.
@@ -209,13 +231,21 @@ class BoardEvidenceCheck(unittest.TestCase):
         self.assertTrue(module.ACCEPTED_UNRESOLVED_DATE)
         allowlisted_id = sorted(module.ACCEPTED_UNRESOLVED)[0]
         _complete, live_findings, _ignored, _bases = module.check(ROOT, None)
-        self.assertTrue(live_findings, "the live board carries accepted findings")
+        self.assertTrue(live_findings, "the live board carries findings")
         for row_id, kind, run_ids in live_findings:
             self.assertIn(kind, ("unresolved", "zero-evidence"))
-            self.assertIn(row_id, module.ACCEPTED_UNRESOLVED)
             if kind == "zero-evidence":
                 self.assertEqual(run_ids, [])
-        self.assertEqual(module.expected_unresolved(live_findings), len(live_findings))
+                # A zero-evidence finding does not depend on the history store, so in
+                # any checkout the board's empty pointers must be accepted ids; a new
+                # one is exactly the debt the allowlist cannot absorb.
+                self.assertIn(row_id, module.ACCEPTED_UNRESOLVED)
+        # Store-independent bound: the dated allowlist can accept at most the findings
+        # the census derived.  The equality that discriminates is asserted below on a
+        # fixture board, where the population is not a property of the checkout.
+        self.assertLessEqual(
+            module.expected_unresolved(live_findings), len(live_findings)
+        )
 
         tasks_path = os.path.join(ROOT, ".coding-hermes", "board", "tasks.jsonl")
         board_zero_evidence = {

@@ -11,13 +11,26 @@ Two shapes are findings:
   not a resolved pointer: without this finding the row is silently counted as
   satisfied and the gate cannot fail on it.
 
+POPULATION RULE (CF-475).  A finding means "resolves in NEITHER" of two stores
+with different lifetimes: the committed ``events.jsonl``, and the GitReins
+history store (``.gitreins/history``), which is git-untracked and therefore
+absent from every fresh clone and from CI.  The derived finding count is thus a
+property of the CHECKOUT, not of the committed tree: the same commit reports
+fewer findings where the run directories exist on disk and more where they do
+not.  This checker must not be graded on that number.  The CF-398 arm of
+``tests/selftest.sh`` asserts this checker's CONTRACT on the fixtures under
+``tests/fixtures/board_evidence`` — an allowlisted-only finding set, an
+unaccepted empty-evidence row, and an unaccepted unresolved run — so the gate
+holds in any checkout.  The ``checked N complete rows, M unresolved`` census
+remains a report for a human, printed with the store roots and their run-dir
+counts beside it.
+
 The accepted debt is an EXPLICIT DATED ALLOWLIST of row ids, never a number
 derived from the rows being graded.  ``expected_unresolved`` is therefore the
 number of findings the allowlist names, which stays below the reported count the
-moment a complete row nobody accepted appears — that disagreement is what the
-CF-398 selftest arm fails on.  The summary line's ``cleared`` count is allowlist
-ids that no longer fail: good news, so it is reported for pruning rather than
-failed on.
+moment a complete row nobody accepted appears.  The summary line's ``cleared``
+count is allowlist ids that no longer fail: good news, so it is reported for
+pruning rather than failed on.
 """
 
 import argparse
@@ -289,6 +302,12 @@ def main(argv=None):
             f"expected_unresolved={expected_unresolved(findings)}"
             f" (accepted by the {ACCEPTED_UNRESOLVED_DATE} allowlist, not derived"
             " from the findings)"
+        )
+        print(
+            "note: evidence resolves against events.jsonl plus the history store(s)"
+            " above, which are git-untracked, so a checkout with 0 run dirs (a fresh"
+            " clone or CI) reports a larger derived count by construction — the CF-398"
+            " gate asserts this checker's contract on fixtures, not this census."
         )
     print(f"checked {len(complete_rows)} complete rows, {len(findings)} unresolved")
     if args.strict and findings:
