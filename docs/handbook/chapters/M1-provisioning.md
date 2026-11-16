@@ -262,6 +262,7 @@ EVIDENCE: docs/OPERATIONS.md
 
 | Setting | Default | Range | Governs | What breaks if changed |
 |---|---|---|---|---|
+| `--harness H` | `hermes` | one of the adapters this tree ships (`scripts/harness/install-*.sh`) | which adapter runs the work inside the node | the name is judged against two run-time sets before anything is staged: a name in neither is `FAIL harness — '<h>' is not an adapter: this tree ships …` listing the derived set, and a name `specs/HARNESS.md` declares with no installer here is a different row citing the spec and CF-006, so a typo and an unshipped adapter never read the same (CF-125). `--help`/`-h` print the usage block and exit 0 with `CRIER_URL` and `BUNKER_SERVER` unset |
 | `--deploy-key FILE` | none | an SSH private key, owner-only mode | injects the per-repo credential at spawn | a readable key is refused (`FAIL deploy_key — … mode 0644`) **before any agent is spawned**; unset means the node clones with whatever identity it has |
 | `--gomodcache PATH` | none | an **absolute path on the node** | points the node at a sealed shared module cache | a relative path is refused (`FAIL gomodcache`); unset leaves a private cache and layer 10 prints the WARN |
 | `--ref R` | `main` (or `NODE_REF`) | a git ref | the branch or tag cloned | unchanged by CF-003 |
