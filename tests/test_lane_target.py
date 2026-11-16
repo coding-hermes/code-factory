@@ -147,9 +147,9 @@ class ParseRemote(unittest.TestCase):
         self.assertEqual((t.kind, t.agent, t.path), ("remote", "cf-worker", "/srv/cf"))
 
     def test_ipv4_host(self):
-        self.assertEqual(
-            lane_target.parse("b@192.168.1.20:/srv/cf").host, "192.168.1.20"
-        )
+        # RFC 5737 TEST-NET-1: a fixture must not name a live private range, or the published
+        # tree carries that address (CF-470).
+        self.assertEqual(lane_target.parse("b@192.0.2.10:/srv/cf").host, "192.0.2.10")
 
     def test_bad_port(self):
         with self.assertRaises(lane_target.TargetError):

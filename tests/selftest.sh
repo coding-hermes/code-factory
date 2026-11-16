@@ -7025,6 +7025,11 @@ rm -rf "$cf006"
 # ch:trace row=CF-050 spec=docs/ACCEPTANCE-PLAN.md#section-61 wave=none:serial-worker test=tests/selftest.sh::CF050_publish_gate doc=docs/handbook/chapters/VIII-5-tests.md,docs/audits/cf050-repair-path.sh evidence=none:no-frozen-transcript witness=none:not-published verdict=none:foreman-runs-gitreins commit=none:foreman-commit memory=none:foreman-closeout
 # CF-050: the published tree must not contain absolute host-home paths. The zero baseline
 # makes this a hard publication gate; .gitreins and the foreman-owned board are excluded.
+# CF-470: the second leak family is a private IPv4 literal — the published handbook named a live
+# LAN host and its gateway port. The octets are ANCHORED on purpose: the board row's loose spelling
+# `\b(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.)` matches ordinary prose list numbering
+# ("10. **Do not grade your own homework.**") and can never pass on this tree — 626 hits against 4
+# real ones. A gate that cannot pass is decoration, so the criterion is the per-octet pattern below.
 cf050_publish_gate() {
   local root=$1 baseline=$2 H I repair_paths count paths repair_count
   # Grade the index as publication truth. A committed leak that the index no longer carries is a
@@ -7032,7 +7037,11 @@ cf050_publish_gate() {
   # A host-home leak is an absolute /home/<name>/ that is not part of a larger path expression, so
   # "$tmpd/fakeroot/repo" (a scratch-relative path) must not be read as a leak.
   local pat='(^|[^A-Za-z0-9])/home/[a-z][a-z0-9_-]*/'
+  local addr='\b((192\.168)|(10\.[0-9]{1,3})|(172\.(1[6-9]|2[0-9]|3[01])))\.[0-9]{1,3}\.[0-9]{1,3}\b'
   local excl=(':!.gitreins/**' ':!.coding-hermes/board/**')
+  # An audit report's job is to quote the leak it reports, so docs/audits keeps the address it
+  # names. The published handbook, the scripts and the tests do not get that exemption.
+  local excl_addr=(':!.gitreins/**' ':!.coding-hermes/board/**' ':!docs/audits/**')
   # Options must precede the pattern: `git grep <pattern> --cached` reads --cached as a pathspec.
   H=$(git -C "$root" grep -lIE "$pat" HEAD -- . "${excl[@]}" 2>/dev/null \
     | sed 's/^HEAD://' | sort -u || true)
@@ -7053,6 +7062,32 @@ cf050_publish_gate() {
     say "  PASS  publish paths — baseline $baseline, current $count (REPAIR: $repair_count committed $repair_word staged for removal: ${repair_paths% })"
   else
     say "  PASS  publish paths — baseline $baseline, current $count"
+  fi
+  # CF-470: the private-IPv4 family, graded with the same index+HEAD union and the same staged-repair
+  # semantics, so the commit that redacts an address is not refused by the gate it is fixing. The FAIL
+  # row names the pattern AND every offending file:line — a bare count sends the reader back to grep.
+  local a_head a_index a_hits a_count a_repair a_word
+  # Options must precede the pattern: `git grep <pattern> --cached` reads --cached as a pathspec.
+  a_head=$(git -C "$root" grep -nIE "$addr" HEAD -- . "${excl_addr[@]}" 2>/dev/null \
+    | sed -E 's/^HEAD:([^:]+):([0-9]+):.*/\1:\2/' | sort -u || true)
+  a_index=$(git -C "$root" grep --cached -nIE "$addr" -- . "${excl_addr[@]}" 2>/dev/null \
+    | sed -E 's/^([^:]+):([0-9]+):.*/\1:\2/' | sort -u || true)
+  a_count=$(printf '%s\n' "$a_index" | grep -c . || true)
+  if [ "$a_count" -gt 0 ]; then
+    a_hits=$(printf '%s\n' "$a_index" | sed -n '1,10p' | tr '\n' ' ')
+    say "  FAIL  publish paths — private IPv4 — pattern: $addr — baseline 0, current $a_count; paths: ${a_hits% }"
+    return 1
+  fi
+  a_repair=$(comm -23 <(printf '%s\n' "$a_head" | cut -d: -f1 | sort -u) \
+    <(printf '%s\n' "$a_index" | cut -d: -f1 | sort -u) | sed '/^$/d')
+  a_count=$(printf '%s\n' "$a_repair" | grep -c . || true)
+  if [ "$a_count" -gt 0 ]; then
+    a_word=path
+    [ "$a_count" -eq 1 ] || a_word='paths'
+    a_hits=$(printf '%s\n' "$a_repair" | sed -n '1,10p' | tr '\n' ' ')
+    say "  PASS  publish paths — private IPv4 — baseline 0, current 0 (REPAIR: $a_count committed $a_word staged for removal: ${a_hits% })"
+  else
+    say "  PASS  publish paths — private IPv4 — baseline 0, current 0"
   fi
   return 0
 }
@@ -7109,6 +7144,51 @@ if [ "$rc" -eq 0 ] \
   say "  PASS  staged removal -> committed leak is a named repair"
 else
   say "  FAIL  staged removal did not open the repair path (exit $rc): $out"; fails=$((fails+1))
+fi
+# CF-470 arm (a): a committed private address must FAIL, and the row must name the pattern and the
+# offending file:line. The octets are written as separate printf arguments for the same reason the
+# host-home fixture builds its path from pieces: this test must not seed the tree it grades.
+cf050_addr="$cf050/addr"
+git init -q -b trunk "$cf050_addr"
+mkdir -p "$cf050_addr/docs"
+printf 'node_ip: %s.%s.%s.%s\n' 192 168 0 1 > "$cf050_addr/docs/leak.md"
+git -C "$cf050_addr" add docs/leak.md
+git -C "$cf050_addr" -c user.name=fixture -c user.email=fixture@example.invalid commit -qm fixture
+out=$(cf050_publish_gate "$cf050_addr" 0 2>&1); rc=$?
+if [ "$rc" -ne 0 ] \
+   && printf '%s\n' "$out" | grep -Fq '  FAIL  publish paths — private IPv4 — pattern: ' \
+   && printf '%s\n' "$out" | grep -Fq 'paths: docs/leak.md:1'; then
+  say "  PASS  seeded private address -> FAIL names the anchored pattern and docs/leak.md:1; gate is falsifiable"
+else
+  say "  FAIL  a seeded private address did not trigger the named address row (exit $rc): $out"; fails=$((fails+1))
+fi
+# CF-470 arm (b): the anchor is load-bearing, so prose list numbering must NOT trip the gate. The row's
+# loose spelling is measured on the same line (it matches) — that is why the anchored octets are the
+# criterion and the loose one cannot be.
+cf050_prose="$cf050/prose"
+git init -q -b trunk "$cf050_prose"
+mkdir -p "$cf050_prose/docs"
+printf '%s\n' '10. **Do not grade your own homework.** The node reports what it did.' > "$cf050_prose/docs/prose.md"
+git -C "$cf050_prose" add docs/prose.md
+git -C "$cf050_prose" -c user.name=fixture -c user.email=fixture@example.invalid commit -qm fixture
+out=$(cf050_publish_gate "$cf050_prose" 0 2>&1); rc=$?
+cf050_loose=$(grep -cE '\b(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.)' "$cf050_prose/docs/prose.md" || true)
+if [ "$rc" -eq 0 ] \
+   && printf '%s\n' "$out" | grep -Fq '  PASS  publish paths — private IPv4 — baseline 0, current 0' \
+   && [ "${cf050_loose:-0}" -ge 1 ]; then
+  say "  PASS  prose list numbering does not trip the address arm; the loose spelling matches the same line ${cf050_loose}x and cannot pass"
+else
+  say "  FAIL  prose list numbering tripped the address arm or the loose spelling did not match (exit $rc, loose=${cf050_loose:-0}): $out"; fails=$((fails+1))
+fi
+# CF-470 arm (c): the staged-repair path must exist for the address family too, or the commit that
+# redacts an address is refused by the gate it is fixing.
+git -C "$cf050_addr" rm -q docs/leak.md
+out=$(cf050_publish_gate "$cf050_addr" 0 2>&1); rc=$?
+if [ "$rc" -eq 0 ] \
+   && printf '%s\n' "$out" | grep -Fq 'private IPv4 — baseline 0, current 0 (REPAIR: 1 committed path staged for removal: docs/leak.md)'; then
+  say "  PASS  staged removal of a private address -> named repair (a redaction commit is not self-refused)"
+else
+  say "  FAIL  staged address removal did not open the repair path (exit $rc): $out"; fails=$((fails+1))
 fi
 rm -rf "$cf050"
 

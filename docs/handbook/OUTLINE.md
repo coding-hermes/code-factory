@@ -191,7 +191,11 @@ modules get their own chapter.
   (`master_doc_fill.py`) · S3 gate (`master_doc_check.py`) · S4 panel
   (`master_doc_panel.py`) · S5 render (`gen_nasa_handbook.py`, `gen_system_views.py`,
   `sheet_style.py`) · S6 corpus (`extract_owner_decisions.py`) · **S7 unit-map
-  generation** (`gen_unit_map.py`) · **S8 patch-chain drift gate** (`verify-patch.sh`) ·
+  generation and the published-address rule** (`gen_unit_map.py`) — the rule is stated
+  once in `docs/handbook/chapters/M6-documentation.md` §III.M6.S7, and it forbids a
+  published appendix from carrying an absolute host-home path or a private IPv4 literal
+  (and with it the node's gateway port); graded by `tests/selftest.sh` §61 · **S8
+  patch-chain drift gate** (`verify-patch.sh`) ·
   **S9 spine gate** (`handbook_spine.py`)
 - **M7 GITHUB** — S1 app credentials (`github-app-setup.sh`, `github-app-token.py`,
   `github-app-refresh.sh`)

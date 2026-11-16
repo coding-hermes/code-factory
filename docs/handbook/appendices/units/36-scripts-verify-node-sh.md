@@ -92,13 +92,13 @@
 unknown arg: --check
 ```
 
-The real run on this control host (verbatim, `EXIT=1`; `BUNKER_SERVER` unset in the shell, `--server` supplied):
+The real run on this control host (verbatim, `EXIT=1`; `BUNKER_SERVER` unset in the shell, `--server` supplied). The node's own LAN address and gateway port are redacted to `<node-ip>` and `<port>` here and in every transcript below (`III.M6.S7`); the verdicts, codes and detail text are the captured run:
 
 ```
 verify node cf-node
   PASS  agent_alive — ALIVE bunker-las-03
-  PASS  node_ip — 192.168.123.66
-  WARN  gateway_reachable — no transport from this host to 192.168.123.66:10800 — the gateway answers 200 INSIDE the node, so this is unverified, not failed (CF-224: publish a port or define the transport)
+  PASS  node_ip — <node-ip>
+  WARN  gateway_reachable — no transport from this host to <node-ip>:<port> — the gateway answers 200 INSIDE the node, so this is unverified, not failed (CF-224: publish a port or define the transport)
   WARN  unauth_refused — unverified from here (no transport); inside the node it answers 401
   FAIL  checkout_freshness — sync — behind=26 (HEAD..origin/main e7cf075ffff4): 71 differing path(s) — .coding-hermes/board/events.jsonl, .coding-hermes/board/tasks.jsonl, .gitreins/history/2026-11-05/0e9f844d/commit.patch, .gitreins/history/2026-11-05/0e9f844d/summary.md, .gitreins/history/2026-11-05/0e9f844d/verdict.json, .gitreins/history/2026-11-05/3f14d5b8/verdict.json, .gitreins/history/2026-11-05/94c31d59/commit.patch, .gitreins/history/2026-11-05/94c31d59/summary.md, .gitreins/history/2026-11-05/94c31d59/verdict
   PASS  seed_drift — ~/.hermes/seed-applied.json: 13 seeded files present and matching
@@ -106,7 +106,7 @@ verify node cf-node
 VERIFY: FAIL (1)
 ```
 
-That run is the ladder working, not a defect: the node answered inside itself (200 / 401), this host has no transport to `192.168.123.66:10800`, and the checkout is 26 commits behind `origin/main` — the FAIL outranks the UNVERIFIED exactly as coded [scripts/verify-node.sh:206] [scripts/verify-node.sh:207]. The `checkout_freshness` row is cut at 500 characters by the parent [scripts/verify-node.sh:143].
+That run is the ladder working, not a defect: the node answered inside itself (200 / 401), this host has no transport to `<node-ip>:<port>`, and the checkout is 26 commits behind `origin/main` — the FAIL outranks the UNVERIFIED exactly as coded [scripts/verify-node.sh:206] [scripts/verify-node.sh:207]. The `checkout_freshness` row is cut at 500 characters by the parent [scripts/verify-node.sh:143].
 
 The pure UNVERIFIED arm (fixture peers: this host's `bunker` and `curl` replaced by stubs that answer the two fixed probes and nothing else; verbatim, `EXIT=3`):
 
@@ -114,7 +114,7 @@ The pure UNVERIFIED arm (fixture peers: this host's `bunker` and `curl` replaced
 verify node fx
   PASS  agent_alive — ALIVE fx-node
   PASS  node_ip — 127.0.0.1
-  WARN  gateway_reachable — no transport from this host to 127.0.0.1:10800 — the gateway answers 200 INSIDE the node, so this is unverified, not failed (CF-224: publish a port or define the transport)
+  WARN  gateway_reachable — no transport from this host to 127.0.0.1:<port> — the gateway answers 200 INSIDE the node, so this is unverified, not failed (CF-224: publish a port or define the transport)
   WARN  unauth_refused — unverified from here (no transport); inside the node it answers 401
   WARN  checkout_freshness — FAIL (bunker exec failed: fx-bunker: unhandled remote command) — the checkout could not be measured; pass --strict-freshness to refuse it
   WARN  seed_drift — bunker exec failed: fx-bunker: unhandled remote command — the seed could not be measured; pass --strict-seed to refuse it — the seed could not be measured; pass --strict-seed to refuse it
@@ -126,7 +126,7 @@ VERIFY: UNVERIFIED — the node answered inside itself, but this host has no tra
 A real HTTP answer that is not `200` stays a FAIL (fixture, verbatim, `EXIT=1`):
 
 ```
-  FAIL  gateway_reachable — http://127.0.0.1:10800/api/status -> 502 (is the harness running on 0.0.0.0:10800?)
+  FAIL  gateway_reachable — http://127.0.0.1:<port>/api/status -> 502 (is the harness running on 0.0.0.0:<port>?)
   FAIL  unauth_refused — /api/system/stats -> 502 — auth refusal not verified
 
 VERIFY: FAIL (2)
@@ -229,7 +229,7 @@ One runbook sentence survives intact and is worth keeping: "A WARN is not approv
 
 | Defect | Presents as | Direction | Evidence |
 |---|---|---|---|
-| `--port` is interpolated unescaped into a remote `bash -lc` string | the remote command text becomes `curl … 'http://127.0.0.1:10800';echo …;'/api/status'` — a quote in `--port` closes the quoted URL and starts a new command on the node [scripts/verify-node.sh:68] | **fail-open** (arbitrary command on the node from a control-host flag); the same class CF-159 fixed elsewhere, and the helper that exists for exactly this is `shq` [scripts/lib.sh:54] | measured with a tracing `bunker` stub: the exact remote text was captured verbatim (§8). `--port` is never validated and is also spliced into both URLs [scripts/verify-node.sh:59] [scripts/verify-node.sh:90]. Only `--artifact` goes through `shq` [scripts/verify-node.sh:107] |
+| `--port` is interpolated unescaped into a remote `bash -lc` string | the remote command text becomes `curl … 'http://127.0.0.1:<port>';echo …;'/api/status'` — a quote in `--port` closes the quoted URL and starts a new command on the node [scripts/verify-node.sh:68] | **fail-open** (arbitrary command on the node from a control-host flag); the same class CF-159 fixed elsewhere, and the helper that exists for exactly this is `shq` [scripts/lib.sh:54] | measured with a tracing `bunker` stub: the exact remote text was captured verbatim (§8). `--port` is never validated and is also spliced into both URLs [scripts/verify-node.sh:59] [scripts/verify-node.sh:90]. Only `--artifact` goes through `shq` [scripts/verify-node.sh:107] |
 | `/tmp/node-status.json` is a fixed, shared path | two concurrent verifies on one control host can grade `auth_gate` from the other run's body [scripts/verify-node.sh:62] [scripts/verify-node.sh:72] | **fail-open** — a stale body carrying `auth_required:true` passes a node that never sent it | measured: with the file pre-seeded and a peer that wrote nothing, the run printed `PASS auth_gate — auth_required:true` (§8). `mktemp` is used everywhere else in the file [scripts/verify-node.sh:108] |
 | The early abort prints `RESULT: FAIL`, not `VERIFY: FAIL` | a parser watching for `^VERIFY:` sees nothing on an agent-dead run, though the exit is 1 [scripts/verify-node.sh:53] | fail-closed, but a **silent gap for the consumer** | measured: `  FAIL  agent_alive — …` then `RESULT: FAIL`, exit 1 |
 | The seed WARN repeats its own sentence | `… the seed could not be measured; pass --strict-seed to refuse it — the seed could not be measured; pass --strict-seed to refuse it` [scripts/verify-node.sh:189] [scripts/verify-node.sh:194] | cosmetic, verdict unaffected | measured in five fixture arms |
@@ -261,7 +261,7 @@ Settings that live outside this file but decide its verdict: the node's `dashboa
 - Source read in full at `e7cf075`: 197 lines of `scripts/verify-node.sh`, 65 of `scripts/lib.sh`, and the two Python children it folds in. Every claim above resolves to one of those lines or to the peer file that owns the other side of the contract.
 - Runs recorded in this document, all on 2026-11-05 from this control host: real `--agent cf-node --server bunker-las-03` → `VERIFY: FAIL (1)`, exit 1, with two UNVERIFIED WARN rows and a `behind=26` checkout; the same with `--artifact /etc/hostname` → `PASS artifact_digest — hostname 96aa37a6e3ab on both sides`, exit 1; with `--artifact /nonexistent-fx36` → `VERIFY: FAIL (2)`, exit 1; `--server no-such-server-fx36` → `RESULT: FAIL`, exit 1; `--check` → `unknown arg: --check`, exit 2; no `--agent` → usage, exit 2; no server → `set BUNKER_SERVER or pass --server <name>`, exit 2.
 - Sixteen ladder arms ran against stub `bunker`/`curl` peers in `~/.hermes/cache/scratch/fx36/` (a tracing stub records the exact remote command text the node would run), plus `--check`, which is parsed before any peer is touched: PASS 0, FAIL 1, `auth_required`-absent FAIL, 502 FAIL, open-gate FAIL, gap-with-200-inside exit 3, gap-with-nothing-inside exit 3, both strict flags exit 1, `--strict-freshness` exit 1, `--strict-seed` exit 1, `--server`-only exit 3, `--port` with a quote exit 3, the stale-`/tmp/node-status.json` arm, and the three usage arms. The `/tmp/node-status.json` arm printed `PASS auth_gate — auth_required:true` for a run that fetched no body, which is the §6c race.
-- The stub trace that proves the `--port` interpolation is on record: the node-side command text was captured verbatim as `curl -s -o /dev/null -w '%{http_code}' --max-time 5 'http://127.0.0.1:10800';echo FX36_INJECTED;'/api/status'` — the quote closes the URL literal. Remote execution of that text was deliberately **not** run: the harness refused the local demonstration, so the record covers the interpolation and stops there.
+- The stub trace that proves the `--port` interpolation is on record: the node-side command text was captured verbatim as `curl -s -o /dev/null -w '%{http_code}' --max-time 5 'http://127.0.0.1:<port>';echo FX36_INJECTED;'/api/status'` — the quote closes the URL literal. Remote execution of that text was deliberately **not** run: the harness refused the local demonstration, so the record covers the interpolation and stops there.
 - `lib.sh` absence was measured by copying the script into a directory without it: `./verify-node.sh: line 18: …/lib.sh: No such file or directory`, six `command not found` lines, then `line 191: FAILED: unbound variable`, exit 1.
 - Checkout leg proved green independently of the node: `python3 scripts/node_freshness.py --workdir .` in this worktree → `PASS freshness — branch=wt/md-36b head=e7cf075ffff4 origin_main=e7cf075ffff4 ancestor=true behind=0`, `RESULT: PASS`, exit 0 [scripts/node_freshness.py:366].
 - The 401 rule is grounded in the bus contract as well as this file: an unsigned read is a 401 by design, so a 401 is evidence the gate exists [fact: FACT-03]; nothing in this file treats 401 as a failure [scripts/verify-node.sh:92] [scripts/verify-node.sh:97].

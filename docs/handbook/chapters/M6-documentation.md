@@ -297,6 +297,20 @@ The rendered gate checks fit, page size, monochrome output, fonts, running furni
 
 Required metrics cover stage duration, candidate and artifact counts, missing references, lint/build/visual failures, unresolved blockers, reviewer budget stops and acceptance latency. Acceptance cases cover a missing figure, an orphan heading, an undersized label, a stale citation, a clean structural gate with an open semantic finding and a repeated build with the same manifest digest.
 
+<a id="III.M6.S7"></a>
+### III.M6.S7 — what a published appendix may say about a node address
+
+Every unit in `docs/handbook/appendices/units/` is published to the owner, so the appendix corpus is graded as publication truth by the gate in `tests/selftest.sh` section 61 (`cf050_publish_gate`). Two leak families are refused, both over the union of the index and `HEAD`, both with baseline 0:
+
+- an absolute host-home path — `/home/<user>/…` — the CF-050 family;
+- a private IPv4 literal — `192.168.…`, `10.…` or `172.16.…`–`172.31.…`, all four octets anchored — the CF-470 family. The gate greps it with
+
+      \b((192\.168)|(10\.[0-9]{1,3})|(172\.(1[6-9]|2[0-9]|3[01])))\.[0-9]{1,3}\.[0-9]{1,3}\b
+
+  and its FAIL row names that pattern and every offending `file:line`, not a bare count. The unanchored spelling `\b(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.)` is **not** the criterion: it matches ordinary prose list numbering (`10. **Do not grade your own homework.**`) and can never pass on this corpus.
+
+What an appendix may publish instead is the placeholder spelling this corpus already uses: `<node-ip>` for the address and `<node-ip>:<port>` — or `<port>` on its own — for the gateway. The verdict, the HTTP code and the detail text stay verbatim, because the ladder's output is the evidence; only the addressing is replaced. Not leaks, and no placeholder needed: a loopback address, a hostname, and an address from an RFC 5737 documentation range (`192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24`), which is what an executable fixture must use when it needs an address to parse. `docs/audits/` is excluded from the address family alone, because an audit report's job is to quote the leak it reports. A staged removal opens the gate's repair path, so the commit that redacts an address is not refused by the gate it is fixing. The corpus-level consistency gate that selects these chapters is `handbook_spine.py` (S9, §7); this section does not restate its checks.
+
 ## 16. P5 reproducible build and decision protocol
 
 This section resolves P5-B-33/34/36/38. It distinguishes the supported source path
