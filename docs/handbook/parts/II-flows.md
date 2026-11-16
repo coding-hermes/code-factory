@@ -715,7 +715,9 @@ and automatic repair stays within configured authority and capacity.
 
 The target recovery query and independently checkable interruption vector are M9
 §17.1; it reconciles all simultaneous local/custody/native/sink states without
-inventing a distributed transaction. Runtime conformance is unverified.
+inventing a distributed transaction. Runtime conformance is unverified. The
+repository-local oracle is `python3 tests/test_durable_records_vector.py`; it
+checks the M9 table's ten crash cases and the single P5G-02 trace marker.
 
 **Target fencing:** Part I §§1.9.3–1.9.3a and M7 §17–17.1 govern the
 independent authority, effect gate and each protected resource, including the
