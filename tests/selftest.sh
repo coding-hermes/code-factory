@@ -2654,12 +2654,19 @@ print("fixture bus worker")
                BUNKER_SERVER="fixture-server", CRIER_URL="http://fixture.invalid:8767",
                FIXTURE_PAYLOAD=str(fixture / "payload"), FIXTURE_VALUES=str(fixture / "values"))
     malicious = "p'; touch $HOME/PWNED; echo '"
+    # CF-125: the harness name must also name an adapter file this tree ships, and the fixture adapter
+    # is a file whose basename IS that name — a '/' in the payload splits it into a directory
+    # component, so no install-*.sh could ever carry the name and the create path would refuse it as
+    # an unknown adapter instead of exercising the quoting. Same shell-hostile shape without a slash,
+    # and it gets its own injection marker to assert below.
+    malicious_harness = "x'; touch HARNESS_PWNED; echo '"
     normal = dict(project="fixture", port="10800", harness="hermes",
                   repo="https://fixture.invalid/repo.git", ref="main", crier=env["CRIER_URL"])
     # Include every data field, not just the reported project exploit. A harmless
     # adapter fixture lets an unusual harness name pass the staging precondition.
     for field, value in [("project", malicious), ("project", "my proj's")] + [
-        (field, malicious) for field in ("port", "harness", "repo", "ref", "crier")
+        (field, malicious_harness if field == "harness" else malicious)
+        for field in ("port", "harness", "repo", "ref", "crier")
     ]:
         values = dict(normal, **{field: value})
         adapter = scripts / f"harness/install-{values['harness']}.sh"
@@ -2685,6 +2692,7 @@ print("fixture bus worker")
         executed = run(["bash", "-lc", payload], env, fixture)
         assert executed.returncode == 0, executed.stderr
         assert not (home / "PWNED").exists(), "node-create injection executed"
+        assert not (fixture / "HARNESS_PWNED").exists(), "node-create harness injection executed"
         expected = [values["project"], values["port"], values["crier"], "--apply",
                     "--project", values["project"], "--harness", values["harness"],
                     "--repo", values["repo"], "--ref", values["ref"]]
@@ -7830,6 +7838,130 @@ else
   say "  FAIL  CF-432 hardcoded corpus path remains"; fails=$((fails+1))
 fi
 rm -rf "$cf432"
+
+say "75. node-create --harness names the adapter set it derived, and --help asks nothing of the environment (CF-125)"
+# Three cases used to collapse into one row. A typo, a name specs/HARNESS.md declares while this
+# tree ships no installer for it, and a name this tree ships are now three diagnoses. The real entry
+# point runs in every arm; the second and third are produced hermetically by deleting ONE installer
+# from a private copy of scripts/ + specs/ and putting it back, so the derivation — not a hard-coded
+# name — decides the branch. The last arm is the pre-fix revision as the red control: it must still
+# answer `unknown arg: --help` and report the typo as a missing staged file, or the arms prove
+# nothing about the change.
+cf125=$(mktemp -d)
+mkdir -p "$cf125/tree/specs" "$cf125/home"
+cp -R "$HERE/scripts" "$cf125/tree/scripts"
+rm -rf "$cf125/tree/scripts/__pycache__"
+cp "$HERE/specs/HARNESS.md" "$cf125/tree/specs/HARNESS.md"
+# A bus URL and NO server host on purpose: a harness this tree ships reaches the documented
+# `server_declared` abort, which is how "this name is on the shipped branch now" becomes observable.
+cf125_create() {  # cf125_create <tree-root> <harness>
+  env -i PATH=/usr/bin:/bin HOME="$cf125/home" CRIER_URL=http://crier.example:8767 \
+    /bin/bash "$1/scripts/node-create.sh" --project fixture \
+    --repo https://github.com/github/gitignore --harness "$2" 2>&1
+}
+cf125_help() {  # cf125_help <tree-root> <flag> — CRIER_URL and BUNKER_SERVER are both unset here
+  env -i PATH=/usr/bin:/bin HOME="$cf125/home" /bin/bash "$1/scripts/node-create.sh" "$2" 2>&1
+}
+
+# a. typo -> the row says the name is unknown AND lists the adapters the tree ships, so the operator
+# learns what to type instead of which file is missing.
+out=$(cf125_create "$HERE" hermes-typo); rc=$?
+row_typo=$(printf '%s\n' "$out" | grep -F '  FAIL  harness — ' | head -1)
+if [ "$rc" -ne 0 ] \
+  && [ "$(printf '%s\n' "$out" | grep -Fc '  FAIL  harness — ')" = 1 ] \
+  && printf '%s\n' "$row_typo" | grep -Fq "'hermes-typo' is not an adapter" \
+  && printf '%s\n' "$row_typo" | grep -Fq 'aider' \
+  && printf '%s\n' "$row_typo" | grep -Fq 'opencode' \
+  && ! printf '%s\n' "$row_typo" | grep -Fq 'declared in specs/HARNESS.md'; then
+  say "  PASS  a. typo -> exit $rc, one FAIL harness row naming the adapters this tree ships"
+else
+  say "  FAIL  a. typo did not name the shipped adapter set (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+# b. spec-declared adapter with no installer in this tree -> a different row that cites the spec and
+# CF-006 and does not read as a broken checkout.
+rm -f "$cf125/tree/scripts/harness/install-aider.sh"
+out=$(cf125_create "$cf125/tree" aider); rc=$?
+row_declared=$(printf '%s\n' "$out" | grep -F '  FAIL  harness — ' | head -1)
+if [ "$rc" -ne 0 ] \
+  && printf '%s\n' "$row_declared" | grep -Fq "'aider' is declared in specs/HARNESS.md but this tree ships no installer for it (no scripts/harness/install-aider.sh); see CF-006" \
+  && [ -n "$row_typo" ] && [ "$row_declared" != "$row_typo" ] \
+  && ! printf '%s\n' "$out" | grep -Fq 'staged_set'; then
+  say "  PASS  b. declared adapter with no installer -> exit $rc, a different row citing specs/HARNESS.md and CF-006"
+else
+  say "  FAIL  b. the declared-but-missing branch was not distinguished from a typo (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+# c. the reverse direction: putting the installer back moves the SAME name onto the shipped branch.
+# The manifest carries it and the create path reaches the documented server_declared abort, so the
+# derivation is not stale in either direction.
+cp "$HERE/scripts/harness/install-aider.sh" "$cf125/tree/scripts/harness/install-aider.sh"
+staged_out=$(env -i PATH=/usr/bin:/bin HOME="$cf125/home" \
+  /bin/bash "$cf125/tree/scripts/node-create.sh" --staged-files --harness aider 2>&1); staged_rc=$?
+out=$(cf125_create "$cf125/tree" aider); rc=$?
+if [ "$staged_rc" -eq 0 ] && printf '%s\n' "$staged_out" | grep -Fxq 'harness/install-aider.sh' \
+  && [ "$rc" -eq 1 ] && ! printf '%s\n' "$out" | grep -Fq '  FAIL  harness — ' \
+  && printf '%s\n' "$out" | grep -Fxq '  FAIL  server_declared — BUNKER_SERVER unset — no agent host to create the node on'; then
+  say "  PASS  c. the restored installer makes the name shipped: manifest exit $staged_rc carries it, create reaches server_declared"
+else
+  say "  FAIL  c. the restored installer did not move the name onto the shipped branch (manifest exit $staged_rc, create exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+# d. --help and -h exit 0 with both environment values unset, and the usage line names every flag
+# the parser accepts — derived from the parser itself, so a flag added there without a usage line
+# turns this arm red.
+help_out=$(cf125_help "$HERE" --help); help_rc=$?
+short_out=$(cf125_help "$HERE" -h); short_rc=$?
+usage_line=$(printf '%s\n' "$help_out" | grep -E '^usage: ' | head -1)
+parsed_flags=$(grep -oE '^[[:space:]]+--[a-z-]+[)|]' "$HERE/scripts/node-create.sh" \
+  | sed -e 's/^[[:space:]]*//' -e 's/[)|]$//' | grep -vx -- '--help' | sort -u)
+missing_flags=""
+n_flags=$(printf '%s\n' "$parsed_flags" | grep -c .)
+for flag in $parsed_flags; do
+  printf '%s\n' "$usage_line" | grep -Fq -- "$flag" || missing_flags="$missing_flags $flag"
+done
+if [ "$help_rc" -eq 0 ] && [ "$short_rc" -eq 0 ] \
+  && [ -n "$usage_line" ] && [ -z "$missing_flags" ] \
+  && printf '%s\n' "$usage_line" | grep -Fq -- '--port' \
+  && printf '%s\n' "$usage_line" | grep -Fq -- '--staged-files' \
+  && ! printf '%s\n' "$help_out" | grep -Fq '  FAIL  ' \
+  && ! printf '%s\n' "$help_out" | grep -Fq 'CRIER_URL unset'; then
+  say "  PASS  d. --help and -h -> exit 0 with CRIER_URL/BUNKER_SERVER unset, usage line names all $n_flags parser flags"
+else
+  say "  FAIL  d. --help demanded the environment or omitted a flag (help exit $help_rc, -h exit $short_rc, missing:${missing_flags:- none})"; fails=$((fails+1))
+  printf '%s\n' "$help_out" | sed 's/^/    | /'
+fi
+
+# e. red control: the revision the row was raised on must still show BOTH collapsed behaviours.
+mkdir -p "$cf125/before"
+cp -R "$HERE/scripts" "$cf125/before/scripts"
+rm -rf "$cf125/before/scripts/__pycache__"
+# Pair the pre-fix entry point with the project-node.sh of the SAME revision: the staged-set
+# validator reads that file's $HERE references, and mixing revisions would red the control for the
+# wrong reason (the CF-051 precedent).
+git -C "$HERE" show c1890a52:scripts/project-node.sh > "$cf125/before/scripts/project-node.sh" 2>/dev/null || true
+if git -C "$HERE" show c1890a52:scripts/node-create.sh > "$cf125/before/scripts/node-create.sh" 2>/dev/null; then
+  before_help=$(cf125_help "$cf125/before" --help); before_help_rc=$?
+  before_out=$(cf125_create "$cf125/before" hermes-typo); before_rc=$?
+  if [ "$before_help_rc" -eq 2 ] \
+    && printf '%s\n' "$before_help" | grep -Fq 'unknown arg: --help' \
+    && ! printf '%s\n' "$before_help" | grep -qE '^usage: ' \
+    && [ "$before_rc" -ne 0 ] \
+    && printf '%s\n' "$before_out" | grep -Fq 'FAIL  staged_set — missing scripts/harness/install-hermes-typo.sh' \
+    && ! printf '%s\n' "$before_out" | grep -Fq 'is not an adapter'; then
+    say "  PASS  e. pre-fix revision c1890a52 answers 'unknown arg: --help' and reports the typo as a missing staged file (red control)"
+  else
+    say "  FAIL  e. pre-fix control did not reproduce the collapsed behaviour (help exit $before_help_rc, typo exit $before_rc)"; fails=$((fails+1))
+    printf '%s\n' "$before_help" | sed 's/^/    | /'
+    printf '%s\n' "$before_out" | sed 's/^/    | /'
+  fi
+else
+  say "  FAIL  e. pre-fix source unavailable (git show c1890a52:scripts/node-create.sh)"; fails=$((fails+1))
+fi
+rm -rf "$cf125"
 
 say ""
 [ "$fails" -eq 0 ] && finish 0 || finish 1

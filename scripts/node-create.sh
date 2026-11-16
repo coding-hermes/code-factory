@@ -2,7 +2,12 @@
 # node-create.sh — control host: create a node from a project + repo + harness triple.
 #
 #   ./node-create.sh --project crier --repo git@… --harness hermes [--ref <branch-or-tag>] \
-#                    [--agent <id>] [--ttl 6h]
+#                    [--agent <id>] [--ttl 6h] [--port 10800] [--deploy-key <file>] \
+#                    [--gomodcache <path>] [--staged-files]
+#
+# --harness is judged against the adapters THIS TREE ships and the names specs/HARNESS.md declares,
+# so a typo names the set to choose from instead of failing on a staged file that never could exist
+# (CF-125). --help / -h print the usage block and exit 0 without CRIER_URL or BUNKER_SERVER.
 #
 # Spawns the agent if needed, stages the scripts into it, runs project-node.sh --apply inside,
 # then runs verify-node.sh. Idempotent: an existing agent is reused, not respawned.
@@ -164,8 +169,102 @@ incomplete() {
   exit 1
 }
 
+# ---- the --harness set ------------------------------------------------------------------------
+# A harness name is judged against TWO sets, both derived at run time so neither can go stale
+# (CF-125):
+#   shipped   the adapters this tree carries — whatever sits beside this script as
+#             harness/install-<name>.sh. Derived from the filesystem, never a hand-written list.
+#   declared  the adapter names specs/HARNESS.md's adapter table declares. The spec is the design
+#             authority, so its `| **<name>** |` rows are read as data rather than repeated here.
+# A typo and an adapter the spec declares but this tree does not ship are different diagnoses with
+# different next steps: the first is a name to correct, the second is a checkout missing a file the
+# spec says exists (CF-006). Collapsing them into one staged_set row told the operator neither.
+
+join_words() {  # join_words <word>... — the list as one operator-readable line
+  local out="" word
+  for word in "$@"; do out="${out:+$out, }$word"; done
+  printf '%s\n' "$out"
+}
+
+in_words() {  # in_words <needle> <word>... — 0 when the needle is one of the words
+  local needle="$1" word
+  shift
+  for word in "$@"; do [ "$word" = "$needle" ] && return 0; done
+  return 1
+}
+
+harness_shipped() {
+  local path name
+  for path in "$HERE"/harness/install-*.sh; do
+    [ -f "$path" ] || continue
+    name="${path##*/}"
+    name="${name#install-}"
+    printf '%s\n' "${name%.sh}"
+  done
+}
+
+harness_declared() {
+  local spec="$HERE/../specs/HARNESS.md" line name
+  [ -r "$spec" ] || return 0
+  while IFS= read -r line; do
+    case "$line" in '| **'*) ;; *) continue ;; esac
+    name="${line#'| **'}"
+    name="${name%%'**'*}"
+    case "$name" in ''|*[!a-z0-9-]*) continue ;; esac
+    printf '%s\n' "$name"
+  done < "$spec"
+}
+
+harness_validate() {  # 0 = this tree ships $HARNESS; 1 = a named FAIL row, do not continue
+  local -a shipped=() declared=()
+  local name shipped_line declared_line same_set=1
+  mapfile -t shipped < <(harness_shipped)
+  mapfile -t declared < <(harness_declared)
+  shipped_line="$(join_words ${shipped[@]+"${shipped[@]}"})"
+  declared_line="$(join_words ${declared[@]+"${declared[@]}"})"
+  for name in ${shipped[@]+"${shipped[@]}"}; do
+    [ "$name" = "$HARNESS" ] && return 0
+  done
+  # Declared by the spec, absent from this tree: a real state the spec tracks, not a broken
+  # checkout, and the next step is a decision about the adapter rather than a corrected name.
+  if in_words "$HARNESS" ${declared[@]+"${declared[@]}"}; then
+    bad "harness" "'$HARNESS' is declared in specs/HARNESS.md but this tree ships no installer for it (no scripts/harness/install-$HARNESS.sh); see CF-006"
+    return 1
+  fi
+  for name in ${shipped[@]+"${shipped[@]}"}; do
+    in_words "$name" ${declared[@]+"${declared[@]}"} || same_set=0
+  done
+  [ "${#shipped[@]}" -eq "${#declared[@]}" ] || same_set=0
+  if [ -z "$shipped_line" ]; then
+    bad "harness" "'$HARNESS' is not an adapter: this tree ships no harness installer at all (scripts/harness/install-*.sh matches nothing)"
+  elif [ -z "$declared_line" ]; then
+    bad "harness" "'$HARNESS' is not an adapter: this tree ships $shipped_line (specs/HARNESS.md is absent or declares no adapter)"
+  elif [ "$same_set" -eq 1 ]; then
+    bad "harness" "'$HARNESS' is not an adapter: this tree ships $shipped_line; specs/HARNESS.md names the same set"
+  else
+    bad "harness" "'$HARNESS' is not an adapter: this tree ships $shipped_line; specs/HARNESS.md declares $declared_line"
+  fi
+  return 1
+}
+
+usage() {
+  printf '%s\n' "usage: $0 --project P --repo URL [--ref R] [--harness H] [--agent ID] [--ttl DURATION] [--port PORT] [--deploy-key FILE] [--gomodcache PATH] [--staged-files]"
+  printf '%s\n' "       --project P        the project this node serves (required)"
+  printf '%s\n' "       --repo URL         the repository the node clones (required)"
+  printf '%s\n' "       --ref R            branch or tag to clone (default main, or \$NODE_REF)"
+  printf '%s\n' "       --harness H        the adapter that runs the work (default hermes); one of the names"
+  printf '%s\n' "                          this tree ships under scripts/harness/install-*.sh"
+  printf '%s\n' "       --agent ID         reuses an agent that must already exist on the server; it is never spawned"
+  printf '%s\n' "       --ttl DURATION     the agent lifetime passed to bunker spawn (default 6h)"
+  printf '%s\n' "       --port PORT        the node gateway port, forwarded as NODE_GATEWAY_PORT (default 10800)"
+  printf '%s\n' "       --deploy-key FILE  injects a read-only per-repo key (mode 600, never in argv)"
+  printf '%s\n' "       --gomodcache PATH  points the node at a sealed shared Go module cache"
+  printf '%s\n' "       --staged-files     validates runtime references and prints the staging manifest without bunker"
+}
+
 while [ $# -gt 0 ]; do
   case "$1" in
+    --help|-h) usage; exit 0 ;;
     --project) PROJECT="$2"; shift 2 ;;
     --repo) REPO="$2"; shift 2 ;;
     --ref) REF="$2"; shift 2 ;;
@@ -179,6 +278,10 @@ while [ $# -gt 0 ]; do
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
 done
+# The harness name is judged before anything is staged or spawned: a typo and a spec-declared
+# adapter this tree does not ship are answered here, in different words, so neither is reported as
+# a missing staged file three layers down (CF-125).
+harness_validate || exit 1
 if [ "$LIST_STAGED" -eq 1 ]; then staged_files; exit $?; fi
 if [ -z "${CRIER_URL:-}" ]; then
   bad "crier_url" "CRIER_URL unset or empty — export CRIER_URL=http://crier.example:8767"
@@ -247,7 +350,7 @@ if [ -z "$SERVER" ]; then
   bad "server_declared" "BUNKER_SERVER unset — no agent host to create the node on"
   incomplete
 fi
-[ -z "$PROJECT" ] && { echo "usage: $0 --project P --repo URL [--ref R] [--harness H] [--agent ID] [--deploy-key FILE] [--gomodcache PATH]"; echo "       --agent ID reuses an agent that must already exist on the server; it is never spawned"; echo "       --deploy-key FILE injects a read-only per-repo key (mode 600, never in argv)"; echo "       --gomodcache PATH points the node at a sealed shared Go module cache"; exit 2; }
+[ -z "$PROJECT" ] && { usage; exit 2; }
 
 b=$(have bunker) || { bad "bunker_cli" "no bunker client on PATH — install the bunker client; without it no agent can be spawned, staged or verified (nothing was attempted)"; incomplete; }
 
