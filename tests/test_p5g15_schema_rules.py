@@ -11,7 +11,9 @@ from pathlib import Path
 
 try:
     from jsonschema import Draft202012Validator
-except ImportError as error:  # pragma: no cover - the conformance dependency is required
+except (
+    ImportError
+) as error:  # pragma: no cover - the conformance dependency is required
     raise SystemExit(f"P5G-15 requires jsonschema>=4.18: {error}") from error
 
 
@@ -116,7 +118,11 @@ def main() -> int:
         fail("claim contract does not name its F16/F5 flow ownership")
     if "P5G-15" not in register:
         fail("contract register does not identify P5G-15")
-    if not re.search(r"additionalProperties.{0,80}false", SCHEMA_PATH.read_text(encoding="utf-8"), re.S):
+    if not re.search(
+        r"additionalProperties.{0,80}false",
+        SCHEMA_PATH.read_text(encoding="utf-8"),
+        re.S,
+    ):
         fail("claim schema is not closed")
 
     print("P5G-15 schema rules: PASS")
