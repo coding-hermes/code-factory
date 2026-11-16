@@ -42,14 +42,54 @@ msec=$(grep -cE '^say "[0-9]+\.' "$S")
 block=$(awk '/^\*\*Status 20/{f=1} f&&/^$/{exit} f' "$R" | tr '\n' ' ')
 printf '%s' "$block" | grep -qE 're-measured at `[0-9a-f]{7,40}`' \
   || { echo "DRIFT: PRD milestone block does not name the tip it was re-measured at"; d=1; }
-open_part=$(printf '%s' "$block" | sed -n 's/.*open defects//p')
-for id in $(printf '%s' "$open_part" | grep -oE 'CF-[0-9]{3}' | sort -u); do
+# Leg A — the milestone's open-blocker list. The id loop below only ever sees what follows the
+# phrase "open defect(s)"; a reworded sentence ("remaining gaps …") leaves that loop with an EMPTY
+# body, and the probe then prints open_blockers= empty and certifies nothing while still passing
+# (CF-115). So a missing phrase is drift on its own, and so is a phrase with no CF-id behind it;
+# only phrase + ids makes the board-status loop meaningful.
+open_part=$(printf '%s' "$block" | sed -nE 's/.*[Oo]pen defects?//p')
+open_ids=$(printf '%s' "$open_part" | grep -oE 'CF-[0-9]{3}' | sort -u | tr '\n' ' ')
+if [ -z "$open_part" ]; then
+  echo "DRIFT: milestone Status block carries no open-defect phrase, so its blocker leg certifies nothing"
+  d=1
+elif [ -z "${open_ids// /}" ]; then
+  echo "DRIFT: milestone open-defect phrase carries no CF-id list (open_blockers empty), so its blocker leg certifies nothing"
+  d=1
+fi
+for id in $open_ids; do
   st=$(jq -r --arg i "$id" 'select(.id==$i)|.status' .coding-hermes/board/tasks.jsonl)
   [ "$st" = complete ] && { echo "DRIFT: milestone lists $id as an open blocker, board says complete"; d=1; }
 done
 for t in '§3' '§4' '§14' '§15' '§20' 'layer 10'; do
   grep -qiF -- "$t" "$R" || { echo "DRIFT: CF-102 layer-arm cell does not name $t"; d=1; }
 done
-echo "measured: tip=${tip:-none} rows=${mrow:-?} events=${mev:-?} sections=$msec open_blockers=$(printf '%s' "$open_part" | grep -oE 'CF-[0-9]{3}' | sort -u | tr '\n' ' ')"
+# Leg D — the plan's reverse-direction table. CF-099 AC4 requires a reverse-table row for every
+# checked-out selftest section, so a probe that never opens that table cannot see a row go missing
+# (CF-115). The coverage check — range expansion included, so "| §22–§28 …" covers §23–§28 — already
+# ships in docs/audits/cf198-section-mapping.sh; this leg invokes it rather than parsing the table a
+# second time.
+map_script=docs/audits/cf198-section-mapping.sh
+uncovered=
+if [ ! -r "$map_script" ]; then
+  echo "DRIFT: reverse-direction table leg cannot run — $map_script is missing"
+  uncovered=checker-missing
+  d=1
+else
+  maprc=0
+  mapout=$(bash "$map_script" --plan "$P" --selftest "$S" 2>&1) || maprc=$?
+  uncovered=$(printf '%s\n' "$mapout" | grep -oE '^MISSING §[0-9]+' | grep -oE '[0-9]+' | sort -n | tr '\n' ' ')
+  if [ -n "${uncovered// /}" ]; then
+    for sec in $uncovered; do
+      echo "DRIFT: tests/selftest.sh §$sec has no row in $P's reverse-direction table"
+      d=1
+    done
+  elif [ "$maprc" -ne 0 ]; then
+    # The shared coverage check failed for a reason that is not an uncovered tree section. Relay it
+    # instead of letting a broken mapping leg read as "table intact".
+    echo "DRIFT: reverse-direction table check failed (rc=$maprc): $(printf '%s\n' "$mapout" | sed -n 's/^  FAIL  section-mapping — //p' | tr '\n' ';')"
+    d=1
+  fi
+fi
+echo "measured: tip=${tip:-none} rows=${mrow:-?} events=${mev:-?} sections=$msec open_blockers=${open_ids} reverse_table_uncovered=${uncovered:-none}"
 [ "$d" -eq 0 ] && echo "OK: milestone, plan snapshot and layer arms agree at $(git rev-parse --short HEAD)"
 exit "$d"
