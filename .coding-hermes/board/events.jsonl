@@ -860,3 +860,5 @@
 {"id": 859, "timestamp": "2026-11-16T20:04:33Z", "event_type": "task_created", "task_id": "CF-471", "actor": "foreman", "detail": "{\"id\":\"CF-471\",\"status\":\"pending\"}"}
 {"id": 860, "timestamp": "2026-11-16T20:04:33Z", "event_type": "task_created", "task_id": "CF-472", "actor": "foreman", "detail": "{\"id\":\"CF-472\",\"status\":\"pending\"}"}
 {"id": 861, "timestamp": "2026-11-16T20:04:33Z", "event_type": "task_created", "task_id": "CF-473", "actor": "foreman", "detail": "{\"id\":\"CF-473\",\"status\":\"pending\"}"}
+{"id": 862, "timestamp": "2026-11-16T20:25:31Z", "event_type": "task_completed", "task_id": "CF-466", "actor": "foreman", "detail": "{\"status\":\"complete\"}"}
+{"id": 863, "timestamp": "2026-11-16T20:25:36Z", "event_type": "task_completed", "task_id": "CF-466", "actor": "foreman", "detail": "CF-466 closed: verdict 5cdc74f4 PASS at 8b9148c5 (0b300014 its ancestor), guard PASS, CI GREEN. Fix commit 0b300014 adds the III.M1.S2 anchor; prose landed via 38712c13. Tick code-factory-duckbrain-2026-11-16-16-59-41."}
