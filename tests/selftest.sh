@@ -8254,5 +8254,67 @@ fi
 rm -rf "$tmpd"
 # END cf481-readme-trace-guard
 
+# BEGIN cf485-7b-pipe-grep-guard
+# CF-485: section 7b decides whether the board gate rejected a fixture. Under `pipefail`, a
+# producer feeding `grep -q` can report 1 for a payload that DOES match: grep exits on the first
+# match, printf takes SIGPIPE (141), and the negation reads TRUE — a false PASS, which is the one
+# direction these instruments exist to catch. CF-482 replaced those three pipelines with the
+# board_fixture_verdict helper; nothing red-ed when the shape came back. This scanner names every
+# line of the section 7b block that still feeds a producer into `grep -q`, `grep -Fq` or
+# `grep -Fxq`. It reads with awk on purpose: a scanner built from `printf | grep -q` would
+# itself exhibit the shape it rejects.
+# Block boundaries are the same rule docs/audits/cf482-decider-differential.sh uses: from
+# `say "7b.` to the line before the next `^say "` at column 0. Section 7b's later arms (the
+# unterminated-tail loop) compare exact output with producer-piped `grep -Fxq` deliberately and
+# sit outside this range.
+cf485_7b_pipe_grep() {  # $1=selftest file -> "BLOCK <lines> OFFENDING <n>" then "line N: text" per hit
+  awk '
+    /^say "7b\./ { inblk = 1; seen = 1 }
+    inblk && /^say "/ && !/^say "7b\./ { done_ = 1 }
+    inblk && !done_ {
+      nb++
+      if ($0 ~ /\|[[:space:]]*grep[[:space:]]+-[A-Za-z]*q([[:space:]]|$)/) {
+        m++; hits[m] = sprintf("line %d: %s", NR, $0)
+      }
+    }
+    END {
+      if (!seen) { print "NOBLOCK"; exit 3 }
+      printf "BLOCK %d OFFENDING %d\n", nb, m
+      for (i = 1; i <= m; i++) print hits[i]
+    }
+  ' "$1"
+}
+say "77. section 7b never pipes a producer into grep -q (CF-485)"
+cf485_scan=$(cf485_7b_pipe_grep "$HERE/tests/selftest.sh"); cf485_rc=$?
+cf485_block=$(printf '%s\n' "$cf485_scan" | awk '/^BLOCK /{print $2; exit}')
+cf485_off=$(printf '%s\n' "$cf485_scan" | awk '/^BLOCK /{print $4; exit}')
+if [ "$cf485_rc" -eq 0 ] && [ "${cf485_off:-x}" = 0 ] && [ "${cf485_block:-0}" -gt 0 ]; then
+  say "  PASS  a. shipped tests/selftest.sh section 7b scans clean — block $cf485_block lines, 0 offending"
+else
+  say "  FAIL  a. shipped tests/selftest.sh section 7b feeds a producer into grep -q (block ${cf485_block:-?} lines, ${cf485_off:-?} offending, exit $cf485_rc)"; fails=$((fails+1))
+  printf '%s\n' "$cf485_scan" | awk '!/^BLOCK /{print "    | " $0}'
+fi
+# b. red control: the shape is planted inside the block of a COPY of the shipped suite, after its
+# `say "7b.` line, and the same scanner must report exactly that one line.
+tmpd=$(mktemp -d)
+cf485_plant="  if printf '%s\n' \"\$out\" | grep -q '^  PASS'; then leaked=1; fi"
+CF485_PLANT="$cf485_plant" awk '{ print } /^say "7b\./ && !d { print ENVIRON["CF485_PLANT"]; d = 1 }' \
+  "$HERE/tests/selftest.sh" > "$tmpd/planted-selftest.sh"
+cf485_scan2=$(cf485_7b_pipe_grep "$tmpd/planted-selftest.sh"); cf485_rc2=$?
+cf485_off2=$(printf '%s\n' "$cf485_scan2" | awk '/^BLOCK /{print $4; exit}')
+cf485_hit2=$(printf '%s\n' "$cf485_scan2" | awk '/^line [0-9]+:/{print; exit}')
+case $cf485_hit2 in
+  *"grep -q '^  PASS'"*) cf485_named=1 ;;
+  *) cf485_named=0 ;;
+esac
+if [ "$cf485_rc2" -eq 0 ] && [ "${cf485_off2:-x}" = 1 ] && [ "$cf485_named" -eq 1 ]; then
+  say "  PASS  b. red control: the planted producer-piped grep -q is the one offending line — $cf485_hit2"
+else
+  say "  FAIL  b. red control: the planted producer-piped grep -q was not reported as exactly one offending line (offending ${cf485_off2:-?}, exit $cf485_rc2)"; fails=$((fails+1))
+  printf '%s\n' "$cf485_scan2" | sed 's/^/    | /'
+fi
+rm -rf "$tmpd"
+# END cf485-7b-pipe-grep-guard
+
 say ""
 [ "$fails" -eq 0 ] && finish 0 || finish 1
