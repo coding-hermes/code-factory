@@ -203,3 +203,30 @@ the retry — a shared-checkout snapshot, not a repo defect, and not filed.
 - **Evidence**: `.coding-hermes/evidence/code-factory-dogfood-2026-11-17-10-10-24/d5-*`
   (`d5-cf483-prefix-check.out`, `d5-cf483-postfix-check.out`, `d5-merged-selftest.txt`,
   `d5-provenance.txt`; the selftest log is stored as `.txt` because `.gitignore:3` ignores `*.log`).
+
+
+#### Addendum — the verdict landed after this entry was committed
+
+The "UNVERIFIED" line above is scoped to the moment it was written. The tier-2 judge finished at
+10:31 and its authoritative artifact is `.gitreins/history/2026-11-17/175640de/verdict.json`
+(copied to `d5-cf483-verdict-175640de.json`):
+
+- **`passed=false`**, `tier2_skipped=false`, tier 1 `PASS`, 6 items graded — **5 PASS, 1 FAIL**.
+  The FAIL is item 1's last clause only, "`bash tests/selftest.sh` stays green": the judge's run saw
+  `SELFTEST: FAIL (4)`, `EXIT=1`, aborting at **section 16** (node-create staged set), and recorded
+  itself that the 4 counted FAILs are section-7b board fixtures and that no CF-483 row was red.
+- **Counter-evidence, three independent full runs, every one `SELFTEST: PASS` / `EXIT=0` / 602 PASS
+  rows with both CF-483 arms green**: the merged tree before the judge started (`d5-merged-selftest.txt`),
+  the records-commit guard on `739c73d5` (`.gitreins/logs/guard-20261117T152305.585170Z.log`,
+  `tests (full)` OK), and a **solo** run at `739c73d5` with an empty porcelain and nothing else in
+  the worktree (`d5-solo-selftest.txt`, 10:38-10:48). The judge's run overlapped two other full suites
+  in the same worktree — this delivery's own records committer ran the guard suite twice (10:12:51
+  refused on the publish gate, 10:19:23 passing) — and section 16 is the fixture that binds a stubbed
+  bunker plus temp dirs. Classified as a contended-checkout observation, **not** a property of the diff.
+- **The row was NOT closed on it**: `CF-483` stays `in_progress` with the note naming both the verdict
+  and the three green runs; the queued action is a re-judge (set `commit_hash` to `2d06b79a`, then
+  `gitreins task start` + `task complete --scan-root` on a worktree with nothing else running).
+- **A real gap fell out of the grading**: the judge's `uncovered failure paths` note says the residue
+  WARN does not change the exit status, so `--check` prints `RESULT: PASS` on a host leaking 3 homes
+  and 2 keys. Verified from the leaking fixture, not inherited — filed as **`CF-495`** (P3, chapter
+  `III.M1.S1`), because a surface automation reads must be able to fail.

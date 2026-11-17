@@ -120,3 +120,6 @@ absolute host-home path and a tailnet address literal in tracked evidence, measu
 Line counts and every other byte are unchanged by the elision (34 lines in each `.out`, before and
 after). The worker's own report is not the evidence: the merged-tree
 suite and the post-fix live arm are.
+
+| `d5-solo-selftest.txt` | the SOLO full suite at `739c73d5` (empty porcelain, nothing else in the worktree): `SELFTEST: PASS`, `EXIT=0`, 602 `PASS` rows — the measurement that contradicts the judge's section-16 abort (host paths elided to `~`, line count unchanged) |
+| `d5-cf483-verdict-175640de.json` | the authoritative tier-2 verdict for `CF-483` (`passed=false`, 5 PASS / 1 FAIL, tier 1 PASS) — copied out of `.gitreins/history/` so the graded result survives the scratch tree; `task_id`/`passed`/`items` re-read with `jq` after the copy, and every `/home/` path elided to `~` (JSON re-validated: `jq` parses it, 6 items) |
