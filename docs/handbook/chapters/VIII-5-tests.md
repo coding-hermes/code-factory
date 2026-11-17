@@ -70,6 +70,33 @@ The exact selector is owned by the test: dispatch encoding uses
 selector without a pre-fix source is not a valid control experiment, and the source override
 without its selector is an ordinary test of the current implementation.
 
+### 4c. Fixture isolation and the shared toolchain cache
+
+A fixture home is created by `env -i PATH="$PATH" HOME=<throwaway> …`, which scrubs every other
+variable — including `XDG_CACHE_HOME` and `XDG_DATA_HOME`. Harness adapters resolve their JS
+toolchain through those two variables, so a scrubbed fixture re-provisioned the toolchain instead
+of reading the cache: measured, one `install-claude-code.sh --check` under a throwaway home took
+8.11 s / 9.14 s and wrote 234,800 KB into that home, while the same command with both XDG
+variables pointed at a warm cache took 0.15 s / 0.09 s and left a 4 KB home.
+
+The contract the three entry scripts now hold (`tests/selftest.sh`, `tests/harness-node-e2e.sh`,
+`tests/harness-conformance.sh`): one `CF_TOOLCHAIN_CACHE` (`${TMPDIR:-/tmp}/cf-toolchain-cache`),
+with `xdg-cache/` and `xdg-data/` created under it, exported by the parent and passed through at
+every `env -i` isolation site. `HOME` isolation is unchanged — each fixture still gets an empty
+throwaway home, which is now 4 KB–884 KB instead of up to 229 MiB. A cache root that cannot be
+created (read-only `TMPDIR`) leaves the passthrough empty, which the XDG convention reads as
+unset, so the gate degrades to per-fixture provisioning instead of aborting.
+
+Measured after the change (this host, sibling fleet lanes live throughout, so every figure carries
+its load window): the adapter battery `tests/harness-node-e2e.sh` — the file one gate run executes
+six times — took 30.73 s / 22.55 s unpatched and 12.39 s / 12.40 s patched, interleaved, at load
+55.7 → 39.8, with 19 PASS rows and `HARNESS-NODE-E2E: PASS` in all four runs. Gate runs at the
+same tree were 311.99 / 285.03 / 246.14 / 285.47 s before and 275.46 / 245.68 / 184.79 / 332.95 s
+after, at load 11–125; that spread is wider than the effect, one load-matched pair inverted, and
+the whole-gate wall/CPU delta is therefore recorded as **unresolved in this window**, not as a
+saving. The removable work is bounded by the exec census: six provisioning events per gate run at
+~7.45 s each.
+
 ## 5. Verification
 
 | Check | Command | Expected | Recorded result |
@@ -144,3 +171,5 @@ a skip with no reason is not a green proof.
 - `tests/test_bus_result_delivery.py` — result-delivery control selector and source contract.
 
 ch:trace row=CF-397 spec=docs/handbook/OUTLINE.md#VIII.5 wave=none:serial-takeover-after-worker-timeout test=tests/test_bus_result_delivery.py::PreFixControlTest doc=docs/handbook/chapters/VIII-5-tests.md evidence=docs/audits/CF-397-unittest-discover.txt witness=none:no-external-witness verdict=none:foreman-runs-gitreins-after-commit commit=none:worker-does-not-know-final-sha memory=none:foreman-writes-after-publication
+
+ch:trace row=PERF-018 spec=docs/handbook/chapters/VIII-5-tests.md#4c-fixture-isolation-and-the-shared-toolchain-cache wave=none:serial-worker test=tests/harness-node-e2e.sh doc=docs/handbook/chapters/VIII-5-tests.md evidence=docs/audits/code-factory-perf-2026-11-17-PERF-018.md witness=none:fixture-only verdict=none:judge-pending commit=a7889243 memory=none:foreman-writes-after-publication
