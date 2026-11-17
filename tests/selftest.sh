@@ -8125,5 +8125,58 @@ fi
 rm -rf "$tmpd"
 # END cf473-python-remedy
 
+# BEGIN cf481-readme-trace-guard
+# CF-481: CF-480 stripped a seven-marker ch:trace block (plus STATUS/TIER/EVIDENCE lines whose own
+# evidence= was README.md) from the end of README.md. No arm reds if one comes back, so a single
+# checker decides both directions here and the arms after the first are its red controls.
+readme_trace_block() {  # $1=README -> prints each offending line, returns 1 if a trace block is present
+  local readme="$1" hits
+  hits=$(grep -nE '^(ch:trace|STATUS:|TIER:|EVIDENCE:)' "$readme" 2>/dev/null)
+  [ -z "$hits" ] && return 0
+  printf '%s\n' "$hits"
+  return 1
+}
+say "76. README carries no traceability block (CF-481)"
+if readme_trace_block "$HERE/README.md" >/dev/null; then
+  say "  PASS  published README.md carries no ch:trace / STATUS: / TIER: / EVIDENCE: line"
+else
+  say "  FAIL  published README.md carries a traceability block again:"; fails=$((fails+1))
+  readme_trace_block "$HERE/README.md" | sed 's/^/    | /'
+fi
+
+tmpd=$(mktemp -d)
+# a. red control: one planted marker line must be caught by the same checker
+cp "$HERE/README.md" "$tmpd/planted-marker.md"
+printf '%s\n' 'ch:trace row=CF-999 spec=none test=none doc=README.md' >> "$tmpd/planted-marker.md"
+cf481_planted=$(readme_trace_block "$tmpd/planted-marker.md"); cf481_rc=$?
+if [ "$cf481_rc" -eq 1 ] && printf '%s\n' "$cf481_planted" | grep -Eq '^[0-9]+:ch:trace row=CF-999'; then
+  say "  PASS  a. red control: a planted ch:trace line is rejected, exit $cf481_rc"
+else
+  say "  FAIL  a. red control: the planted ch:trace line was not named (exit $cf481_rc)"; fails=$((fails+1))
+  printf '%s\n' "$cf481_planted" | sed 's/^/    | /'
+fi
+# b. red control: the prefix forms the old footer used, one fixture per prefix
+for cf481_prefix in STATUS: TIER: EVIDENCE:; do
+  cp "$HERE/README.md" "$tmpd/planted-prefix.md"
+  printf '%s\n' "$cf481_prefix PASS" >> "$tmpd/planted-prefix.md"
+  cf481_out=$(readme_trace_block "$tmpd/planted-prefix.md"); cf481_rc=$?
+  if [ "$cf481_rc" -eq 1 ] && printf '%s\n' "$cf481_out" | grep -Fq ":$cf481_prefix"; then
+    say "  PASS  b. red control: a planted $cf481_prefix line is rejected, exit $cf481_rc"
+  else
+    say "  FAIL  b. red control: a planted $cf481_prefix line was not named (exit $cf481_rc)"; fails=$((fails+1))
+  fi
+done
+# c. non-vacuity control: the same words mid-sentence are prose, not a block, and must be accepted.
+# Self-contained fixture: it must not inherit arm (a)'s state, so this arm varies one input only.
+printf '%s\n' '# fixture' '' \
+  'The old footer began with a `ch:trace` line and ended with `STATUS: PASS`.' > "$tmpd/prose.md"
+if readme_trace_block "$tmpd/prose.md" >/dev/null; then
+  say "  PASS  c. a mid-sentence mention is accepted (the check is anchored to line starts)"
+else
+  say "  FAIL  c. a mid-sentence mention was rejected (the check matches substrings)"; fails=$((fails+1))
+fi
+rm -rf "$tmpd"
+# END cf481-readme-trace-guard
+
 say ""
 [ "$fails" -eq 0 ] && finish 0 || finish 1
