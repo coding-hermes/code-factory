@@ -7289,10 +7289,15 @@ cf050_publish_gate() {
   # "$tmpd/fakeroot/repo" (a scratch-relative path) must not be read as a leak.
   local pat='(^|[^A-Za-z0-9])/home/[a-z][a-z0-9_-]*/'
   local addr='\b((192\.168)|(10\.[0-9]{1,3})|(172\.(1[6-9]|2[0-9]|3[01])))\.[0-9]{1,3}\.[0-9]{1,3}\b'
-  local excl=(':!.gitreins/**' ':!.coding-hermes/board/**')
+  local excl=(':!.gitreins/**' ':!.coding-hermes/board/**' ':!.coding-hermes/evidence/**')
   # An audit report's job is to quote the leak it reports, so docs/audits keeps the address it
   # names. The published handbook, the scripts and the tests do not get that exemption.
-  local excl_addr=(':!.gitreins/**' ':!.coding-hermes/board/**' ':!docs/audits/**')
+  # CF-493: `.coding-hermes/evidence/**` is exempt from BOTH arms — absolute host-home paths and
+  # private-address literals — because an evidence transcript's job is to quote the run it records,
+  # including the paths and addresses that run touched; redacting it would make the evidence
+  # inauthentic. That exemption is the evidence subtree alone: the board keeps its own exclusion
+  # and every other path, `.coding-hermes/` included, is still graded by both arms.
+  local excl_addr=(':!.gitreins/**' ':!.coding-hermes/board/**' ':!.coding-hermes/evidence/**' ':!docs/audits/**')
   # Options must precede the pattern: `git grep <pattern> --cached` reads --cached as a pathspec.
   H=$(git -C "$root" grep -lIE "$pat" HEAD -- . "${excl[@]}" 2>/dev/null \
     | sed 's/^HEAD://' | sort -u || true)
@@ -7440,6 +7445,72 @@ if [ "$rc" -eq 0 ] \
   say "  PASS  staged removal of a private address -> named repair (a redaction commit is not self-refused)"
 else
   say "  FAIL  staged address removal did not open the repair path (exit $rc): $out"; fails=$((fails+1))
+fi
+# CF-493 arm (a): `.coding-hermes/evidence/**` is exempt from BOTH arms. An evidence transcript
+# records a run — including the host paths and the addresses that run touched — so redacting it
+# would make the evidence inauthentic. Both leak families are placed under the exempt subtree here
+# and each arm must still read a clean PASS row, not merely a nonzero exit.
+cf050_ev="$cf050/evidence"
+git init -q -b trunk "$cf050_ev"
+mkdir -p "$cf050_ev/.coding-hermes/evidence/dogfood-run-1"
+printf 'workspace: /%s/%s/fixture\n' home "${USER:-user}" \
+  > "$cf050_ev/.coding-hermes/evidence/dogfood-run-1/proof.out"
+printf 'node_ip: %s.%s.%s.%s\n' 192 168 0 1 \
+  > "$cf050_ev/.coding-hermes/evidence/dogfood-run-1/probe.out"
+git -C "$cf050_ev" add .coding-hermes/evidence
+git -C "$cf050_ev" -c user.name=fixture -c user.email=fixture@example.invalid commit -qm fixture
+out=$(cf050_publish_gate "$cf050_ev" 0 2>&1); rc=$?
+if [ "$rc" -eq 0 ] \
+   && printf '%s\n' "$out" | grep -Fq '  PASS  publish paths — baseline 0, current 0' \
+   && printf '%s\n' "$out" | grep -Fq '  PASS  publish paths — private IPv4 — baseline 0, current 0'; then
+  say "  PASS  evidence transcript -> host-home PASS and private IPv4 PASS under .coding-hermes/evidence/**"
+else
+  say "  FAIL  evidence transcript was not exempt from both arms (exit $rc): $out"; fails=$((fails+1))
+fi
+# CF-493 arm (b): the red control. The SAME content one directory OUTSIDE the exempt subtree is
+# still graded, so what was added is a subtree exemption and not a disabled arm. The host-home row
+# names the offending path; the address family is the arm that quotes a file:line, so it gets its
+# own fixture and the same falsifier.
+cf050_ev_red="$cf050/evidence-red"
+git init -q -b trunk "$cf050_ev_red"
+mkdir -p "$cf050_ev_red/docs"
+printf 'workspace: /%s/%s/fixture\n' home "${USER:-user}" > "$cf050_ev_red/docs/leak.md"
+git -C "$cf050_ev_red" add docs/leak.md
+git -C "$cf050_ev_red" -c user.name=fixture -c user.email=fixture@example.invalid commit -qm fixture
+out=$(cf050_publish_gate "$cf050_ev_red" 0 2>&1); rc=$?
+if [ "$rc" -ne 0 ] \
+   && printf '%s\n' "$out" | grep -Fq '  FAIL  publish paths — baseline 0, current 1; paths: docs/leak.md'; then
+  say "  PASS  same content at docs/leak.md -> still FAIL naming docs/leak.md; the exemption is a subtree, not a disabled arm"
+else
+  say "  FAIL  the evidence exemption leaked outside the subtree (exit $rc): $out"; fails=$((fails+1))
+fi
+cf050_ev_red_addr="$cf050/evidence-red-addr"
+git init -q -b trunk "$cf050_ev_red_addr"
+mkdir -p "$cf050_ev_red_addr/docs"
+printf 'node_ip: %s.%s.%s.%s\n' 192 168 0 1 > "$cf050_ev_red_addr/docs/leak.md"
+git -C "$cf050_ev_red_addr" add docs/leak.md
+git -C "$cf050_ev_red_addr" -c user.name=fixture -c user.email=fixture@example.invalid commit -qm fixture
+out=$(cf050_publish_gate "$cf050_ev_red_addr" 0 2>&1); rc=$?
+if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -Fq 'paths: docs/leak.md:1'; then
+  say "  PASS  same content at docs/leak.md (address family) -> still FAIL quoting docs/leak.md:1"
+else
+  say "  FAIL  the address arm stopped quoting its offending file:line (exit $rc): $out"; fails=$((fails+1))
+fi
+# CF-493 arm (d): the staged-repair arm above (c) is unchanged and still asserted; this one adds
+# the scope falsifier. The exemption is the evidence subtree alone. A leak under another
+# `.coding-hermes/` path is still graded, so a later widening of that pathspec to the whole
+# foreman-owned directory cannot pass here.
+cf050_ev_scope="$cf050/evidence-scope"
+git init -q -b trunk "$cf050_ev_scope"
+mkdir -p "$cf050_ev_scope/.coding-hermes/notes"
+printf 'workspace: /%s/%s/fixture\n' home "${USER:-user}" > "$cf050_ev_scope/.coding-hermes/notes/leak.md"
+git -C "$cf050_ev_scope" add .coding-hermes/notes/leak.md
+git -C "$cf050_ev_scope" -c user.name=fixture -c user.email=fixture@example.invalid commit -qm fixture
+out=$(cf050_publish_gate "$cf050_ev_scope" 0 2>&1); rc=$?
+if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -Fq 'paths: .coding-hermes/notes/leak.md'; then
+  say "  PASS  .coding-hermes outside evidence is still graded -> FAIL names .coding-hermes/notes/leak.md"
+else
+  say "  FAIL  the evidence exemption widened to the whole .coding-hermes tree (exit $rc): $out"; fails=$((fails+1))
 fi
 rm -rf "$cf050"
 
