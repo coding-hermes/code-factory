@@ -1,0 +1,62 @@
+=== host census ===
+bunker: reading server "bunker-las-03"
+No agents found.
+=== bunker-las-03 ===
+── bunker-las-03 ──
+  Hostname: bunker-las-03
+  URL:      https://<host-tailnet-3>:10001
+  Version:  0.2.1
+  Status:   ONLINE
+  Uptime:   5d 18h 30m
+  Agents:   0/8
+  /tmp:     HOST-SHARED — agent sessions see the host /tmp
+
+  ╔══════════════════════════════════════════════════════════╗
+  ║  ⚠  WARNING: Private /tmp is NOT active on this host.           ║
+  ║  Agent exec sessions share the host /tmp; the README's        ║
+  ║  'Private /tmp per agent' promise does not hold here.         ║
+  ╚══════════════════════════════════════════════════════════╝
+  Reason:   the pam_namespace drop-in configuration is missing
+  Net mode: shared — host network namespace (no network isolation: shared loopback, global port space) — NOT tenant isolation
+  Egress:   open, allowlist, none
+  Residue:  0 orphan users, 0 orphan homes, 0 orphan keys, 0 stale linger entries (0 registered agents)
+  CPU:      144.3%
+  Memory:   2.3 GB / 31.1 GB
+  Disk:     78% (171.7 GB/220.6 GB)
+STATUS_RC=0
+=== bunker-las-02 ===
+── bunker-las-02 ──
+  Hostname: bunker-las-02
+  URL:      http://<host-tailnet-2>:10001
+  Version:  0.1.4
+  Status:   ONLINE
+  Uptime:   5d 19h 44m
+  Agents:   0/8
+  /tmp:     HOST-SHARED — agent sessions see the host /tmp
+
+  ╔══════════════════════════════════════════════════════════╗
+  ║  ⚠  WARNING: Private /tmp is NOT active on this host.           ║
+  ║  Agent exec sessions share the host /tmp; the README's        ║
+  ║  'Private /tmp per agent' promise does not hold here.         ║
+  ╚══════════════════════════════════════════════════════════╝
+  Reason:   the pam_namespace drop-in configuration is missing
+  Net mode: not reported by this daemon — it predates network-isolation reporting
+  Egress:   not reported by this daemon — it predates egress reporting; --egress-mode allowlist/none spawns are REFUSED by this CLI
+  Residue:  0 orphan users, 0 orphan homes, 0 orphan keys, 11 stale linger entries (0 registered agents)
+            residue present: this host holds agent users/homes/keys/linger entries with no registered agent behind them
+  CPU:      24.8%
+  Memory:   2.3 GB / 31.1 GB
+  Disk:     65% (143.9 GB/220.6 GB)
+STATUS_RC=0
+=== bunker-las-01 ===
+── bunker-las-01 ──
+  URL:      http://<host-tailnet-1>:19090
+  Status:   OFFLINE
+  Error:    server info: deadline_exceeded: Post "http://<host-tailnet-1>:19090/bunker.v1.Bunkerd/ServerInfo": dial tcp <host-tailnet-1>:19090: i/o timeout
+STATUS_RC=0
+=== bunker-las-04 ===
+── bunker-las-04 ──
+  URL:      http://<host-tailnet-4>:10001
+  Status:   OFFLINE
+  Error:    server info: deadline_exceeded: Post "http://<host-tailnet-4>:10001/bunker.v1.Bunkerd/ServerInfo": dial tcp <host-tailnet-4>:10001: i/o timeout
+STATUS_RC=0

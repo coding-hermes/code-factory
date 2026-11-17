@@ -123,3 +123,36 @@ suite and the post-fix live arm are.
 
 | `d5-solo-selftest.txt` | the SOLO full suite at `739c73d5` (empty porcelain, nothing else in the worktree): `SELFTEST: PASS`, `EXIT=0`, 602 `PASS` rows — the measurement that contradicts the judge's section-16 abort (host paths elided to `~`, line count unchanged) |
 | `d5-cf483-verdict-175640de.json` | the authoritative tier-2 verdict for `CF-483` (`passed=false`, 5 PASS / 1 FAIL, tier 1 PASS) — copied out of `.gitreins/history/` so the graded result survives the scratch tree; `task_id`/`passed`/`items` re-read with `jq` after the copy, and every `/home/` path elided to `~` (JSON re-validated: `jq` parses it, 6 items) |
+
+## Delivery 6 — `2026-11-17T16:03Z` … `16:10Z` (same run marker; tick id in the log entry, not here)
+
+Two arms against the documented step-3 path, one per ONLINE host, plus the one-variable A/B that
+decides what the `reach:` row is telling the operator. Exit status read from the `bash <script>`
+invocation itself, never after a pipe.
+
+| File | Arm |
+|---|---|
+| `d6-node-create-remeasure.sh` | the delivery-6 live arm: a four-host status census, then README step 3 on `bunker-las-03` with `github/gitignore`, `--harness hermes`, `--ttl 2h` |
+| `d6-create-bunker-las-03.out` / `.err` | `PASS  spawn — node-dogfood-probe-110346`, `PASS  staged`, in-node provisioning; `CREATE_EXIT=1`, `CREATE_WALL_CLOCK_S=162` |
+| `d6-node-create-las02.sh`, `d6-create-bunker-las-02.out` / `.err` | the same arm on the second ONLINE host: `PASS  spawn — node-dogfood-probe2-110651`, `CREATE_EXIT=1`, `CREATE_WALL_CLOCK_S=152` |
+| `d6-host-census.out` | `bunker-las-03` ONLINE 0/8, `-02` ONLINE 0/8, `-01` OFFLINE, `-04` OFFLINE, each with its `STATUS_RC` |
+| `d6-node-reach-ab.sh`, `d6-node-reach-ab.out` | the decisive A/B: the same agent probes the control host's crier on loopback, on the control host's LAN address and on a node-routable address (loopback 000 / LAN 000 / routable 200), on both hosts |
+| `d6-crier-health-control-host.out` | the control host's own `/health` → `HTTP=200`, so the bus is up while the node row is red |
+| `d6-destroy-las03.out`, `d6-destroy-las02.out` | teardown of both probe agents after their transcripts were captured (archive-then-delete, `rc=0`, SSH key removed) |
+| `d6-elide.py`, `d6-elide-home.py`, `d6-elide-nodehome.py` | the three elision passes, kept so the committed bytes are reproducible from the raw captures |
+
+### Elision applied to this fire's files (CF-050 / CF-378)
+
+The raw captures carried private addresses and node home directories. Substitutions, with the counts
+each pass reported (line counts and every other byte unchanged):
+
+| Committed text | Real value it stood for |
+|---|---|
+| `<host-tailnet-3>`, `<host-tailnet-2>`, `<host-tailnet-1>`, `<host-tailnet-4>` | the four bunker hosts' own addresses, as printed by `bunker status` |
+| `<control-host-lan>`, `<node-lan-3>`, `<node-lan-2>` | the control host's LAN address and the two nodes' reported addresses |
+| `<control-host-tailnet>` | the control host's node-routable address used in the reach A/B |
+| `~` (35 replacements) | the operator's home directory |
+| `<node-home-3>`, `<node-home-2>` (9 replacements each) | the two nodes' home directories, `/home/bunker-node-<project>-<hhmmss>` |
+
+The board row `CF-496` carries the same elision. No measurement, row id or exit code was changed;
+the numbers in the log entry are re-readable from these files.

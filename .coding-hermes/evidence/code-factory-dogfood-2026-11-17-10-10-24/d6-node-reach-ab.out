@@ -1,0 +1,10 @@
+# control host: crier pid; listening sockets (the bus binds all interfaces)
+LISTEN 0      4096                                        *:8767             *:*    users:(("crier",pid=393172,fd=9))            
+# control host: local health probe
+control-loopback-8767=200
+# inside node-dogfood-probe-110346 on bunker-las-03 (delivery-3 style value, then a node-routable one)
+node-loopback-8767=000
+node-lan-8767=000
+node-tailnet-8767=200
+las02-node-loopback-8767=000
+las02-node-tailnet-8767=200
