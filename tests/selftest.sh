@@ -3129,17 +3129,64 @@ cf483_bad_out=$(env -i PATH="$cf483_tmp/bin:/usr/bin:/bin" HOME="$cf483_tmp/home
   BUNKER_SERVER=fixture-server BUNKER_CONFIG="$cf483_tmp/config.yaml" \
   CF483_RESIDUE='Residue unavailable' /bin/bash "$HERE/scripts/bunker-server-install.sh" --check 2>&1)
 cf483_bad_rc=$?
+# CF-495: a leaking host is a counted FAIL, not a warning — the exit status is the contract
+# automation reads. The last line must be `RESULT: FAIL (N)` with N >= 1, and the counts row
+# must still carry the measured values.
+cf483_leaky_last=$(printf '%s\n' "$cf483_leaky_out" | tail -1)
+cf483_leaky_n=$(printf '%s\n' "$cf483_leaky_last" | sed -n 's/^RESULT: FAIL (\([0-9][0-9]*\))$/\1/p')
 if [ "$cf483_zero_rc" -eq 0 ] \
   && ! printf '%s\n' "$cf483_zero_out" | grep -Fq '  WARN  residue' \
   && printf '%s\n' "$cf483_zero_out" | grep -Fq 'PASS  residue — 0 orphan users, 0 orphan homes, 0 orphan keys, 0 stale linger entries (server-reported)' \
-  && [ "$cf483_leaky_rc" -eq 0 ] \
-  && printf '%s\n' "$cf483_leaky_out" | grep -E '^  WARN  residue — .*3 orphan homes.*2 orphan keys' >/dev/null \
+  && printf '%s\n' "$cf483_zero_out" | grep -Fq 'RESULT: PASS' \
+  && [ "$cf483_leaky_rc" -ne 0 ] \
+  && [ -n "$cf483_leaky_n" ] && [ "$cf483_leaky_n" -ge 1 ] \
+  && printf '%s\n' "$cf483_leaky_out" | grep -E '^  FAIL  residue — .*3 orphan homes.*2 orphan keys' >/dev/null \
+  && printf '%s\n' "$cf483_leaky_out" | grep -Fq 'node_hygiene.py reap (CF-003)' \
   && [ "$cf483_bad_rc" -eq 0 ] \
   && printf '%s\n' "$cf483_bad_out" | grep -Fq 'WARN  residue — server-reported counts could not be parsed'; then
-  say "  PASS  CF-483 clean counts pass without warning; 3 homes/2 keys warn with values; unparseable counts stay unmeasured"
+  say "  PASS  CF-483/CF-495 clean counts pass; 3 homes/2 keys FAIL with values and exit $cf483_leaky_rc (RESULT: FAIL ($cf483_leaky_n)); unparseable counts stay an unmeasured warning"
 else
-  say "  FAIL  CF-483 residue count fixtures (zero exit $cf483_zero_rc, leaky exit $cf483_leaky_rc, unparseable exit $cf483_bad_rc)"
+  say "  FAIL  CF-483/CF-495 residue count fixtures (zero exit $cf483_zero_rc, leaky exit $cf483_leaky_rc last line '${cf483_leaky_last}', unparseable exit $cf483_bad_rc)"
   printf '%s\n' "$cf483_zero_out" "$cf483_leaky_out" "$cf483_bad_out" | sed 's/^/    | /'
+  fails=$((fails+1))
+fi
+# CF-495 red control: the PRE-FIX script classified the same leaking fixture as a warning and
+# exited 0. The pre-fix revision is resolved by CONTENT, never by position: once this fix is
+# committed HEAD carries the fixed script, so `git show HEAD:...` would silently hand the test a
+# copy of the code under test and the control would pass for the wrong reason.
+cf483_prefix_rev=""
+while IFS= read -r cf483_rev; do
+  if git -C "$HERE" show "$cf483_rev:scripts/bunker-server-install.sh" 2>/dev/null \
+    | grep -Fq 'warn "residue" "$residue_report'; then
+    cf483_prefix_rev="$cf483_rev"
+    break
+  fi
+done < <(git -C "$HERE" log --format=%H -n 40 -- scripts/bunker-server-install.sh 2>/dev/null)
+# The pre-fix copy sources lib.sh from its own directory, so it runs from a sibling
+# `scripts/` directory that carries the real lib.sh — not from $cf483_tmp, where the
+# missing library would abort it before any check ran (and prove nothing).
+mkdir -p "$cf483_tmp/prefix/scripts"
+ln -sf "$HERE/scripts/lib.sh" "$cf483_tmp/prefix/scripts/lib.sh"
+if [ -n "$cf483_prefix_rev" ] \
+  && git -C "$HERE" show "$cf483_prefix_rev:scripts/bunker-server-install.sh" > "$cf483_tmp/prefix/scripts/bunker-server-install.sh" 2>/dev/null \
+  && grep -Fq 'warn "residue" "$residue_report' "$cf483_tmp/prefix/scripts/bunker-server-install.sh"; then
+  cf483_prefix_out=$(env -i PATH="$cf483_tmp/bin:/usr/bin:/bin" HOME="$cf483_tmp/home" \
+    BUNKER_SERVER=fixture-server BUNKER_CONFIG="$cf483_tmp/config.yaml" \
+    CF483_RESIDUE="$cf483_leaky" /bin/bash "$cf483_tmp/prefix/scripts/bunker-server-install.sh" --check 2>&1)
+  cf483_prefix_rc=$?
+  if [ "$cf483_prefix_rc" -eq 0 ] \
+    && [ "$(printf '%s\n' "$cf483_prefix_out" | tail -1)" = 'RESULT: PASS' ] \
+    && printf '%s\n' "$cf483_prefix_out" | grep -Fq '  WARN  residue'; then
+    # The control compares the pre-fix revision against the file UNDER TEST, whose exit status is
+    # $cf483_leaky_rc — printed so a reverted tree reads as an obvious contradiction, not a pass.
+    say "  PASS  CF-495 red control: pre-fix ${cf483_prefix_rev:0:8} passes the leaking host (exit $cf483_prefix_rc, RESULT: PASS) while scripts/bunker-server-install.sh under test exits $cf483_leaky_rc (last line '$cf483_leaky_last')"
+  else
+    say "  FAIL  CF-495 red control: pre-fix ${cf483_prefix_rev:0:8} did not reproduce the old pass (exit $cf483_prefix_rc, last line '$(printf '%s\n' "$cf483_prefix_out" | tail -1)') against the script under test's exit $cf483_leaky_rc"
+    printf '%s\n' "$cf483_prefix_out" | sed 's/^/    | /'
+    fails=$((fails+1))
+  fi
+else
+  say "  FAIL  CF-495 red control: no pre-fix revision of scripts/bunker-server-install.sh found in this checkout — the control cannot prove the arm can fail"
   fails=$((fails+1))
 fi
 # Before the fix, grep -qi orphan classified this exact clean status block as residue.

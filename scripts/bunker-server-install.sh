@@ -8,6 +8,12 @@
 # Accepted flags are --check, --json, --reap-orphans, and --apply. The generic install
 # mode is recognized only to refuse --apply explicitly; it is not a usage mode.
 #
+# --check exit status. A leaking host is not a warning: any non-zero server-reported
+# residue count (orphan users / orphan homes / orphan keys / stale linger entries) is a
+# counted FAIL row, so the run ends `RESULT: FAIL (N)` and exits 1. All-zero counts end
+# `RESULT: PASS` and exit 0, and an unparseable status block stays a WARN with exit 0
+# (residue unmeasured, not clean).
+#
 # A "bunker server" is the daemon that hosts agents. It is NOT the same machine as the
 # scheduler: the control host designs work, the bunker server runs nodes.
 set -uo pipefail
@@ -147,7 +153,10 @@ if [ -n "$b" ] && [ "${rc:-1}" -eq 0 ]; then
         && [ "$orphan_keys" -eq 0 ] && [ "$stale_linger" -eq 0 ]; then
         ok "residue" "$residue_report"
       else
-        warn "residue" "$residue_report — inspect/reap with node_hygiene.py reap (CF-003); BUNKER_HOMES_DIR/BUNKER_KEYS_DIR must name server-side directories accessible from this control host"
+        # A measured leak is a counted FAIL, not a warning: automation reads the exit
+        # status, and a WARN here made a leaking host indistinguishable from a clean one
+        # (CF-495).
+        bad "residue" "$residue_report — inspect/reap with node_hygiene.py reap (CF-003); BUNKER_HOMES_DIR/BUNKER_KEYS_DIR must name server-side directories accessible from this control host"
       fi
     else
       warn "residue" "server-reported counts could not be parsed — residue is unmeasured; inspect bunker status --server $SERVER and use node_hygiene.py reap (CF-003) with the server-side directories accessible from this control host"
