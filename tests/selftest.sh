@@ -5946,34 +5946,90 @@ say "51. the python lint lane can go red on one unused import, and green once it
 # away: the red that reached the branch is verdict
 # .gitreins/history/2026-11-05/0e9f844d (F401 at scripts/master_doc_fill.py:16,18,19
 # and scripts/master_doc_skeleton.py:10).
-if ! command -v ruff >/dev/null 2>&1; then
-  say "  FAIL  ruff is not on PATH, so the lint lane cannot be graded on this host"; fails=$((fails+1))
+#
+# CF-487: every `ruff` above used to be a BARE name, so WHICH checker graded the tracked
+# surface was decided by the launching shell's PATH. ruff 0.17.5 widened its DEFAULT rule
+# set — I001 lands on docs/audits/cf089-census-standin.py:7:1, UP031 beside it — while
+# 0.15.22 prints "All checks passed!" on the same tree, so `SELFTEST: PASS` was unreachable
+# from a cron-spawned shell and a FAIL row could not be attributed to a tool. Two
+# independent levers fix that: the BINARY is resolved to an absolute path and its
+# `--version` must equal $ruff_pin, and the RULE SET is named explicitly so a checker whose
+# defaults widen cannot move the verdict. Every row below names the version it graded, so a
+# FAIL is attributable to a tool; `RUFF_BIN` overrides the binary but is refused, never
+# silently swapped, when it is not the pin. Measurements and quoted output:
+# docs/audits/cf487-ruff-version-pin.md
+ruff_pin="0.15.22"
+ruff_rules="E4,E7,E9,F"
+ruff_bin=""
+ruff_version=""
+ruff_tried=""
+ruff_candidates=()
+if [ -n "${RUFF_BIN:-}" ]; then
+  # An explicit override is honoured or refused — never quietly replaced by the host pin.
+  ruff_candidates=("$RUFF_BIN")
 else
+  ruff_candidates=("${HOME:-/nonexistent}/.local/bin/ruff")
+  ruff_path_hit=$(have ruff || true)
+  [ -n "$ruff_path_hit" ] && ruff_candidates+=("$ruff_path_hit")
+fi
+for candidate in "${ruff_candidates[@]}"; do
+  [ -n "$candidate" ] || continue
+  if [ ! -x "$candidate" ]; then
+    ruff_tried="$ruff_tried $candidate(absent-or-not-executable)"
+    continue
+  fi
+  measured=$("$candidate" --version 2>/dev/null | head -1) || measured=""
+  case "$measured" in
+    "ruff $ruff_pin"*) ruff_bin=$candidate; ruff_version=$measured; break ;;
+    *) ruff_tried="$ruff_tried $candidate(${measured:-no-version-output})" ;;
+  esac
+done
+if [ -z "$ruff_bin" ]; then
+  say "  FAIL  no checker at the pinned ruff $ruff_pin to grade with, so the lint lane cannot be attributed to a tool; tried:${ruff_tried:- (nothing found)}"; fails=$((fails+1))
+else
+  say "  PASS  pinned checker: $ruff_version at $ruff_bin (pin $ruff_pin, rules $ruff_rules)"
   tmpd=$(mktemp -d)
   # RED: an unused import is a finding the lane fails on, and it is named F401.
   printf 'import os\nprint("x")\n' > "$tmpd/one_unused.py"
-  out=$(ruff check "$tmpd/one_unused.py" 2>&1); rc=$?
+  out=$("$ruff_bin" check --select "$ruff_rules" "$tmpd/one_unused.py" 2>&1); rc=$?
   if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q 'F401'; then
-    say "  PASS  one unused import -> exit $rc naming F401"
+    say "  PASS  one unused import -> exit $rc naming F401 ($ruff_version, rules $ruff_rules)"
   else
-    say "  FAIL  one unused import did not red (exit $rc)"; fails=$((fails+1))
+    say "  FAIL  one unused import did not red under $ruff_version at $ruff_bin (exit $rc)"; fails=$((fails+1))
     printf '%s\n' "$out" | sed 's/^/    | /'
   fi
   # GREEN: the same file, same checker, one line removed.
   printf 'print("x")\n' > "$tmpd/one_unused.py"
-  if out=$(ruff check "$tmpd/one_unused.py" 2>&1); then
-    say "  PASS  same file once the import is removed -> exit 0"
+  if out=$("$ruff_bin" check --select "$ruff_rules" "$tmpd/one_unused.py" 2>&1); then
+    say "  PASS  same file once the import is removed -> exit 0 ($ruff_version, rules $ruff_rules)"
   else
-    say "  FAIL  the clean file still reds, so the arm cannot go green"; fails=$((fails+1))
+    say "  FAIL  the clean file still reds under $ruff_version at $ruff_bin, so the arm cannot go green"; fails=$((fails+1))
     printf '%s\n' "$out" | sed 's/^/    | /'
   fi
-  # The tracked surface the lane grades must itself be clean.
+  # RED CONTROL (CF-487): the isort family is the class the version race actually moved, and
+  # the pinned defaults do not grade it, so this control ASKS for I001 — a pin is not proof
+  # the checker can still fail, only the quote below is.
+  printf 'from urllib.parse import urlparse, parse_qs\nimport json\nimport os\n\nprint(json.dumps({"a": os.getcwd(), "u": str(urlparse("x")), "q": parse_qs("y")}))\n' \
+    > "$tmpd/unsorted.py"
+  out=$("$ruff_bin" check --select I001 --output-format=concise "$tmpd/unsorted.py" 2>&1); rc=$?
+  quoted=$(printf '%s\n' "$out" | grep -m1 'I001' | sed 's/^[^ ]*:[0-9]*:[0-9]*: //' || true)
+  if [ "$rc" -ne 0 ] && [ -n "$quoted" ]; then
+    say "  PASS  unsorted import block -> exit $rc; quoted: $quoted ($ruff_version, --select I001)"
+  else
+    say "  FAIL  the unsorted-import control did not red under $ruff_version at $ruff_bin (exit $rc)"; fails=$((fails+1))
+    printf '%s\n' "$out" | sed 's/^/    | /'
+  fi
+  # The tracked surface the lane grades must itself be clean. Concise output so a FAIL can
+  # NAME the offending file:line instead of only dumping a block nobody can attribute.
   tracked=$(git -C "$HERE" ls-files '*.py')
   n_tracked=$(printf '%s\n' "$tracked" | grep -c . || true)
-  if out=$(ruff check $tracked 2>&1); then
-    say "  PASS  tracked python surface clean: $n_tracked files graded"
+  out=$("$ruff_bin" check --select "$ruff_rules" --output-format=concise $tracked 2>&1); rc=$?
+  if [ "$rc" -eq 0 ]; then
+    say "  PASS  tracked python surface clean: $n_tracked files graded ($ruff_version, rules $ruff_rules)"
   else
-    say "  FAIL  tracked python surface is red: a python-staging commit is refused"; fails=$((fails+1))
+    n_find=$(printf '%s\n' "$out" | grep -cE '^[^ ]+:[0-9]+:[0-9]+: ' || true)
+    first=$(printf '%s\n' "$out" | grep -m1 -E '^[^ ]+:[0-9]+:[0-9]+: ' || true)
+    say "  FAIL  tracked python surface is red under $ruff_version at $ruff_bin: $n_find finding(s), first ${first:-unattributed}"; fails=$((fails+1))
     printf '%s\n' "$out" | sed 's/^/    | /'
   fi
   rm -rf "$tmpd"
