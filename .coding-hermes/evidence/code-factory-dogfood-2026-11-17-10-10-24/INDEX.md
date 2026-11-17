@@ -53,3 +53,42 @@ host-home elision applied — the board rows `CF-483`/`CF-484` therefore carry t
 home path inside their quoted FAIL row (`binary — host-provided <home>/.local/bin/hermes`) where
 these copies carry `~/…`. The board path is exempt from the publish gate; this directory is not.
 
+---
+
+# Delivery 3 — the node-create leg (README step 3), added at `db42390d`
+
+Report: `docs/dogfood/2026-11-17-node-create-leg.md`. Rows: `CF-489` (P1), `CF-490` (P2).
+
+Deliveries 1 and 2 left step 3 unverified. These arms are that leg, run against real hosts with a
+real public fixture (`https://github.com/github/gitignore`) and a live crier. stdout and stderr were
+captured separately per arm; the exit status is the `/usr/bin/time … CREATE_WALL=/CREATE_RC=` line in
+the arm's own `.err`, and the wall clock is also written into the `.out` as
+`CREATE_WALL_CLOCK_S`/`STARTED_UTC`/`ENDED_UTC` so the transcript is self-dating.
+
+| File | Arm |
+|---|---|
+| `step3-manifest.*` | `node-create.sh --staged-files` — rc 0, 14-file manifest, 0.42 s (the host-free arm) |
+| `step3-nodecreate-las03.sh`, `step3-create.*` | the documented command against an ONLINE host — rc 1, `FAIL spawn — … slice-limits … memory.swap.max = "max", want "0"`, 27.19 s (`CF-489`) |
+| `step3-nodecreate-las02.sh`, `step3-create-las02.*` | the IDENTICAL command with only `BUNKER_SERVER` changed, against a second ONLINE host — rc 1, same assertion at a different read budget (5 vs 40), 20.59 s (`CF-489`) |
+| `step3-file-rows.py`, `r3-*.txt`, `r4-*.txt` | the exact board payloads this delivery filed (`CF-489`, `CF-490`) — the driver passes every field as an argv list, no shell interpolation |
+
+## Substitutions (disclosed, not silent)
+
+| Literal | Replaced with | Files affected |
+|---|---|---|
+| the absolute host-home prefix | `~` | `step3-nodecreate-las03.sh`, `step3-nodecreate-las02.sh`, `step3-file-rows.py`, the `r3-*`/`r4-*` payload copies |
+
+Nothing else was changed. The node host names (`bunker-las-02`, `bunker-las-03`) are left as printed
+because the tracked tree already carries them (`.coding-hermes/dogfood-log.md`, `docs/audits/`, the
+handbook appendices) and no address or port appears in these transcripts. The one host-filesystem
+literal that remains is the bunkerd spawn-log path (`/mnt/ssd/tmp/cf-spawn-…`), quoted verbatim
+because it is the only handle the failure message gives a user; it is a scratch path, not a home
+path and not a network address.
+
+Two further disclosures about `step3-file-rows.py`: the committable copy is re-emitted in `ruff
+format` style (the repo's lint lane grades staged `*.py`; `ruff format --check` on this copy reports
+"already formatted"), and its `BOARD`/`BOARDCTL`/`SCRATCH` roots carry the same `~` elision. It is the
+same argv-list logic that filed `CF-489`/`CF-490`, not a second implementation.
+
+
+

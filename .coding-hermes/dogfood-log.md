@@ -65,3 +65,34 @@ sibling row was minted; this is a second, independent measurement of the same de
 A separate FAIL on the first attempt (`publish paths — baseline 0, current 1`,
 `docs/audits/cf-PERF-021-…`) was the worker's own mid-edit `/home/…` leak in the shared index, gone by
 the retry — a shared-checkout snapshot, not a repo defect, and not filed.
+
+## 2026-11-17 — delivery 3 of `code-factory-dogfood-2026-11-17-10-10-24`: the node-create leg
+
+- **Verdict for this leg**: 🔴 DOES-NOT-DELIVER on this fleet. README "Quick start" step 3 cannot
+  produce a node on either bunker host that answers; deliveries 1–2 left the leg unverified, this one
+  walked it.
+- **Tip walked**: `db42390d` (`origin/main`, parity 0/0, clean tree). Fixture:
+  `https://github.com/github/gitignore`; harness `hermes`; live crier on the fleet's loopback port.
+- **Measured**: `bunker-las-03` → `FAIL spawn — … at stage slice-limits … memory.swap.max = "max",
+  want "0" (bar swap)`, rc 1, 27.19 s. `bunker-las-02`, identical command, only the server changed →
+  the same assertion at a different read budget (5 vs 40), rc 1, 20.59 s. `bunker-las-01` and
+  `bunker-las-04` are OFFLINE (`dial tcp … i/o timeout`). The host-free arm
+  (`--staged-files`) is fine: rc 0, 14 files, 0.42 s.
+- **What held**: the failure is not swallowed (rc 1, `FAIL` prefix, bunkerd log path, final
+  diagnostic quoted) and no agent is stranded — `bunker list` reports `No agents found` on both hosts
+  after both failures.
+- **Rows filed**: `CF-489` (P1 — no ONLINE host can spawn; rows carry the host setting to change and
+  the doc that must stop implying a working path) and `CF-490` (P2 — the spawn refusal is
+  unclassified passthrough with no remedy line, and `grep` for the prerequisite in the tree returns
+  0 hits). Chapters named on both: `III.M1.S1`, `III.M1.S2`.
+- **Not claimed**: slice-level residue below the agent list (no exec path, and `bunker reap` /
+  `bunker homes` reject `--server`); that cgroup swap accounting is the only cause; and any
+  successful node create — none was observed.
+- **Artifacts**: `docs/dogfood/2026-11-17-node-create-leg.md`,
+  `.coding-hermes/evidence/code-factory-dogfood-2026-11-17-10-10-24/step3-*` + `r3-*`/`r4-*`, plus
+  the delivery-3 section of that directory's `INDEX.md`.
+- **No dispatch**: this lane's contract is to file, not to fix its own findings (the dogfood skill's
+  rule), so no worker was spawned on `CF-489`/`CF-490`; the next `code-factory` foreman tick should
+  take `CF-490` first — it is repo-side code plus docs with a fixture, and it does not need host
+  access. `CF-489` is blocked on the host owner for its PASS arm.
+

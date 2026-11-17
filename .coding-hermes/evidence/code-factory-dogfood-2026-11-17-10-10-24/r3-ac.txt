@@ -1,0 +1,9 @@
+A host that can spawn is proved by one recorded run, and the record exists in the tree.
+
+1. Re-run the documented command on each ONLINE host, with the same real public fixture:
+   BUNKER_SERVER=<host> CRIER_URL=<live-crier-url> scripts/node-create.sh --project dogfood-probe --repo https://github.com/github/gitignore --harness hermes --ttl 2h
+   PASS arm: the output carries a `PASS` row for the spawn stage (no `FAIL  spawn`), the agent id it printed is listed by `bunker --server <host> list`, and the run continues into staging/provisioning.
+   FAIL arm: still `FAIL  spawn — … at stage slice-limits … memory.swap.max = "max", want "0"`.
+2. Commit the transcript of the PASS arm under .coding-hermes/evidence/<tick>/ and cite it in the row's closeout note, with the host name and the agent id.
+3. If the fleet cannot be fixed from inside this repo, the row's evidence names the exact host setting that must change (bunkerd slice wants memory.swap.max=0; cgroup v2 swap accounting must be enabled on the host) and the owning lane (ops/bunker), and the README Status table gains a line stating that no ONLINE host can spawn until that lands — so the doc stops implying a working node path.
+4. No tuning of the create path to work around the host refusal: none of this row's acceptance may be met by suppressing or rewording the diagnostic.

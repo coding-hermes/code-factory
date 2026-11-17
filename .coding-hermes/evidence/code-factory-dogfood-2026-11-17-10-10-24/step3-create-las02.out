@@ -1,0 +1,8 @@
+node-create — project=dogfood-probe harness=hermes server=bunker-las-02
+  ..    spawning node-dogfood-probe-062006 (ttl 2h)
+  FAIL  spawn — failed; log=/mnt/ssd/tmp/cf-spawn-node-dogfood-probe-062006-maOBKj.log; final diagnostic: bunker: spawn agent: internal: spawn node-dogfood-probe-062006 failed at stage slice-limits: containment landing did not converge within 5 reads: containment landing: memory.swap.max = "max", want "0" (bar swap)
+CREATE_EXIT=1
+CREATE_WALL_CLOCK_S=20
+SERVER=bunker-las-02
+STARTED_UTC=2026-11-17T11:20:06Z
+ENDED_UTC=2026-11-17T11:20:26Z

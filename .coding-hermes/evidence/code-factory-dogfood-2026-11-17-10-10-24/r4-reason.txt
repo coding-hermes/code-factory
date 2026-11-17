@@ -1,0 +1,17 @@
+P2 — a spawn-stage refusal is passed through verbatim: no classified host row, no remedy line, and the host prerequisite appears in no document
+
+Measured twice today (CF-489 arms 1 and 2). `scripts/node-create.sh` prints the bunkerd diagnostic with the log path and exits 1:
+
+  FAIL  spawn — failed; log=/mnt/ssd/tmp/cf-spawn-node-dogfood-probe-061457-HAmFH3.log; final diagnostic: bunker: spawn agent: internal: spawn node-dogfood-probe-061457 failed at stage slice-limits: containment landing did not converge within 40 reads: containment landing: memory.swap.max = "max", want "0" (bar swap)
+
+WHAT IS ACTUALLY GOOD HERE, so a fix does not regress it: the row is prefixed FAIL, the exit status is 1, the bunkerd log path is printed, and the final diagnostic is quoted rather than swallowed. This is not a swallowed-failure row (that class is CF-056).
+
+WHAT IS MISSING, measured against this repo's own standard:
+1. NO CLASS. Other refusals in the same script are classified and remedied by name — `FAIL agent` names the id and says to run --apply / spawn it (CF-051), `FAIL config file:line is not KEY=VALUE — refusing to run it` (bunker-provision.sh). A spawn-stage refusal is the one failure leg that hands the user bunkerd's internal vocabulary (`slice-limits`, `containment landing`, `bar swap`) with no `host cannot spawn` class and no next action. A stranger cannot tell "your host is misconfigured" from "the factory is broken", and every wrong guess costs a 20-30 s round trip.
+2. NO REMEDY LINE. The message names what failed, never what to do: enable cgroup v2 swap accounting on the host (bunkerd's slice wants memory.swap.max=0), or move to another --server, or check `bunker status --server <name>` first.
+3. NO DOCUMENTED PREREQUISITE. `grep -rn 'slice-limits\|containment landing\|swap.max'` over the tree (md/sh/py) returns 0 hits, and neither README "Quick start" nor docs/OPERATIONS.md states that the TARGET server must be spawn-capable. Step 1 (`bunker-server-install.sh --check`) qualifies the control host only, so the documented path has no step where this can be discovered before step 3.
+4. RETRY SEMANTICS ARE INVISIBLE. The two arms report different budgets ("within 40 reads" vs "within 5 reads") for the same unsatisfiable state, so the printed number reads like a flake counter when the cause is deterministic. Nothing says the refusal is deterministic and a retry will cost the same 20-30 s.
+
+EVIDENCE: .coding-hermes/evidence/code-factory-dogfood-2026-11-17-10-10-24/step3-create.out, step3-create-las02.out (both arms, verbatim), docs/dogfood/2026-11-17-node-create-leg.md.
+
+FIX DIRECTION: give the spawn leg its own class in node-create.sh (e.g. `FAIL host — <server> cannot spawn an agent: <stage> …` plus one remedy line naming the host setting and the `bunker status --server` preflight), and state the host prerequisite in README Quick start + docs/OPERATIONS.md next to the step-3 command. Behaviour first, doc second, one commit.
