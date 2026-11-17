@@ -107,15 +107,26 @@ credential store built from the token, and deletes both copies. No value is prin
 passed as an argument, and `$HOME/.node/node.json` carries names only
 (`scripts/bunker-provision.sh:172-214`).
 
-`--check` against the template, on a host that has the client but no such node:
+`--check` against the shipped template `config/bunker.example.conf`, at this tip, on a host that has
+the client but no such node. Row names, verdicts and order below are that run verbatim (exit 1); the
+only edit is the `$HOME` prefix in the `inputs` and `github_auth` detail paths, elided to `~` because
+a published page may not carry an absolute host-home path (`III.M6.S7`). The placeholder values
+`agent=<agent-id>` and `server=<bunker-server>` are what an *unedited* copy carries; a host that
+edited them sees its own values there:
 
 ```
-PASS  config — bunker.example.conf — 25 lines, KEY=VALUE only
-bunker-provision --check — project=code-factory agent=cf-node server=bunker-node-01
+  PASS  config — bunker.example.conf — 53 lines, KEY=VALUE only
+  FAIL  inputs — not readable: GITHUB_TOKEN_FILE(~/.config/code-factory/github.token) CRIER_AGENT_KEY_FILE(~/.config/code-factory/<project>/agent.key) S3_ENV_FILE(~/.config/code-factory/s3.env)
+bunker-provision --check — project=code-factory agent=<agent-id> server=<bunker-server>
+  ..    resolved repo=https://github.com/coding-hermes/code-factory.git ref=main harness=hermes namespaces=code-factory,coder (primary code-factory) ttl=30d crier=http://<control-host>:8767 duckbrain=http://<control-host>:3000
+  FAIL  github_auth — GITHUB_TOKEN_FILE ~/.config/code-factory/github.token is unreadable
   PASS  bunker_cli — ~/.local/bin/bunker
-  FAIL  server — bunker-node-01 not listed by 'bunker list'
-  FAIL  agent — cf-node absent — run --apply to create it
+  FAIL  server — <bunker-server> not listed by 'bunker list'
+  FAIL  agent — <agent-id> absent — run --apply to create it
 ```
+
+The `53 lines` in the first row is `wc -l config/bunker.example.conf`, and the `inputs` row names
+every credential path the template expects before any bunker call is made.
 
 `--apply` printing PASS is not evidence; `--check` is. Against the reference deployment on
 2026-11-05 the same command printed `PASS  repo — clone present (af67c3b branch main, 0 dirty)`,
@@ -268,7 +279,7 @@ project inventory before relying on a current deployment count.
 
 The six core lane rows are configured by `scripts/load_lane_config.py`; the eight added family rows
 (workdir, parent, admission mode) by `scripts/add_family_lanes.py`. Prompts are role files, not
-lane files: `prompts/` ships eleven files for fourteen lanes, and every QA-job lane (the three QA
+lane files: `prompts/` ships twelve files for fourteen lanes, and every QA-job lane (the three QA
 satellites and `code-factory-qa` itself) loads the same `prompts/qa.md`. The loader copies the
 prompt text into the scheduler's project row at setup, so edit the file in `prompts/` and re-run
 the loader; the database row is only a copy of it. `tests/selftest.sh` refuses a README that names
@@ -342,7 +353,7 @@ STATUS: complete | partial | blocked
 TIER: T1
 EVIDENCE: README.md#the-lanes
 
-Evidence for the state of this README: the clone figure is covered by the published audit `docs/audits/code-factory-readme-2026-10-30-20-29-25.md`; the prompt column and the eleven-file/layout census are covered by the published audit `docs/audits/code-factory-readme-2026-10-30-23-28-00.md` (whose command transcript is the `.probe.txt` beside it).
+Evidence for the state of this README: the clone figure is covered by the published audit `docs/audits/code-factory-readme-2026-10-30-20-29-25.md`; the prompt column and the layout census are covered by the published audit `docs/audits/code-factory-readme-2026-10-30-23-28-00.md` (whose command transcript is the `.probe.txt` beside it); the prompt-file count is the twelve that `ls prompts/*.md | wc -l` prints at this tip, not a number carried over from that audit.
 
 ch:trace row=CF-038 spec=README.md#evidence wave=none:serial test=bash-tests/selftest.sh doc=README.md evidence=docs/audits/code-factory-readme-2026-10-30-23-28-00.md witness=path@origin:README.md verdict=none:foreman-judges-after-merge commit=none:self-referential-hash memory=none:not-written
 
