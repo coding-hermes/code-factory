@@ -96,3 +96,63 @@ the retry — a shared-checkout snapshot, not a repo defect, and not filed.
   take `CF-490` first — it is repo-side code plus docs with a fixture, and it does not need host
   access. `CF-489` is blocked on the host owner for its PASS arm.
 
+
+## 2026-11-17 — delivery 4 of `code-factory-dogfood-2026-11-17-10-10-24`: duplicate delivery, then the foreman leg on CF-490
+
+- **Duplicate delivery, confirmed before any work**: `grep -c` of the tick id in
+  `~/.hermes/logs/gateway.log` returns 4 inbound lines (05:10, 05:46, 06:11, 07:02 local). Deliveries
+  1-3 own the walk: rows `CF-483`/`CF-484` (control-host path at `0014b76a`), `CF-489`/`CF-490`
+  (node-create leg on two bunker hosts), evidence under
+  `.coding-hermes/evidence/code-factory-dogfood-2026-11-17-10-10-24/`, plus the re-fire receipt
+  `82972156` and its addendum `f892cbd6`. No re-walk here; nothing re-measured.
+- **Provenance re-verified from `origin/main`, not the working copy**: `CF-483`, `CF-484`, `CF-489`,
+  `CF-490` all `pending` with a paired `task_created` event each; the evidence directory is tracked
+  and non-empty; `gitreins` history holds the dogfood verdict run `ed488866`.
+- **The tree was held, twice, by live writers.** At 07:03-07:08 the sibling foreman tick
+  `code-factory-foreman-2026-11-17-10-27-30` (session `e738fa85`) held the shared checkout: its
+  `board-close.sh` had `CF-486` staged as `complete` while `HEAD` still read `in_progress`. It landed
+  and pushed `609172a1`; the tree then went clean. At 08:04-08:12 three more sessions were committing
+  board rows in the same checkout (`CF-274` closeout, a `-- .coding-hermes/board/**` pathspec commit)
+  with `.git/index.lock` held through their gitreins guards. **No second dispatch into the shared
+  checkout, and no board write retried against a held index** — that contention is why the CF-490
+  landing was done from an isolated worktree.
+- **Delivery 3's handoff was executed, by the lane that owns it.** Delivery 3 ended with "the next
+  `code-factory` foreman tick should take `CF-490` first". This delivery is that tick: `CF-490`
+  claimed on the board (status `in_progress` + `foreman_note` naming the tick, the chapter and the
+  files) in `70d02621`, GitReins task `CF-490` created and started, a worker
+  (`openai/gpt-6.1-terra@xkiro`, the authoritative worker lane) dispatched into
+  `~/.hermes/cache/scratch/cf490-wt-0715` on branch `cf490-host-spawn-class` at base `70d02621`.
+  Fixing the finding is the foreman leg, not the dogfood lane fixing its own findings; the walk
+  itself stayed read-only.
+- **The worker lost its turn, its diff survived.** `hermes chat` exited 1 with "Gateway disconnected;
+  turn outcome is unknown" after staging all seven files. Per the unattended-session rule the index,
+  not the log, is where such a deliverable lives: the staged set was frozen as-is, every gate was run
+  by the foreman, and the commit was made under the foreman's identity with the provenance disclosed
+  in the message (`56c3a2b1`).
+- **Measured, all offline (no live bunker run claimed)**:
+  `bash tests/selftest.sh` in the worktree → `SELFTEST: PASS`, `EXIT=0`, 598 `PASS` rows, including
+  `PASS CF-490 host spawn refusal -> one FAIL host row (fixture-server, stage slice-limits) + one
+  remedy line` and `PASS CF-490 red control: the pre-fix script prints only the bare FAIL spawn row`.
+  `bash docs/audits/cf490-host-spawn-proof.sh` → `CF490-PROOF: PASS`, rc 0 (ARM A pre-fix: host rows 0,
+  remedy 0; ARM B post-fix: host rows 1, spawn rows 0, remedy 1, log exists, diagnostic verbatim;
+  ARM C quota refusal keeps `FAIL spawn`; docs greps 2/2 and 1/1). `bash -n` on the three changed
+  shell files, rc 0 each (the `bash -n <file>` form was refused by the scan-budget gate and the
+  stdin form `bash -n < <file>` was used instead).
+- **A caution for the next fire**: the commit-time guard reported `Tier 1: DEGRADED PASS (skips:
+  lint=no staged files, tests=no staged files)` on this worktree, and the two guard runs recorded
+  around the commit (`guard-20261117T124910`, `…T125557`) also show `lint: no staged files` — so the
+  suite that certifies this fix is the one the foreman ran directly, not a hook lane. That is the
+  CF-474 class again (a commit-time guard presented an empty staged set in a worktree), already
+  filed; this is a third independent measurement, not a new row.
+- **Landed**: fix commit `56c3a2b1`, merge `96e119e5` pushed to `origin` and `gh` (both refs verified
+  equal to the local tip by `ls-remote`), CI run on `96e119e5` = `success`. The landing was done from
+  the isolated worktree (merge of `cf490-host-spawn-class` onto `origin/main` at `3d2a7c46`, then
+  `git push origin HEAD:main`) precisely because the shared checkout's index was held by other lanes;
+  full suite re-run on the MERGED tree before pushing: `SELFTEST: PASS`, `EXIT=0`, 598 `PASS` rows.
+- **CI**: `gh run list` at tick start — last three runs `success`/`success`/`cancelled`
+  (the cancelled one is the superseded dogfood-commit run); the merged tip `96e119e5` then ran
+  `success`. No failure to file.
+- **Evidence committed**: `.coding-hermes/evidence/code-factory-dogfood-2026-11-17-10-10-24/d4-*`
+  (`cf490-proof.out`, the merged-tree selftest log + its verdict excerpt, and a provenance record
+  naming the fix commit, merge commit, base and remote tip).
+

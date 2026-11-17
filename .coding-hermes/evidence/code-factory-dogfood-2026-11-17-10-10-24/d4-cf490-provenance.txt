@@ -1,0 +1,7 @@
+# CF-490 — landing provenance (delivery 4 of code-factory-dogfood-2026-11-17-10-10-24)
+worktree=~/.hermes/cache/scratch/cf490-wt-0715
+fix_commit=56c3a2b190ac45a3b736e39399a982c96062de71
+merge_commit=96e119e55ad65ee9fbb1a1c87f59791f6881da42
+base=70d02621e9d9da7d7778e48cbf0eaa5c7a30b861
+remote_main=1c54dfa774c7e83275392db9b82b09b8f3973c28
+worker_log=~/.hermes/cache/scratch/cf-foreman-1010/cf490-worker.log  (hermes chat exit 1: gateway disconnected; diff frozen and committed by the foreman)

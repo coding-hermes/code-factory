@@ -1,0 +1,8 @@
+# CF-490 — verdict lines from bash tests/selftest.sh (merged tree 96e119e5)
+# full log: .coding-hermes/evidence/code-factory-dogfood-2026-11-17-10-10-24/d4-cf490-selftest.log
+run_rc=RC=0
+SELFTEST: PASS
+EXIT=0
+pass_rows=598
+  PASS  CF-490 host spawn refusal -> one FAIL host row (fixture-server, stage slice-limits) + one remedy line, log /mnt/ssd/tmp/tmp.caIPvj94fm/runtime/cf-spawn-node-fixture-081307-mFTyhN.log and the diagnostic kept verbatim
+  PASS  CF-490 red control: the pre-fix script prints only the bare FAIL spawn row (0 host rows, 0 remedy lines) — this fixture can fail

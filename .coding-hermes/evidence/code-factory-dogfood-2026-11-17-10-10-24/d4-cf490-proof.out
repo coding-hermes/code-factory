@@ -1,0 +1,29 @@
+=== ARM A — pre-fix (70d02621:scripts/node-create.sh), slice-limits diagnostic ===
+node-create — project=fixture harness=hermes server=fixture-server
+  ..    spawning node-fixture-074911 (ttl 6h)
+  FAIL  spawn — failed; log=/mnt/ssd/tmp/tmp.d2sgJKghz1/runtime/cf-spawn-node-fixture-074911-vVm8AW.log; final diagnostic: bunker: spawn agent: internal: spawn node-fixture-000000 failed at stage slice-limits: containment landing did not converge within 40 reads: containment landing: memory.swap.max = "max", want "0" (bar swap)
+rc=1  FAIL-host rows=0  FAIL-spawn rows=1  remedy lines=0
+PASS  pre-fix refusal is unclassified: no host class, no remedy, diagnostic kept
+
+=== ARM B — post-fix (this tree), same slice-limits diagnostic ===
+node-create — project=fixture harness=hermes server=fixture-server
+  ..    spawning node-fixture-074912 (ttl 6h)
+  FAIL  host — fixture-server cannot spawn an agent: slice-limits; log=/mnt/ssd/tmp/tmp.d2sgJKghz1/runtime/cf-spawn-node-fixture-074912-LOTxzp.log; final diagnostic: bunker: spawn agent: internal: spawn node-fixture-000000 failed at stage slice-limits: containment landing did not converge within 40 reads: containment landing: memory.swap.max = "max", want "0" (bar swap)
+  ..    remedy: fixture-server must let bunkerd land its per-agent slice — enable cgroup v2 swap accounting on that host so memory.swap.max can be set to 0; preflight the target from here with: bunker status --server fixture-server
+rc=1  FAIL-host rows=1  FAIL-spawn rows=0  remedy lines=1  log=/mnt/ssd/tmp/tmp.d2sgJKghz1/runtime/cf-spawn-node-fixture-074912-LOTxzp.log
+PASS  one FAIL host row (fixture-server, stage slice-limits) + one remedy line, log file exists, diagnostic verbatim
+
+=== ARM C — quota refusal keeps the FAIL spawn row (CF-056) ===
+node-create — project=fixture harness=hermes server=fixture-server
+  ..    spawning node-fixture-074912 (ttl 6h)
+  FAIL  spawn — failed; log=/mnt/ssd/tmp/tmp.d2sgJKghz1/runtime/cf-spawn-node-fixture-074912-vSVDjM.log; final diagnostic: fixture spawn refused: quota exhausted
+rc=1  FAIL-host rows=0  FAIL-spawn rows=1
+PASS  a non-host refusal is still the plain FAIL spawn row
+
+=== DOCS — the prerequisite sentence and its citation ===
+grep -c 'target server must be spawn-capable' README.md -> 2 (rc=0)
+grep -c 'cf490-host-spawn-class' README.md -> 2 (rc=0)
+grep -c 'target server must be spawn-capable' docs/OPERATIONS.md -> 1 (rc=0)
+grep -c 'cf490-host-spawn-class' docs/OPERATIONS.md -> 1 (rc=0)
+
+CF490-PROOF: PASS
