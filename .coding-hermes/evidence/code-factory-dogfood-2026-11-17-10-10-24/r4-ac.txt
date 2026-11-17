@@ -1,0 +1,6 @@
+A spawn-stage refusal is classified, remedied and documented, and a fixture proves the class fires.
+
+1. `scripts/node-create.sh` maps a bunkerd spawn-stage refusal to one named row of its own — `FAIL host — <server> cannot spawn an agent: <stage>` — followed by exactly one remedy line naming (a) the host setting to fix and (b) the `bunker status --server <name>` preflight a user can run before step 3. The bunkerd log path and final diagnostic stay in the message (no regression of today's information content).
+2. `tests/selftest.sh` gains a fixture that drives the stub/dry bunker arm with that exact diagnostic and asserts the new row and the remedy line appear, plus a red control (the same arm without the classification must FAIL the fixture).
+3. README "Quick start" and docs/OPERATIONS.md state, beside step 3, that the target server must be spawn-capable and that step 1 qualifies only the control host; each doc sentence cites the fixture/run that proves it.
+4. Acceptance is re-runnable from a clean tree: `bash tests/selftest.sh` (or the documented subset) exits 0 and the cited fixture name appears in its output; the README grep for the new prerequisite sentence returns >= 1.

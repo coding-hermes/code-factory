@@ -1,0 +1,41 @@
+FF......
+======================================================================
+FAIL: test_allowlist_cannot_absorb_a_new_zero_evidence_row (tests.test_board_evidence_check.BoardEvidenceCheck.test_allowlist_cannot_absorb_a_new_zero_evidence_row)
+The accepted baseline is a dated allowlist, not a runtime-derived count.
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "~/.hermes/cache/scratch/cf-foreman-2026-11-17-10-27-30/wt-red/tests/test_board_evidence_check.py", line 242, in test_allowlist_cannot_absorb_a_new_zero_evidence_row
+    self.assertIn(row_id, module.ACCEPTED_UNRESOLVED)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'CF-473' not found in frozenset({'CF-114', 'CF-141', 'CF-320', 'CF-096', 'CF-275', 'CF-082', 'CF-257', 'CF-382', 'CF-008', 'CF-422', 'CF-115', 'CF-291', 'CF-280', 'CF-090', 'CF-244', 'CF-245', 'CF-034', 'CF-011', 'CF-052', 'CF-037', 'CF-401', 'CF-153', 'CF-404', 'CF-064', 'CF-307', 'CF-127', 'CF-128', 'CF-378', 'CF-182', 'CF-370', 'CF-402', 'CF-354', 'CF-050', 'PERF-012', 'CF-051', 'CF-411', 'CF-167', 'CF-041', 'P5G-34', 'CF-379', 'CF-038', 'CF-150', 'CF-197', 'CF-092', 'CF-157', 'PERF-014', 'QA-CODE-FACTORY-2', 'CF-013', 'CF-089', 'CF-219', 'CF-192', 'CF-303', 'CF-012', 'CF-226', 'CF-277', 'CF-198', 'CF-289', 'CF-305', 'CF-259', 'CF-097', 'CF-230', 'CF-270'})
+
+======================================================================
+FAIL: test_both_evidence_shapes_resolve_and_empty_shapes_do_not (tests.test_board_evidence_check.BoardEvidenceCheck.test_both_evidence_shapes_resolve_and_empty_shapes_do_not)
+Both evidence shapes resolve; an empty field is still ZERO-EVIDENCE (CF-486).
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "~/.hermes/cache/scratch/cf-foreman-2026-11-17-10-27-30/wt-red/tests/test_board_evidence_check.py", line 444, in test_both_evidence_shapes_resolve_and_empty_shapes_do_not
+    self.assertEqual(
+    ~~~~~~~~~~~~~~~~^
+        observed,
+        ^^^^^^^^^
+    ...<7 lines>...
+        },
+        ^^
+    )
+    ^
+AssertionError: {'CF-[59 chars]T': 'zero-evidence', 'CF-486-FIXTURE-DICT-COMM[157 chars]nce'} != {'CF-[59 chars]T': 'resolved', 'CF-486-FIXTURE-DICT-COMMIT': [144 chars]nce'}
+Diff is 714 characters long. Set self.maxDiff to None to see it.
+
+----------------------------------------------------------------------
+Ran 8 tests in 1.709s
+
+FAILED (failures=2)
+
+CF-486 evidence-shape verdicts:
+  CF-486-FIXTURE-LIST = resolved
+  CF-486-FIXTURE-DICT-ARTIFACT = zero-evidence
+  CF-486-FIXTURE-DICT-COMMIT = zero-evidence
+  CF-486-FIXTURE-DICT-DANGLING = zero-evidence
+  CF-486-FIXTURE-EMPTY-LIST = zero-evidence
+  CF-486-FIXTURE-EMPTY-DICT = zero-evidence

@@ -1,0 +1,29 @@
+P1 — no ONLINE node host in this fleet can spawn an agent: the documented step-3 node create dies at bunkerd's slice-limits stage on both hosts that answer
+
+WALKED: README "Quick start" step 3, verbatim, from a clean tree at db42390d (origin/main, parity 0/0), with the two documented env vars exported (CRIER_URL=http://127.0.0.1:8767, a live crier on :8767; BUNKER_SERVER=<host>), against a real public repo the repo's own Status table already uses as its clone fixture (https://github.com/github/gitignore).
+
+  scripts/node-create.sh --project dogfood-probe --repo https://github.com/github/gitignore --harness hermes --ttl 2h
+
+ARM 1 — bunker-las-03 (bunker status: ONLINE, 5d 13h uptime, 0/8 agents, disk 78%):
+  ..    spawning node-dogfood-probe-061457 (ttl 2h)
+  FAIL  spawn — failed; log=/mnt/ssd/tmp/cf-spawn-node-dogfood-probe-061457-HAmFH3.log; final diagnostic: bunker: spawn agent: internal: spawn node-dogfood-probe-061457 failed at stage slice-limits: containment landing did not converge within 40 reads: containment landing: memory.swap.max = "max", want "0" (bar swap)
+  exit 1, 27.19 s wall (CREATE_WALL=27.19 CREATE_RC=1)
+
+ARM 2 — bunker-las-02 (ONLINE, 0/8 agents, disk 64%), the IDENTICAL command, only BUNKER_SERVER changed:
+  ..    spawning node-dogfood-probe-062006 (ttl 2h)
+  FAIL  spawn — failed; log=/mnt/ssd/tmp/cf-spawn-node-dogfood-probe-062006-maOBKj.log; final diagnostic: bunker: spawn agent: internal: spawn node-dogfood-probe-062006 failed at stage slice-limits: containment landing did not converge within 5 reads: containment landing: memory.swap.max = "max", want "0" (bar swap)
+  exit 1, 20.59 s wall (CREATE2_WALL=20.59 CREATE2_RC=1)
+
+Two independent hosts, two different read budgets (40 vs 5), the same unsatisfiable assertion: the bunkerd slice wants memory.swap.max=0 and the host reports "max". So this is a fleet-side containment prerequisite, not a one-host fluke and not a repo code path: the create path did reach bunkerd and got a typed diagnostic.
+
+WHAT A USER LOSES: there is no host in this fleet on which README step 3 can complete, so the repo's own flagship promise ("scripts/node-create.sh … make one, from the control host") has no reproducible instance. The README already says "No created node has been measured live by this repository" — this is why that sentence is still true at this tip.
+
+WHAT STEP 1 CANNOT CATCH: step 1 is `bunker-server-install.sh --check`, which qualifies the CONTROL host (bunker CLI present, crier reachable). It says nothing about whether the TARGET server can spawn, so a stranger walks 1 → PASS, 2 → PASS/FAIL-by-python, 3 → a bunkerd internal stage name.
+
+NO RESIDUE MEASURED: `bunker list` on both hosts reports "No agents found" after the failures (0/8 on each), so a refused spawn leaves no agent object behind. Slice/cgroup residue below the agent list was NOT measured (no exec into the hosts without an agent, and `bunker reap`/`bunker homes` reject --server, so they can only act on the active server) — recorded as unverified, not as clean.
+
+ALSO OBSERVED (routing, not this row's fix): bunker-las-01 and bunker-las-04 are OFFLINE — `bunker status --server` answers `deadline_exceeded: dial tcp <ip>:<port>: i/o timeout` — so 2 of the 4 las hosts answer at all, and neither answering host can spawn.
+
+EVIDENCE (committed with this row): .coding-hermes/evidence/code-factory-dogfood-2026-11-17-10-10-24/step3-create.out, step3-create.err, step3-create-las02.out, step3-create-las02.err, step3-manifest.out (the --staged-files arm: 14 files, 0.42 s, rc 0), plus docs/dogfood/2026-11-17-node-create-leg.md.
+
+FIX DIRECTION: this is a host-side containment setting on the bunker hosts (bunkerd's per-agent slice wants memory.swap.max=0; the host must have cgroup v2 swap accounting enabled so the write lands and reads back 0). The repo-side half — naming the prerequisite and classifying the refusal — is CF-490. Owner of the host setting is the ops/bunker lane; this row exists so the fleet's node capability is not silently absent.

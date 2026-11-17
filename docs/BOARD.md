@@ -38,6 +38,20 @@ public repo.
 5. Keep task IDs unique and acceptance criteria falsifiable. `tests/selftest.sh` checks row parsing;
    the boardctl validator is the schema/consistency gate.
 
+## Closure evidence shapes
+
+A `complete` row's `detail.evidence` is accepted in two shapes: a LIST of
+`{"run_id": ...}` pointers, each of which must resolve in `events.jsonl` or the
+GitReins history store, and a DICT bundle `{commit, commands, artifacts}`, which
+resolves when its named commit appears in one of those two stores or one artifact
+it lists exists in this tree. A row whose evidence is an empty list, an empty
+object, or otherwise yields no pointer at all is `ZERO-EVIDENCE`; a dict bundle in
+which no pointer resolves is `UNRESOLVED` naming every pointer it tried.
+
+`python3 scripts/board_evidence_check.py` prints those findings. The same rule is
+stated in that script's module docstring (EVIDENCE SHAPE RULE, CF-486) and in the
+handbook's M4 §7 (`docs/handbook/chapters/M4-board.md`).
+
 ## Board lock adjudication
 
 `.coding-hermes/board/.lock` can exist in a working tree as untracked 0-byte residue. A
