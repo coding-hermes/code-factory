@@ -348,18 +348,5 @@ hand-written count does not. The recorded 2026-11-04 run printed
 run may differ, so use the census above as the authority rather than treating this snapshot as
 current scheduler state.
 
-ch:trace row=CF-188 spec=README.md#the-lanes wave=code-factory-readme-2026-11-11-10-03-09#CF-188 test=bash-tests/selftest.sh::selftest doc=README.md evidence=README.md witness=README.md#the-lanes verdict=none:foreman-judges-after-merge commit=none:self-referential-hash memory=none:not-written
-STATUS: complete | partial | blocked
-TIER: T1
-EVIDENCE: README.md#the-lanes
-
-Evidence for the state of this README: the clone figure is covered by the published audit `docs/audits/code-factory-readme-2026-10-30-20-29-25.md`; the prompt column and the layout census are covered by the published audit `docs/audits/code-factory-readme-2026-10-30-23-28-00.md` (whose command transcript is the `.probe.txt` beside it); the prompt-file count is the twelve that `ls prompts/*.md | wc -l` prints at this tip, not a number carried over from that audit.
-
-ch:trace row=CF-038 spec=README.md#evidence wave=none:serial test=bash-tests/selftest.sh doc=README.md evidence=docs/audits/code-factory-readme-2026-10-30-23-28-00.md witness=path@origin:README.md verdict=none:foreman-judges-after-merge commit=none:self-referential-hash memory=none:not-written
-
-ch:trace row=CF-014 spec=README.md#quick-start wave=code-factory-readme-2026-10-30-18-28-33#readme test=scripts/project-node.sh::check-project-demo doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-18-28-33.md witness=path@origin:README.md verdict=none:open-finding commit=none:open memory=/project/code-factory/readme-audit-2026-10-30-18-28-33
-ch:trace row=CF-013 spec=README.md#status wave=code-factory-readme-2026-10-30-18-28-33#readme test=scripts/harness/install-hermes.sh::check doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-18-28-33.md witness=none:no-live-bunker-or-gateway-available verdict=none:open-finding commit=none:open memory=/project/code-factory/readme-audit-2026-10-30-18-28-33
-ch:trace row=CF-065 spec=README.md#the-lanes wave=none:serial test=tests/selftest.sh::selftest doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-11-03-15-41-00-cf065.probe.txt witness=path@origin:README.md verdict=none:judged-after-commit commit=none:self-referential-hash memory=none:no-lane-role-token
-ch:trace row=CF-064 spec=README.md#status wave=code-factory-readme-2026-11-03-16-51-21#readme test=scripts/harness/install-hermes.sh::check doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-CF-064.probe.txt witness=cmd:exit-1/inference_key-rows-0-vs-1 verdict=none:judged-after-commit commit=none:self-referential-hash memory=none:no-lane-role-token
-
-ch:trace row=CF-151 spec=README.md#status test=tests/selftest.sh::selftest doc=README.md evidence=none:worker-transcript witness=cmd:exit-0/selftest-section-37 verdict=none:judged-after-commit commit=none:self-referential-hash memory=none:not-written
+Where the evidence for this file lives: every claim here that came from a run names that run, and
+the full transcripts of the 2026-10-30, 2026-11-03 and 2026-11-17 readme audits are in `docs/audits/`.
