@@ -97,6 +97,17 @@ the whole-gate wall/CPU delta is therefore recorded as **unresolved in this wind
 saving. The removable work is bounded by the exec census: six provisioning events per gate run at
 ~7.45 s each.
 
+What an empty cache does — and does not do — to a fixture environment, measured at one tip with a
+cold root that really was provisioned (12 KB → 230 MB mid-run): it costs wall time and changes no
+verdict. Same tree, adjacent windows: 265 s cold vs 231 s warm (+14.7 %), with an identical
+607-row verdict set and **zero** rows present in only one arm. `HOME` is still throwaway in both
+arms; only the two XDG roots are shared, so home-cleanliness assertions see the same empty home.
+Fixtures that isolate with `env -i` and do not carry the XDG passthrough — the cf183 block at
+`tests/selftest.sh:2215-2306` is one — cannot see the cache at all, so a "cold-cache-only" row is a
+row-count artifact until proven otherwise: one failing assertion whose message embeds a child's
+output is printed as several rows. Evidence, row-by-row attribution and the NOT PROVEN list:
+`docs/audits/cf-PERF-021-cold-cache-attribution.md` (VIII.5.4c).
+
 ## 5. Verification
 
 | Check | Command | Expected | Recorded result |
