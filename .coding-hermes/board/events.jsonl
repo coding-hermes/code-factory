@@ -901,3 +901,4 @@
 {"id":900,"timestamp":"2026-11-17T11:25:14Z","event_type":"task_updated","task_id":"CF-489","actor":"foreman","detail":"{\"status\":\"pending\"}"}
 {"id":901,"timestamp":"2026-11-17T11:25:14Z","event_type":"task_updated","task_id":"CF-490","actor":"foreman","detail":"{\"status\":\"pending\"}"}
 {"id":902,"timestamp":"2026-11-17T11:30:44Z","event_type":"task_updated","task_id":"CF-486","actor":"foreman","detail":"{\"status\":\"in_progress\"}"}
+{"id":903,"timestamp":"2026-11-17T12:02:14Z","event_type":"task_completed","task_id":"CF-486","actor":"foreman","detail":"{\"status\":\"complete\"}"}
