@@ -549,6 +549,36 @@ PY
 }
 # END board-arm
 
+# CF-482: decide a malformed-board fixture through ONE helper.
+# The three conditions used to be re-derived inline as `printf '%s\n' "$out" | grep -q …`.
+# Under `set -o pipefail` an early-exiting `grep -q` closes the pipe, the producer takes
+# SIGPIPE (141) and a MATCHING payload becomes a FAILED pipeline — so the same bytes could
+# report PASS in one run and FAIL in the next, and the negated form could certify a fixture
+# that leaked a PASS row. `case` globs spawn no producer at all, so the verdict here is a
+# pure function of (rc, out). Both directions of the old hazard are reproducible and are
+# recorded in docs/audits/cf482-board-gate-arm-flake-evidence.md.
+board_fixture_verdict() {  # $1=out $2=rc $3=expected -> prints its decision AND the values it decided on
+  local out="$1" rc="$2" expected="$3" ok=1 why="" nl=$'\n'
+  [ "$rc" -eq 1 ] || { ok=0; why="exit $rc, expected 1"; }
+  case "$nl$out" in
+    *"$nl  FAIL  $expected"*) ;;
+    *) ok=0; why="${why:+$why; }named FAIL row (  FAIL  $expected) absent" ;;
+  esac
+  case "$nl$out" in
+    *"$nl  FAIL  2 of 3 rows parse"*) ;;
+    *) ok=0; why="${why:+$why; }(  FAIL  2 of 3 rows parse) absent" ;;
+  esac
+  case "$nl$out" in
+    *"$nl  PASS"*) ok=0; why="${why:+$why; }board_arm leaked a PASS row" ;;
+  esac
+  if [ "$ok" -eq 1 ]; then
+    printf 'rc=%s; named FAIL row present; 2-of-3 row present; no PASS row leaked' "$rc"
+    return 0
+  fi
+  printf 'rc=%s; %s' "$rc" "$why"
+  return 1
+}
+
 say "7. the board is valid JSONL"
 b="$HERE/.coding-hermes/board/tasks.jsonl"
 board_arm "$b" || fails=$((fails+1))
@@ -571,15 +601,28 @@ for arm in null array string number missing-id duplicate-id bad-status missing-s
   printf '%s\n' '{"id":"CF-001","status":"pending"}' "$middle" \
     '{"id":"CF-003","status":"complete"}' > "$tmpd/$arm.jsonl"
   out=$(board_arm "$tmpd/$arm.jsonl" 2>&1); rc=$?
-  if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -Fq "  FAIL  $expected" \
-    && printf '%s\n' "$out" | grep -Fxq '  FAIL  2 of 3 rows parse' \
-    && ! printf '%s\n' "$out" | grep -q '^  PASS'; then
-    say "  PASS  $arm fixture rejected, exit $rc"
+  if verdict=$(board_fixture_verdict "$out" "$rc" "$expected"); then
+    say "  PASS  $arm fixture rejected: $verdict"
     printf '%s\n' "$out"
   else
-    say "  FAIL  $arm fixture escaped the board gate (exit $rc)"; fails=$((fails+1))
+    say "  FAIL  $arm fixture escaped the board gate: $verdict"; fails=$((fails+1))
     printf '%s\n' "$out"
   fi
+done
+# CF-482: the fixture that returned opposite verdicts on byte-identical output, run five
+# times on unchanged inputs with each iteration's verdict printed beside the output it judged.
+say "  ..    CF-482 duplicate-id fixture, five consecutive verdicts"
+for iter in 1 2 3 4 5; do
+  printf '%s\n' '{"id":"CF-001","status":"pending"}' \
+    '{"id":"CF-001","status":"pending"}' \
+    '{"id":"CF-003","status":"complete"}' > "$tmpd/dup-$iter.jsonl"
+  out=$(board_arm "$tmpd/dup-$iter.jsonl" 2>&1); rc=$?
+  if verdict=$(board_fixture_verdict "$out" "$rc" "board duplicate id 'CF-001': lines 1 and 2"); then
+    say "  PASS  CF-482 iteration $iter -> $verdict"
+  else
+    say "  FAIL  CF-482 iteration $iter -> $verdict"; fails=$((fails+1))
+  fi
+  printf '%s\n' "$out" | sed 's/^/          | /'
 done
 # A single run must report every bad record, not stop at the first one.
 printf '%s\n' null '[]' '"fixture"' 42 > "$tmpd/multiple.jsonl"
