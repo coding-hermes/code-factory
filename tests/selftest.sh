@@ -3100,6 +3100,58 @@ else
 fi
 rm -rf "$cf057_tmp"
 
+# CF-483: classify the bunker status residue by its measured counts, not the label
+# "orphan". The red control reproduces the old grep predicate against the clean fixture.
+say "32b. bunker-server-install classifies server-reported residue counts (CF-483)"
+cf483_tmp=$(mktemp -d)
+mkdir -p "$cf483_tmp/bin" "$cf483_tmp/home"
+printf 'server: fixture-server\n' > "$cf483_tmp/config.yaml"
+printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  'case "$1" in' \
+  '  --version) printf "fixture\\n" ;;' \
+  '  list) exit 0 ;;' \
+  '  status) printf "Server: fixture-server\\n  Residue:  %s\\n" "$CF483_RESIDUE" ;;' \
+  '  *) exit 2 ;;' \
+  'esac' > "$cf483_tmp/bin/bunker"
+chmod +x "$cf483_tmp/bin/bunker"
+cf483_zero='0 orphan users, 0 orphan homes, 0 orphan keys, 0 stale linger entries'
+cf483_leaky='0 orphan users, 3 orphan homes, 2 orphan keys, 1 stale linger entry'
+cf483_zero_out=$(env -i PATH="$cf483_tmp/bin:/usr/bin:/bin" HOME="$cf483_tmp/home" \
+  BUNKER_SERVER=fixture-server BUNKER_CONFIG="$cf483_tmp/config.yaml" \
+  CF483_RESIDUE="$cf483_zero" /bin/bash "$HERE/scripts/bunker-server-install.sh" --check 2>&1)
+cf483_zero_rc=$?
+cf483_leaky_out=$(env -i PATH="$cf483_tmp/bin:/usr/bin:/bin" HOME="$cf483_tmp/home" \
+  BUNKER_SERVER=fixture-server BUNKER_CONFIG="$cf483_tmp/config.yaml" \
+  CF483_RESIDUE="$cf483_leaky" /bin/bash "$HERE/scripts/bunker-server-install.sh" --check 2>&1)
+cf483_leaky_rc=$?
+cf483_bad_out=$(env -i PATH="$cf483_tmp/bin:/usr/bin:/bin" HOME="$cf483_tmp/home" \
+  BUNKER_SERVER=fixture-server BUNKER_CONFIG="$cf483_tmp/config.yaml" \
+  CF483_RESIDUE='Residue unavailable' /bin/bash "$HERE/scripts/bunker-server-install.sh" --check 2>&1)
+cf483_bad_rc=$?
+if [ "$cf483_zero_rc" -eq 0 ] \
+  && ! printf '%s\n' "$cf483_zero_out" | grep -Fq '  WARN  residue' \
+  && printf '%s\n' "$cf483_zero_out" | grep -Fq 'PASS  residue — 0 orphan users, 0 orphan homes, 0 orphan keys, 0 stale linger entries (server-reported)' \
+  && [ "$cf483_leaky_rc" -eq 0 ] \
+  && printf '%s\n' "$cf483_leaky_out" | grep -E '^  WARN  residue — .*3 orphan homes.*2 orphan keys' >/dev/null \
+  && [ "$cf483_bad_rc" -eq 0 ] \
+  && printf '%s\n' "$cf483_bad_out" | grep -Fq 'WARN  residue — server-reported counts could not be parsed'; then
+  say "  PASS  CF-483 clean counts pass without warning; 3 homes/2 keys warn with values; unparseable counts stay unmeasured"
+else
+  say "  FAIL  CF-483 residue count fixtures (zero exit $cf483_zero_rc, leaky exit $cf483_leaky_rc, unparseable exit $cf483_bad_rc)"
+  printf '%s\n' "$cf483_zero_out" "$cf483_leaky_out" "$cf483_bad_out" | sed 's/^/    | /'
+  fails=$((fails+1))
+fi
+# Before the fix, grep -qi orphan classified this exact clean status block as residue.
+if printf '%s\n' "$cf483_zero" | grep -qi 'orphan' \
+  && ! printf '%s\n' "$cf483_zero_out" | grep -Fq '  WARN  residue'; then
+  say "  PASS  CF-483 red control: pre-fix orphan-label predicate warns on the clean fixture; measured-count check does not"
+else
+  say "  FAIL  CF-483 red control did not distinguish the pre-fix clean-host false warning"
+  fails=$((fails+1))
+fi
+rm -rf "$cf483_tmp"
+
 # ch:trace row=CF-057 spec=docs/handbook/chapters/M1-provisioning.md#3-submodule-inventory wave=none:serial-test-gap test=tests/selftest.sh::cf057-apply-refusal doc=docs/handbook/chapters/M1-provisioning.md evidence=tests/selftest.sh::cf057-apply-refusal witness=none:local-test-only verdict=none:foreman-judges-after-push commit=none:foreman-fills-after-commit memory=none:foreman-resolves
 # STATUS: partial
 # TIER: T1

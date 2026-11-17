@@ -81,6 +81,31 @@ if [ -n "$b" ]; then
   fi
 fi
 
+# CF-483: the server's status block LABELS its counts with the word "orphan", so matching that word
+# measures nothing — it printed the same WARN on a host reporting 0 orphans and on one leaking a home
+# per destroyed node. Parse the four numbers and let the numbers decide. Prints "users homes keys
+# linger"; prints nothing and exits 1 when the block does not carry that shape, because "unmeasured"
+# must never be read as "0" (that is the same defect in a new place). The caller below is the only
+# consumer: read the four fields in that order.
+residue_counts() {  # residue_counts <status text>
+  printf '%s\n' "${1:-}" | awk '
+    /^[[:space:]]*Residue:/ { if (!found) { found = 1; line = $0 } }
+    END {
+      if (!found) exit 1
+      sub(/^.*Residue:[[:space:]]*/, "", line)
+      if (split(line, got, ",") < 4) exit 1
+      split("orphan users,orphan homes,orphan keys,stale linger entr", want, ",")
+      out = ""
+      for (i = 1; i <= 4; i++) {
+        f = tolower(got[i])
+        if (index(f, want[i]) == 0) exit 1
+        if (!match(f, /[0-9]+/)) exit 1
+        out = (i == 1) ? substr(f, RSTART, RLENGTH) : out " " substr(f, RSTART, RLENGTH)
+      }
+      print out
+    }'
+}
+
 # 4. capacity: the host, not this machine
 if [ -n "$b" ] && [ "${rc:-1}" -eq 0 ]; then
   st=$("$b" status --server "$SERVER" 2>&1 | head -20)
@@ -114,7 +139,19 @@ if [ -n "$b" ] && [ "${rc:-1}" -eq 0 ]; then
   elif [ "$REAP_ORPHANS" -eq 1 ]; then
     bad "residue" "--reap-orphans requires BUNKER_HOMES_DIR or BUNKER_KEYS_DIR — refusing unmeasured cleanup"
   else
-    say "$st" | grep -qi 'orphan' && warn "residue" "orphan homes/keys reported by the server — set BUNKER_HOMES_DIR/BUNKER_KEYS_DIR and re-run with --reap-orphans"
+    residue_values=$(residue_counts "$st" 2>/dev/null) || residue_values=""
+    if [ -n "$residue_values" ]; then
+      read -r orphan_users orphan_homes orphan_keys stale_linger <<< "$residue_values"
+      residue_report="$orphan_users orphan users, $orphan_homes orphan homes, $orphan_keys orphan keys, $stale_linger stale linger entries (server-reported)"
+      if [ "$orphan_users" -eq 0 ] && [ "$orphan_homes" -eq 0 ] \
+        && [ "$orphan_keys" -eq 0 ] && [ "$stale_linger" -eq 0 ]; then
+        ok "residue" "$residue_report"
+      else
+        warn "residue" "$residue_report — inspect/reap with node_hygiene.py reap (CF-003); BUNKER_HOMES_DIR/BUNKER_KEYS_DIR must name server-side directories accessible from this control host"
+      fi
+    else
+      warn "residue" "server-reported counts could not be parsed — residue is unmeasured; inspect bunker status --server $SERVER and use node_hygiene.py reap (CF-003) with the server-side directories accessible from this control host"
+    fi
   fi
 fi
 
