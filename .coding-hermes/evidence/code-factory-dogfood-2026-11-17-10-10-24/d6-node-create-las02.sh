@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # code-factory dogfood — delivery 6: CF-489 AC#1 second ONLINE host (bunker-las-02).
+# The project name is the row's documented fixture; the agent id carries its own timestamp
+# (node-dogfood-probe-<hhmmss>), so reusing the same --project cannot collide with the las-03 arm.
 set -uo pipefail
 cd ~/code-factory || exit 90
 EVID=~/code-factory/.coding-hermes/evidence/code-factory-dogfood-2026-11-17-10-10-24
@@ -9,7 +11,7 @@ HOST=bunker-las-02
 START=$(date +%s)
 BUNKER_SERVER="$HOST" timeout 600 /usr/bin/time -f 'CREATE_WALL=%e CREATE_RC=%x' \
   ./scripts/node-create.sh \
-    --project dogfood-probe2 \
+    --project dogfood-probe \
     --repo https://github.com/github/gitignore \
     --harness hermes \
     --ttl 2h \

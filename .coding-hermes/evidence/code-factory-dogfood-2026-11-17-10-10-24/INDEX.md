@@ -156,3 +156,25 @@ each pass reported (line counts and every other byte unchanged):
 
 The board row `CF-496` carries the same elision. No measurement, row id or exit code was changed;
 the numbers in the log entry are re-readable from these files.
+
+### Delivery 6 addendum — the las-02 arm, two runs, one variable (the project argument)
+
+The judge on run `fd3b385b` rejected the first las-02 capture because the script passed
+`--project dogfood-probe2` while the row's documented command passes `--project dogfood-probe`. Both
+runs are kept, because together they are the finding:
+
+| File | Run | Result |
+|---|---|---|
+| `d6-create-bunker-las-02-pass-1606.out` / `.err` | 16:06, `--project dogfood-probe2` | `PASS  spawn — node-dogfood-probe2-110651`, 152 s, continues into `PASS  staged` and provisioning |
+| `d6-create-bunker-las-02.out` / `.err` | 16:39, `--project dogfood-probe` (the documented argument, after the patch to `d6-node-create-las02.sh`) | `FAIL  host — bunker-las-02 cannot spawn an agent: slice-limits`, 17 s |
+
+Same host, same repo fixture, same harness, no code change between them: the spawn is intermittent on
+`bunker-las-02`, and the first capture's project argument — not the host — is what the judge was right
+to challenge. `bunker-las-03` is the host that spawns deterministically (16:03, `CREATE_WALL_CLOCK_S=162`).
+No agent was left behind on either host (`bunker list` on both: none), so no teardown row is owed for
+the 16:39 arm.
+
+The `d6-node-create-las02.sh` committed here is the version that PRODUCED the 16:39 transcript; the
+16:06 transcript was produced by its `--project dogfood-probe2` predecessor, which is preserved in
+`d389fb7a` and is not the script at HEAD. That asymmetry is disclosed rather than smoothed over: it is
+the reason the judge's finding stands.

@@ -272,3 +272,31 @@ The "UNVERIFIED" line above is scoped to the moment it was written. The tier-2 j
   `d6-node-reach-ab.out`, `d6-destroy-las03.out`, `d6-destroy-las02.out`, plus the two create
   scripts, the reach A/B script and the elision scripts that ran). Addresses and host-home paths are
   elided; the substitution table is in the evidence `INDEX.md`.
+
+## 2026-11-17 — delivery 6 addendum: the las-02 PASS did not reproduce; CF-489 stays open
+
+- **What forced this addendum**: the tier-2 judge on the closeout run (`gitreins task complete CF-489`
+  → verdict `fd3b385b`) rejected the closeout on two counts. One was mine and it was fair: the las-02
+  arm ran `--project dogfood-probe2` while `CF-489`'s criterion names `--project dogfood-probe`, so the
+  second host had not actually been walked with the documented command.
+- **Re-ran the arm with the documented argument, and it does not reproduce.** At 16:39 the same script,
+  same fixture, same host printed `FAIL  host — bunker-las-02 cannot spawn an agent: slice-limits` in
+  **17 s** — the exact refusal delivery 3 recorded. Both transcripts are now committed: the 16:06 PASS
+  is preserved as `d6-create-bunker-las-02-pass-1606.out` (it had been overwritten in the working tree
+  by the re-run; restored from `d389fb7a`), and the 16:39 documented run is `d6-create-bunker-las-02.out`.
+- **The honest reading of this fire's evidence is narrower than its commit claims.** `bunker-las-03`
+  spawns: `PASS  spawn — node-dogfood-probe-110346` at 16:03, 162 s, no host row. `bunker-las-02` is
+  **intermittent**: one PASS at 16:06 and one slice-limits refusal at 16:39, same host, same fixture,
+  no code change between the two runs, and no agent left behind by either. A nondeterministic spawn
+  refusal is a worse defect than the deterministic one delivery 3 recorded, and it is exactly what
+  `CF-489`'s title ("no ONLINE node host … can spawn") cannot express.
+- **Correction to `d389fb7a`'s own message and log entry**, which say "CF-489 closed against that
+  evidence": no close was ever written. The board gate needs `--evidence-run-id` from a judged run, and
+  the judge then graded the still-open row — which is the second of its two findings, and it was right.
+  The close is **dropped, not deferred**: `CF-489` stays open at P1 with both measurements recorded on
+  the row (`boardctl update CF-489 --note …`), and this addendum is what a later reader reconciles
+  against, not a retraction of the entry above.
+- **The mechanism worth keeping**: the judge's first finding (wrong `--project`) is what exposed the
+  second (intermittent refusal). A transcript that is not reproducible from its committed script hides
+  the arm's real result — the deviation was not cosmetic, it was the thing masking the failure.
+- Judge run for this addendum: `fd3b385b` (tier 1 + tier 2 over the closeout diff), recorded on the row.
