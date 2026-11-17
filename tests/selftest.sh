@@ -3,6 +3,21 @@
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 . "$HERE/scripts/lib.sh"
+
+# PERF-018: the fixtures below isolate with `env -i`, which also scrubs XDG_CACHE_HOME and
+# XDG_DATA_HOME — so a throwaway HOME re-provisions the ~230 MB JS toolchain (8-11 s per fixture)
+# instead of reading a cache. Let the toolchain CACHE cross the isolation boundary; HOME stays a
+# throwaway dir, so a home-cleanliness assertion sees a stricter fixture, not a looser one. A
+# cache root that cannot be created (a read-only TMPDIR) leaves the passthrough empty, which the
+# XDG convention reads as unset, so the gate degrades to today's per-fixture provision rather than
+# aborting.
+CF_TOOLCHAIN_CACHE="${CF_TOOLCHAIN_CACHE:-${TMPDIR:-/tmp}/cf-toolchain-cache}"
+if mkdir -p "$CF_TOOLCHAIN_CACHE/xdg-cache" "$CF_TOOLCHAIN_CACHE/xdg-data" 2>/dev/null; then
+  export CF_TOOLCHAIN_CACHE
+else
+  CF_TOOLCHAIN_CACHE=""
+fi
+
 fails=0
 finished=0
 selftest_section="startup"
@@ -6981,7 +6996,10 @@ for cf006_pair in aider:AIDER goose:GOOSE; do
   cf006_adapter="$HERE/scripts/harness/install-$cf006_id.sh"
 
   # ARM (a): --check is a real check — named rows, one verdict line, and the verdict the rows imply.
-  out=$(env -i PATH="$PATH" HOME="$cf006/home" /bin/bash "$cf006_adapter" --check 2>&1); rc=$?
+  out=$(env -i PATH="$PATH" \
+          XDG_CACHE_HOME="${CF_TOOLCHAIN_CACHE:+$CF_TOOLCHAIN_CACHE/xdg-cache}" \
+          XDG_DATA_HOME="${CF_TOOLCHAIN_CACHE:+$CF_TOOLCHAIN_CACHE/xdg-data}" \
+          HOME="$cf006/home" /bin/bash "$cf006_adapter" --check 2>&1); rc=$?
   printf '%s\n' "$out" > "$cf006/$cf006_id.check.out"
   rows=$(printf '%s\n' "$out" | grep -c '^  \(PASS\|FAIL\|WARN\)  ')
   f=$(printf '%s\n' "$out" | grep -c '^  FAIL  ')
@@ -7003,7 +7021,10 @@ for cf006_pair in aider:AIDER goose:GOOSE; do
   # ARM (b): --apply refuses BY NAME, ends FAIL (n) over its own rows, exits 1, and installs nothing.
   # A scratch HOME per harness, so "placed nothing" is measured rather than asserted.
   cf006_h="$cf006/home-$cf006_id"; mkdir -p "$cf006_h"
-  out=$(env -i PATH="$PATH" HOME="$cf006_h" /bin/bash "$cf006_adapter" --apply 2>&1); rc=$?
+  out=$(env -i PATH="$PATH" \
+          XDG_CACHE_HOME="${CF_TOOLCHAIN_CACHE:+$CF_TOOLCHAIN_CACHE/xdg-cache}" \
+          XDG_DATA_HOME="${CF_TOOLCHAIN_CACHE:+$CF_TOOLCHAIN_CACHE/xdg-data}" \
+          HOME="$cf006_h" /bin/bash "$cf006_adapter" --apply 2>&1); rc=$?
   printf '%s\n' "$out" > "$cf006/$cf006_id.apply.out"
   f=$(printf '%s\n' "$out" | grep -c '^  FAIL  ')
   wn=$(printf '%s\n' "$out" | grep -c '^  WARN  ')
@@ -7409,7 +7430,10 @@ mkdir -p "$cf063/prefix/scripts" "$cf063/prefix/home"
 if git -C "$HERE" show 5e112be2e7da734fa5fa3faec915ca1f58328229:scripts/verify-node.sh > "$cf063/prefix/scripts/verify-node.sh" 2>/dev/null \
   && cp "$HERE/scripts/lib.sh" "$cf063/prefix/scripts/lib.sh"; then
   chmod +x "$cf063/prefix/scripts/verify-node.sh"
-  cf063_old_out=$(env -i PATH="$PATH" HOME="$cf063/prefix/home" /bin/bash "$cf063/prefix/scripts/verify-node.sh" --help 2>&1); cf063_old_rc=$?
+  cf063_old_out=$(env -i PATH="$PATH" \
+                    XDG_CACHE_HOME="${CF_TOOLCHAIN_CACHE:+$CF_TOOLCHAIN_CACHE/xdg-cache}" \
+                    XDG_DATA_HOME="${CF_TOOLCHAIN_CACHE:+$CF_TOOLCHAIN_CACHE/xdg-data}" \
+                    HOME="$cf063/prefix/home" /bin/bash "$cf063/prefix/scripts/verify-node.sh" --help 2>&1); cf063_old_rc=$?
   if [ "$cf063_old_rc" -eq 2 ] && printf '%s\n' "$cf063_old_out" | grep -Fxq 'unknown arg: --help'; then
     say "  PASS  CF-063 pre-fix verifier -> exit $cf063_old_rc, named unknown-arg control"
   else
@@ -7431,7 +7455,10 @@ cf063_check_usage() { # cf063_check_usage <label> [VAR=value ...] [script args..
       *) break ;;
     esac
   done
-  got=$(env -i PATH="$PATH" HOME="$cf063/prefix/home" "${env_args[@]}" /bin/bash "$HERE/scripts/verify-node.sh" "$@" 2>&1); rc2=$?
+  got=$(env -i PATH="$PATH" \
+          XDG_CACHE_HOME="${CF_TOOLCHAIN_CACHE:+$CF_TOOLCHAIN_CACHE/xdg-cache}" \
+          XDG_DATA_HOME="${CF_TOOLCHAIN_CACHE:+$CF_TOOLCHAIN_CACHE/xdg-data}" \
+          HOME="$cf063/prefix/home" "${env_args[@]}" /bin/bash "$HERE/scripts/verify-node.sh" "$@" 2>&1); rc2=$?
   first=$(printf '%s\n' "$got" | head -1)
   if [ "$rc2" -eq 2 ] && [ "$first" = "$cf063_usage_line" ]; then
     say "  PASS  CF-063 $label -> usage, exit $rc2"
@@ -7443,14 +7470,20 @@ cf063_check_usage() { # cf063_check_usage <label> [VAR=value ...] [script args..
 cf063_check_usage bare
 cf063_check_usage help --help
 cf063_check_usage help-with-server BUNKER_SERVER=fixture --help
-cf063_operational=$(env -i PATH="$PATH" HOME="$cf063/prefix/home" /bin/bash "$HERE/scripts/verify-node.sh" --agent fixture 2>&1); cf063_operational_rc=$?
+cf063_operational=$(env -i PATH="$PATH" \
+                      XDG_CACHE_HOME="${CF_TOOLCHAIN_CACHE:+$CF_TOOLCHAIN_CACHE/xdg-cache}" \
+                      XDG_DATA_HOME="${CF_TOOLCHAIN_CACHE:+$CF_TOOLCHAIN_CACHE/xdg-data}" \
+                      HOME="$cf063/prefix/home" /bin/bash "$HERE/scripts/verify-node.sh" --agent fixture 2>&1); cf063_operational_rc=$?
 if [ "$cf063_operational_rc" -eq 2 ] && printf '%s\n' "$cf063_operational" | grep -Fxq 'set BUNKER_SERVER or pass --server <name>'; then
   say "  PASS  CF-063 operational invocation -> exit $cf063_operational_rc, missing-server refusal names BUNKER_SERVER"
 else
   say "  FAIL  CF-063 operational invocation lost its missing-server refusal (exit $cf063_operational_rc): $(printf '%s\n' "$cf063_operational" | head -1)"
   fails=$((fails+1))
 fi
-cf063_flag=$(env -i PATH="$PATH" HOME="$cf063/prefix/home" /bin/bash "$HERE/scripts/verify-node.sh" \
+cf063_flag=$(env -i PATH="$PATH" \
+               XDG_CACHE_HOME="${CF_TOOLCHAIN_CACHE:+$CF_TOOLCHAIN_CACHE/xdg-cache}" \
+               XDG_DATA_HOME="${CF_TOOLCHAIN_CACHE:+$CF_TOOLCHAIN_CACHE/xdg-data}" \
+               HOME="$cf063/prefix/home" /bin/bash "$HERE/scripts/verify-node.sh" \
   --agent fixture --server fixture --transport invalid 2>&1); cf063_flag_rc=$?
 if [ "$cf063_flag_rc" -eq 2 ] && printf '%s\n' "$cf063_flag" | grep -Fq 'verify-node: --transport must be node-address, published-port, tunnel or bunker-exec (got: invalid)'; then
   say "  PASS  CF-063 --server alone satisfies the server guard before transport validation, exit $cf063_flag_rc"

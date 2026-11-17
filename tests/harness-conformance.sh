@@ -51,6 +51,21 @@ set -uo pipefail
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 . "$HERE/scripts/lib.sh"
 
+# PERF-018: the fixtures below isolate with `env -i`, which also scrubs XDG_CACHE_HOME and
+# XDG_DATA_HOME — so a throwaway HOME re-provisions the ~230 MB JS toolchain (8-11 s per fixture)
+# instead of reading a cache. Let the toolchain CACHE cross the isolation boundary; HOME stays a
+# throwaway dir, so a home-cleanliness assertion sees a stricter fixture, not a looser one. A
+# cache root that cannot be created (a read-only TMPDIR) leaves the passthrough empty, which the
+# XDG convention reads as unset, so the gate degrades to today's per-fixture provision rather than
+# aborting.
+CF_TOOLCHAIN_CACHE="${CF_TOOLCHAIN_CACHE:-${TMPDIR:-/tmp}/cf-toolchain-cache}"
+if mkdir -p "$CF_TOOLCHAIN_CACHE/xdg-cache" "$CF_TOOLCHAIN_CACHE/xdg-data" 2>/dev/null; then
+  export CF_TOOLCHAIN_CACHE
+else
+  CF_TOOLCHAIN_CACHE=""
+fi
+
+
 MODE_INSTALL=0
 WRITE_DOC=0
 VARS_ONLY=0
@@ -361,7 +376,10 @@ vars_fixture() {  # the workdir + key file the acceptance run needs, both inside
 
 hc_run() {  # hc_run <adapter> [args...] — a scrubbed env: this battery's set is the only source
   local adapter="$1"; shift
-  env -i PATH="$PATH" HOME="$HOME" TMPDIR="${TMPDIR:-/tmp}" LANG=C \
+  env -i PATH="$PATH" \
+    XDG_CACHE_HOME="${CF_TOOLCHAIN_CACHE:+$CF_TOOLCHAIN_CACHE/xdg-cache}" \
+    XDG_DATA_HOME="${CF_TOOLCHAIN_CACHE:+$CF_TOOLCHAIN_CACHE/xdg-data}" \
+    HOME="$HOME" TMPDIR="${TMPDIR:-/tmp}" LANG=C \
     "${RUN_ENV[@]}" "${HC_ENV[@]}" bash "$adapter" "$@"
 }
 

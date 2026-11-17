@@ -32,6 +32,21 @@
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 . "$HERE/scripts/lib.sh"
+
+# PERF-018: the fixtures below isolate with `env -i`, which also scrubs XDG_CACHE_HOME and
+# XDG_DATA_HOME — so a throwaway HOME re-provisions the ~230 MB JS toolchain (8-11 s per fixture)
+# instead of reading a cache. Let the toolchain CACHE cross the isolation boundary; HOME stays a
+# throwaway dir, so a home-cleanliness assertion sees a stricter fixture, not a looser one. A
+# cache root that cannot be created (a read-only TMPDIR) leaves the passthrough empty, which the
+# XDG convention reads as unset, so the gate degrades to today's per-fixture provision rather than
+# aborting.
+CF_TOOLCHAIN_CACHE="${CF_TOOLCHAIN_CACHE:-${TMPDIR:-/tmp}/cf-toolchain-cache}"
+if mkdir -p "$CF_TOOLCHAIN_CACHE/xdg-cache" "$CF_TOOLCHAIN_CACHE/xdg-data" 2>/dev/null; then
+  export CF_TOOLCHAIN_CACHE
+else
+  CF_TOOLCHAIN_CACHE=""
+fi
+
 say "harness node e2e — CF-006 (offline fixture; live node leg UNVERIFIED)"
 
 W="$(mktemp -d)" || { printf 'FAIL fixture: cannot create a fixture root\n'; exit 2; }
@@ -53,9 +68,15 @@ AH="$W/adapter-home"; mkdir -p "$AH"
 for a in hermes claude-code codex opencode deepseek pi-agent; do
   f="$TREE/scripts/harness/install-$a.sh"
   if [ ! -x "$f" ]; then bad "adapter:$a" "absent at scripts/harness/install-$a.sh"; continue; fi
-  out=$(env -i PATH="$PATH" HOME="$AH" /bin/bash "$f" --check 2>&1); rc=$?
+  out=$(env -i PATH="$PATH" \
+          XDG_CACHE_HOME="${CF_TOOLCHAIN_CACHE:+$CF_TOOLCHAIN_CACHE/xdg-cache}" \
+          XDG_DATA_HOME="${CF_TOOLCHAIN_CACHE:+$CF_TOOLCHAIN_CACHE/xdg-data}" \
+          HOME="$AH" /bin/bash "$f" --check 2>&1); rc=$?
   rows=$(printf '%s\n' "$out" | grep -c '^  \(PASS\|FAIL\|WARN\) ')
-  help=$(env -i PATH="$PATH" HOME="$AH" /bin/bash "$f" --help 2>&1)
+  help=$(env -i PATH="$PATH" \
+           XDG_CACHE_HOME="${CF_TOOLCHAIN_CACHE:+$CF_TOOLCHAIN_CACHE/xdg-cache}" \
+           XDG_DATA_HOME="${CF_TOOLCHAIN_CACHE:+$CF_TOOLCHAIN_CACHE/xdg-data}" \
+           HOME="$AH" /bin/bash "$f" --help 2>&1)
   # Exit 3 is a MEASURED answer, not a failure: it is `UNVERIFIED`, the verdict an adapter whose
   # rows include a WARN must print (specs/HARNESS.md "The verdict line", CF-141). What this arm
   # requires is a named row set AND one verdict line consistent with it — 0/PASS, 3/UNVERIFIED,
@@ -93,7 +114,10 @@ for a in opencode deepseek pi-agent; do
   before="$W/refuse-$a.before"
   after="$W/refuse-$a.after"
   LC_ALL=C find "$h" -type f -perm -u+x -print 2>/dev/null | LC_ALL=C sort > "$before"
-  out=$(env -i PATH="$PATH" HOME="$h" /bin/bash "$TREE/scripts/harness/install-$a.sh" --apply 2>&1); rc=$?
+  out=$(env -i PATH="$PATH" \
+          XDG_CACHE_HOME="${CF_TOOLCHAIN_CACHE:+$CF_TOOLCHAIN_CACHE/xdg-cache}" \
+          XDG_DATA_HOME="${CF_TOOLCHAIN_CACHE:+$CF_TOOLCHAIN_CACHE/xdg-data}" \
+          HOME="$h" /bin/bash "$TREE/scripts/harness/install-$a.sh" --apply 2>&1); rc=$?
   # `installed nothing` means no new file appeared under a repo-owned install root and no install
   # row was printed. Probing a host binary may still create its own XDG cache/state directories
   # (`pi --version` does), which are host state, not an install. Compare against the pre-run
@@ -266,14 +290,20 @@ BUNKER_STUB
   chmod +x "$BIN/curl" "$BIN/bunker"
 
   node_create() {  # the real control-host create entry, with the bunker transport stubbed
-    env -i PATH="$BIN:$PATH" HOME="$W/control-home" BUNKER_SERVER=fixture FIXTURE_LOG="$W/bunker.log" \
+    env -i PATH="$BIN:$PATH" \
+      XDG_CACHE_HOME="${CF_TOOLCHAIN_CACHE:+$CF_TOOLCHAIN_CACHE/xdg-cache}" \
+      XDG_DATA_HOME="${CF_TOOLCHAIN_CACHE:+$CF_TOOLCHAIN_CACHE/xdg-data}" \
+      HOME="$W/control-home" BUNKER_SERVER=fixture FIXTURE_LOG="$W/bunker.log" \
       FIXTURE_NODE="$NODE" NODE_DISK_FLOOR=1 CRIER_URL=http://fixture.invalid:8767 \
       FIXTURE_CODEX_VERSION="$pin" CF_CODEX_CMH_URL="file://$W/cmh.tar.gz" \
       CF_CODEX_CMH_SHA256="$CMH_SHA" /bin/bash "$TREE/scripts/node-create.sh" \
       --project demo --repo "$W/origin.git" --harness codex --agent cf-fixture 2>&1
   }
   node_verify() {  # the real verifier, same home, stubbed transport
-    env -i PATH="$BIN:$PATH" HOME="$NODE" FIXTURE_NODE="$NODE" FIXTURE_LOG="$W/bunker.log" FIXTURE_CODEX_VERSION="$pin" \
+    env -i PATH="$BIN:$PATH" \
+      XDG_CACHE_HOME="${CF_TOOLCHAIN_CACHE:+$CF_TOOLCHAIN_CACHE/xdg-cache}" \
+      XDG_DATA_HOME="${CF_TOOLCHAIN_CACHE:+$CF_TOOLCHAIN_CACHE/xdg-data}" \
+      HOME="$NODE" FIXTURE_NODE="$NODE" FIXTURE_LOG="$W/bunker.log" FIXTURE_CODEX_VERSION="$pin" \
       /bin/bash "$TREE/scripts/verify-node.sh" --agent cf-fixture --server fixture "$@" 2>&1
   }
 
