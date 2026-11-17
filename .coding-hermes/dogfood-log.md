@@ -46,3 +46,22 @@ Duplicate delivery of the tick above: no re-walk, no new product measurements, z
   2491440 (PERF-021 brief, started 05:06:25) owns them, and its dirty-path set matches its brief
   exactly. Left untouched; no second dispatch into this checkout.
 - **CI**: last 5 runs on `coding-hermes/code-factory` all `success`; nothing filed.
+
+#### Addendum — the tip moved while this receipt was being written
+
+The `f2127dd9` claim above is scoped to the moment it was measured; two commits landed after it, and
+this receipt was rebased onto them by the fleet harvester (its local pre-rebase sha was `e986d45c`):
+
+- `1fc9c17e` — the live PERF-021 worker's own commit: `docs/audits/cf-PERF-021-cold-cache-attribution.md`
+  (+370) and `docs/handbook/chapters/VIII-5-tests.md` (+11). The two paths this receipt "left untouched"
+  are therefore now landed by their owner, not residue.
+- `82972156` — this receipt itself, `name-only` = `.coding-hermes/dogfood-log.md` alone.
+
+**Guard coverage, re-measured:** the pathspec commit (`git commit -F msg -- <path>`) presented the guard
+an EMPTY staged set — `Tier 1: DEGRADED PASS (skips: lint=no staged files, tests=no staged files)`,
+guard log `.gitreins/logs/guard-20261117T110029.965517Z.log`. That class is already owned by **CF-474**
+("the commit-time guard treats `git commit --only <path>` from a clean index as an empty…"), so no
+sibling row was minted; this is a second, independent measurement of the same defect at a new tip.
+A separate FAIL on the first attempt (`publish paths — baseline 0, current 1`,
+`docs/audits/cf-PERF-021-…`) was the worker's own mid-edit `/home/…` leak in the shared index, gone by
+the retry — a shared-checkout snapshot, not a repo defect, and not filed.
