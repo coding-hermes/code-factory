@@ -139,7 +139,7 @@ ch:trace row=CF-048 spec=docs/handbook/chapters/M4-board.md#board-integrity wave
 | semantic validate | `scripts/boardctl validate` | RESULT OK with named warnings | 2026-11-14 | **PASS** — `513 tasks, 774 events, 0 fixtures`, `key uniformity 511/513 (2 drift: acceptance/chapter/created/model)`, `RESULT: OK (89 warning(s))` |
 | lock adjudication | `scripts/board_lock.py` on an absent / unheld / unreadable / held lock | ABSENT / HELD / RESIDUE / ERROR named (`board_lock.py:166-185`) | 2026-11-14 | **PASS** — absent → `ABSENT` exit 0; 0-byte → `RESIDUE consumers=0 commits_after_mtime=unknown` exit 0; chmod-000 → `ERROR … probe=open-failed … UNKNOWN` exit 3 (CF-259); HELD arm is `tests/selftest.sh` §33 |
 | duplicate id refusal | `boardctl create --id CF-289 --title x` (scratch board root) | refused, board unchanged | 2026-11-14 | **PASS** — `task id "CF-289" already exists … create aborted` exit 1, 513 rows before and after |
-| evidence census (report) | `python3 scripts/board_evidence_check.py` | names the store population with run-dir counts, the accepted/derived split and the `new=` ids; a complete row that names no evidence is named | 2026-11-16 | **REPORT, not a gate** — `stores: … history=….gitreins/history (173 run dirs)`, `62 accepted findings of 62 findings, new=none`, `checked 176 complete rows, 62 unresolved` here, against `104 unresolved` with an empty `--history-root`. The count is checkout-dependent by construction (see the population rule below), so the CF-398 arm grades the checker's contract on fixtures rather than this census (CF-475). The 4 zero-evidence rows (CF-289, CF-305, P5G-34, CF-422) print as `ZERO-EVIDENCE <id>`, and the 62 accepted rows still fail `--strict`: closing them is board work, not instrument work |
+| evidence census (report) | `python3 scripts/board_evidence_check.py` | names the store population with run-dir counts, the accepted/derived split and the `new=` ids; a complete row that names no evidence in either accepted shape is named | 2026-11-17 | **REPORT, not a gate** — measured in this checkout: `stores: … history=….gitreins/history (182 run dirs)`, `62 accepted findings of 64 findings, new=CF-470,PERF-018, cleared=0`, `checked 183 complete rows, 64 unresolved`, against `107 unresolved` with an empty `--history-root`. The count is checkout-dependent by construction (see the population rule below), so the CF-398 arm grades the checker's contract on fixtures rather than this census (CF-475). The 4 zero-evidence rows (CF-289, CF-305, P5G-34, CF-422) print as `ZERO-EVIDENCE <id>`; the two `new=` ids are runs absent from this store (CF-470's GitHub run `43936119176`, PERF-018's lane run), i.e. population, not new debt. The dict-bundle shape resolves since CF-486: CF-473's `{commit, commands, artifacts}` bundle is no longer reported, and the 62 accepted rows still fail `--strict`: closing them is board work, not instrument work |
 | selftest arms | `bash tests/selftest.sh` | `SELFTEST: PASS` | 2026-11-14 | **RED before this tick, green after** — §67 `tests/test_lane_config_readonly.py` failed `cannot read projects table: no such column: cooldown_s` at `70519fcc`; fixture repaired in this tick (see CF-439) |
 
 **Re-measured 2026-11-14 (sync lane, tip `70519fcc`).** The 2026-11-07 values this table used to
@@ -198,6 +198,20 @@ nobody has accepted appears under `new=` and leaves the expected number below th
 one. That inequality is asserted on a fixture board, never on the live census (population
 rule above). Adding an id is a dated act of acceptance; `cleared=<n>` counts accepted ids
 that no longer fail and is the prompt to prune the list.
+
+**Evidence-shape rule (2026-11-17, CF-486).** A `complete` row's `detail.evidence`
+is accepted in two shapes: a LIST of `{"run_id": ...}` pointers, each of which must
+resolve in `events.jsonl` or the GitReins history store, and a DICT bundle
+`{commit, commands, artifacts}`, which resolves when its named commit appears in one
+of those two stores or one artifact it lists exists in this tree. A row whose
+evidence is an empty list, an empty object, or otherwise yields no pointer at all is
+`ZERO-EVIDENCE`; a dict bundle in which no pointer resolves is `UNRESOLVED` naming
+every pointer it tried. Reading only the list shape reported the `boardctl` closeout
+CF-473 as `ZERO-EVIDENCE`, which is how a legitimate closeout turned the tracked
+suite red. `tests/test_board_evidence_check.py` grades all six arms on one fixture
+board — list, dict resolved by artifact, dict resolved by commit, a dict in which
+nothing resolves, an empty list and an empty object — and prints their verdicts.
+`docs/BOARD.md` §"Closure evidence shapes" carries the same rule.
 
 
 **Drift re-measured.** The CF-270

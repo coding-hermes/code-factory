@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Check that complete board rows point at locally inspectable evidence runs.
 
-A complete row is only evidence when it names a run that can be inspected here.
-Two shapes are findings:
+A complete row is only evidence when it names a run or an artifact that can be
+inspected here.  Two shapes are findings:
 
 * ``UNRESOLVED <id> <run>`` — the row names a run that is in neither
   ``events.jsonl`` nor any GitReins history store;
@@ -10,6 +10,17 @@ Two shapes are findings:
   run id at all, so there is nothing to resolve (CF-438).  An empty pointer is
   not a resolved pointer: without this finding the row is silently counted as
   satisfied and the gate cannot fail on it.
+
+EVIDENCE SHAPE RULE (CF-486).  ``detail.evidence`` is accepted in two shapes: a
+LIST of ``{"run_id": ...}`` pointers, each of which must resolve in
+``events.jsonl`` or the GitReins history store, and a DICT bundle
+``{commit, commands, artifacts}``, which resolves when its named commit appears
+in one of those two stores or one artifact it lists exists in this tree.  A row
+whose evidence is an empty list, an empty object, or otherwise yields no pointer
+at all is ``ZERO-EVIDENCE``; a dict bundle in which no pointer resolves is
+``UNRESOLVED`` naming every pointer it tried.  ``docs/BOARD.md`` section
+"Closure evidence shapes" and the handbook's M4 section 7
+(``docs/handbook/chapters/M4-board.md``) carry this same rule.
 
 POPULATION RULE (CF-475).  A finding means "resolves in NEITHER" of two stores
 with different lifetimes: the committed ``events.jsonl``, and the GitReins
@@ -167,28 +178,72 @@ def _load_rows(tasks_path):
     return rows, ignored
 
 
-def _evidence_ids(row):
+def _evidence_references(row):
+    """Return ``(shape, references)`` for a complete row's evidence field.
+
+    ``shape`` is ``"list"`` or ``"dict"`` for the two accepted shapes (see the
+    module's EVIDENCE SHAPE RULE), and ``None`` when the row names no evidence at
+    all.  Each reference is a ``(kind, value)`` pair: ``("run", <run id>)`` for a
+    list pointer, ``("commit", <sha>)`` or ``("artifact", <path>)`` for a dict
+    bundle.  An empty list, an empty object, or an evidence field that yields no
+    reference returns ``[]`` -- an empty pointer is not a resolved pointer.
+    """
     detail = row.get("detail")
     if not isinstance(detail, dict):
-        return []
+        return None, []
     evidence = detail.get("evidence")
-    if not isinstance(evidence, list):
-        return []
-    return [
-        item["run_id"]
-        for item in evidence
-        if isinstance(item, dict)
-        and isinstance(item.get("run_id"), str)
-        and item["run_id"]
-    ]
+    if isinstance(evidence, list):
+        return "list", [
+            ("run", item["run_id"])
+            for item in evidence
+            if isinstance(item, dict)
+            and isinstance(item.get("run_id"), str)
+            and item["run_id"]
+        ]
+    if isinstance(evidence, dict):
+        references = []
+        commit = evidence.get("commit")
+        if isinstance(commit, str) and commit:
+            references.append(("commit", commit))
+        artifacts = evidence.get("artifacts")
+        if isinstance(artifacts, list):
+            references.extend(
+                ("artifact", artifact)
+                for artifact in artifacts
+                if isinstance(artifact, str) and artifact
+            )
+        return "dict", references
+    return None, []
+
+
+def _evidence_ids(row):
+    """Return the evidence references a complete row names, in either shape."""
+    return [value for _kind, value in _evidence_references(row)[1]]
+
+
+def _reference_resolves(root, kind, value, events_text, history_bases):
+    """Return whether one evidence reference is inspectable in this checkout.
+
+    A run id or commit resolves when it is named by the committed events store or
+    carries a GitReins history run directory; an artifact resolves when the path
+    it names exists in this tree (or is named by the events store).  A dict
+    bundle is ONE evidence record, so a reader needs one of its pointers to be
+    inspectable, not every one of them.
+    """
+    if kind == "artifact":
+        return value in events_text or os.path.isfile(os.path.join(root, value))
+    if value in events_text:
+        return True
+    return any(_run_directory_exists(base, value) for base in history_bases)
 
 
 def check(root, history_root=None):
     """Return (complete rows, findings, ignored lines, history roots).
 
     Each finding is ``(row_id, kind, run_ids)`` with ``kind`` either
-    ``"unresolved"`` (named runs that resolve nowhere) or ``"zero-evidence"``
-    (the row names no run at all, so nothing can be inspected).
+    ``"unresolved"`` (named runs, or a dict bundle's pointers, that resolve
+    nowhere) or ``"zero-evidence"`` (the row names no evidence at all, so nothing
+    can be inspected).
     """
     board_root = os.path.join(root, ".coding-hermes", "board")
     tasks_path = os.path.join(board_root, "tasks.jsonl")
@@ -203,17 +258,21 @@ def check(root, history_root=None):
     complete_rows = [row for row in rows if row.get("status") == "complete"]
     for row in complete_rows:
         row_id = row.get("id", "<missing-id>")
-        evidence_ids = _evidence_ids(row)
-        if not evidence_ids:
+        shape, references = _evidence_references(row)
+        if not references:
             findings.append((row_id, "zero-evidence", []))
             continue
         unresolved = [
-            run_id
-            for run_id in evidence_ids
-            if run_id not in events_text
-            and not any(_run_directory_exists(base, run_id) for base in history_bases)
+            value
+            for kind, value in references
+            if not _reference_resolves(root, kind, value, events_text, history_bases)
         ]
-        if unresolved:
+        if not unresolved:
+            continue
+        # A list row names independent runs and each one must resolve; a dict
+        # bundle is one record, so it is a finding only when NONE of its pointers
+        # is inspectable here (CF-486).
+        if shape == "list" or len(unresolved) == len(references):
             findings.append((row_id, "unresolved", unresolved))
 
     return complete_rows, findings, ignored, history_bases

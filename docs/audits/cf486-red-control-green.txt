@@ -1,0 +1,13 @@
+........
+----------------------------------------------------------------------
+Ran 8 tests in 5.288s
+
+OK
+
+CF-486 evidence-shape verdicts:
+  CF-486-FIXTURE-LIST = resolved
+  CF-486-FIXTURE-DICT-ARTIFACT = resolved
+  CF-486-FIXTURE-DICT-COMMIT = resolved
+  CF-486-FIXTURE-DICT-DANGLING = unresolved
+  CF-486-FIXTURE-EMPTY-LIST = zero-evidence
+  CF-486-FIXTURE-EMPTY-DICT = zero-evidence

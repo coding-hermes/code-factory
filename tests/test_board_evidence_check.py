@@ -343,6 +343,147 @@ class BoardEvidenceCheck(unittest.TestCase):
             strict = self.run_checker(temp_root, "--strict")
             self.assertEqual(strict.returncode, 1, strict.stdout + strict.stderr)
 
+    def test_both_evidence_shapes_resolve_and_empty_shapes_do_not(self):
+        """Both evidence shapes resolve; an empty field is still ZERO-EVIDENCE (CF-486).
+
+        A ``boardctl`` closeout writes ``detail.evidence`` as a DICT bundle
+        (``{commit, commands, artifacts}``) while older rows carry a LIST of
+        ``{"run_id": ...}`` pointers. A checker that reads only the list reports a
+        legitimate bundle as ``ZERO-EVIDENCE`` -- a finding nobody accepted, so
+        the tracked suite goes red on the closeout (CF-473). The widening must not
+        turn an empty field into evidence, and a bundle in which no pointer is
+        inspectable must still be a finding.
+        """
+        rows = [
+            {
+                "id": "CF-486-FIXTURE-LIST",
+                "status": "complete",
+                "detail": {"evidence": [{"run_id": "cf486-list-run"}]},
+            },
+            # dict shape resolved by its ARTIFACT: the path it names is in the tree
+            {
+                "id": "CF-486-FIXTURE-DICT-ARTIFACT",
+                "status": "complete",
+                "detail": {
+                    "evidence": {
+                        "commit": "0" * 40,
+                        "commands": ["python3 -m unittest discover -s tests"],
+                        "artifacts": ["docs/audits/cf486-dict-bundle.md"],
+                    }
+                },
+            },
+            # dict shape resolved by its COMMIT: named by the committed events store
+            {
+                "id": "CF-486-FIXTURE-DICT-COMMIT",
+                "status": "complete",
+                "detail": {
+                    "evidence": {
+                        "commit": "cf486-dict-commit",
+                        "commands": [],
+                        "artifacts": ["docs/audits/cf486-absent.md"],
+                    }
+                },
+            },
+            # dict shape in which nothing resolves is still a finding
+            {
+                "id": "CF-486-FIXTURE-DICT-DANGLING",
+                "status": "complete",
+                "detail": {
+                    "evidence": {
+                        "commit": "cf486-absent-commit",
+                        "artifacts": ["docs/audits/cf486-absent.md"],
+                    }
+                },
+            },
+            {
+                "id": "CF-486-FIXTURE-EMPTY-LIST",
+                "status": "complete",
+                "detail": {"evidence": []},
+            },
+            {
+                "id": "CF-486-FIXTURE-EMPTY-DICT",
+                "status": "complete",
+                "detail": {"evidence": {}},
+            },
+        ]
+        with tempfile.TemporaryDirectory() as temp_root:
+            board_path = os.path.join(temp_root, ".coding-hermes", "board")
+            os.makedirs(board_path)
+            os.makedirs(os.path.join(temp_root, "docs", "audits"))
+            with open(
+                os.path.join(temp_root, "docs", "audits", "cf486-dict-bundle.md"),
+                "w",
+                encoding="utf-8",
+            ) as artifact:
+                artifact.write("evidence artifact\n")
+            with open(
+                os.path.join(board_path, "tasks.jsonl"), "w", encoding="utf-8"
+            ) as tasks_file:
+                for row in rows:
+                    tasks_file.write(json.dumps(row) + "\n")
+            with open(
+                os.path.join(board_path, "events.jsonl"), "w", encoding="utf-8"
+            ) as events_file:
+                for event in (
+                    {"id": 1, "run_id": "cf486-list-run"},
+                    {"id": 2, "commit": "cf486-dict-commit"},
+                ):
+                    events_file.write(json.dumps(event) + "\n")
+
+            module = self.load_checker_module()
+            _complete, findings, _ignored, _bases = module.check(temp_root, None)
+            by_row = {row_id: kind for row_id, kind, _runs in findings}
+            observed = {row["id"]: by_row.get(row["id"], "resolved") for row in rows}
+            # PROOF for the row: print all six verdicts, not only the failures.
+            print(
+                "\nCF-486 evidence-shape verdicts:\n"
+                + "\n".join(
+                    f"  {row_id} = {verdict}" for row_id, verdict in observed.items()
+                )
+            )
+            self.assertEqual(
+                observed,
+                {
+                    "CF-486-FIXTURE-LIST": "resolved",
+                    "CF-486-FIXTURE-DICT-ARTIFACT": "resolved",
+                    "CF-486-FIXTURE-DICT-COMMIT": "resolved",
+                    "CF-486-FIXTURE-DICT-DANGLING": "unresolved",
+                    "CF-486-FIXTURE-EMPTY-LIST": "zero-evidence",
+                    "CF-486-FIXTURE-EMPTY-DICT": "zero-evidence",
+                },
+            )
+            self.assertIn(
+                (
+                    "CF-486-FIXTURE-DICT-DANGLING",
+                    "unresolved",
+                    ["cf486-absent-commit", "docs/audits/cf486-absent.md"],
+                ),
+                findings,
+            )
+
+            result = self.run_checker(temp_root)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(
+                self.finding_lines(result.stdout),
+                [
+                    "UNRESOLVED CF-486-FIXTURE-DICT-DANGLING "
+                    "cf486-absent-commit,docs/audits/cf486-absent.md",
+                    "ZERO-EVIDENCE CF-486-FIXTURE-EMPTY-LIST",
+                    "ZERO-EVIDENCE CF-486-FIXTURE-EMPTY-DICT",
+                ],
+            )
+            self.assertIn("checked 6 complete rows, 3 unresolved", result.stdout)
+            strict = self.run_checker(temp_root, "--strict")
+            self.assertEqual(strict.returncode, 1, strict.stdout + strict.stderr)
+
+        # The live row that reddened the suite: its dict bundle names a commit the
+        # events store records and a committed artifact, so it must not be a
+        # finding -- and it is not on the allowlist (CF-486 criterion 1).
+        live = self.run_checker(ROOT)
+        self.assertEqual(live.returncode, 0, live.stdout + live.stderr)
+        self.assertNotIn("CF-473", live.stdout)
+        self.assertNotIn("CF-473", module.ACCEPTED_UNRESOLVED)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
