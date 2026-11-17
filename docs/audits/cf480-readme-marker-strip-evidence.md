@@ -3,7 +3,7 @@
 Measured on the readme lane tick `code-factory-readme-2026-11-17-02-40-53` at `origin/main`
 `feda6bd4`.
 
-ch:trace row=CF-480 spec=docs/traceability-doctrine.md test=tests/selftest.sh::readme-content-arms doc=docs/audits/cf480-readme-marker-strip-evidence.md prompt=none:lane-brief evidence=docs/audits/cf480-readme-marker-strip-evidence.md witness=path@origin:docs/audits/cf480-readme-marker-strip-evidence.md verdict=none:not-yet-judged commit=none:self-referential-hash memory=/project/code-factory/readme-audit-2026-11-17-02-40-53
+ch:trace row=CF-480 spec=docs/traceability-doctrine.md test=none:no-arm-guards-the-absence-of-the-block doc=docs/audits/cf480-readme-marker-strip-evidence.md prompt=none:lane-brief evidence=docs/audits/cf480-readme-marker-strip-evidence.md witness=path@origin:docs/audits/cf480-readme-marker-strip-evidence.md verdict=pending:rejudge-for-this-artifact commit=none:self-referential-hash memory=/project/code-factory/readme-audit-2026-11-17-02-40-53
 
 ## What was wrong
 
@@ -59,3 +59,17 @@ EXIT=0
 ```
 
 The diff is deletion-only above the closing sentence: no section, table or command block was edited.
+
+## The gap this leaves, stated instead of papered over
+
+Nothing prevents the block from returning. The first version of this artifact cited
+`test=tests/selftest.sh::readme-content-arms`; no such arm exists — a judge re-read the tree,
+grepped for it, and found the string only in this file. That is exactly the closure-by-reference
+this row is about, committed in the row's own evidence, so the citation is corrected above to
+`test=none:no-arm-guards-the-absence-of-the-block` and the missing guard is filed as **CF-481**
+(add an arm that reds when `README.md` carries a `ch:trace` or `STATUS:`/`TIER:`/`EVIDENCE:` line).
+
+What DOES stand behind the strip today: the arms that read README's real content still pass (prompt
+reference, census byte-parity with `docs/audits/cf089-census-recipe.sh`, `HERMES_PYTHON_BIN` in
+Quick start, `BUNKER_SERVER`), and the absence itself is verifiable in one command —
+`git show origin/main:README.md | grep -c 'ch:trace'` prints 0.
