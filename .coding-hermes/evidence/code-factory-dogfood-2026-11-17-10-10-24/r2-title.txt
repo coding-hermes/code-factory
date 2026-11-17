@@ -1,0 +1,1 @@
+P3 — README Quick start step 2 says "the same check with an explicit interpreter passes"; measured it exits 1 with NODE: FAIL (7) — two MORE failures than the default arm

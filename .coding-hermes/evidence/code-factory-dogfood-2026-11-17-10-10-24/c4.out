@@ -1,0 +1,4 @@
+land-node-branch — workdir=/nonexistent/wt branch=node/L/x commit=deadbeef origin/main
+  FAIL  workdir — not a git worktree: /nonexistent/wt
+
+LAND: REFUSED — not a git worktree: /nonexistent/wt

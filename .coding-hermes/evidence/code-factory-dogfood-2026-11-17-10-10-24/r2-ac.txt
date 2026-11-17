@@ -1,0 +1,6 @@
+1. README Quick start step 2 states what actually changes (the `python` row flips FAIL -> PASS) and what stays red on a control host, and makes no claim that the check passes: `awk '/^## Quick start/,/^## Provisioning/' README.md | grep -c 'the same check with an explicit interpreter passes'` is 0.
+2. Both arms are reproducible at the fix commit and the counts the prose states match them: default arm exits 1 with `NODE: FAIL (5)` including `FAIL  python`; `HERMES_PYTHON_BIN=python3.12` arm exits 1 with `NODE: FAIL (7)` including `PASS  python — 3.12`. FAILIF: the remedy arm exits 0 (which would make the old sentence true and this row wrong) or either total differs from the prose.
+3. tests/selftest.sh binds the claim to the measurement: a fixture that greps the Quick start for a whole-check-passes claim fails when present, so a future rewrite cannot overclaim silently (AGENTS.md rule 2 — the check must be able to fail).
+4. `bash tests/selftest.sh` reports no new failure at the fix commit.
+
+Chapter: III.M6 (documentation) — README Quick start truth for step 2.

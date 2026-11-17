@@ -1,0 +1,12 @@
+usage: scripts/node-create.sh --project P --repo URL [--ref R] [--harness H] [--agent ID] [--ttl DURATION] [--port PORT] [--deploy-key FILE] [--gomodcache PATH] [--staged-files]
+       --project P        the project this node serves (required)
+       --repo URL         the repository the node clones (required)
+       --ref R            branch or tag to clone (default main, or $NODE_REF)
+       --harness H        the adapter that runs the work (default hermes); one of the names
+                          this tree ships under scripts/harness/install-*.sh
+       --agent ID         reuses an agent that must already exist on the server; it is never spawned
+       --ttl DURATION     the agent lifetime passed to bunker spawn (default 6h)
+       --port PORT        the node gateway port, forwarded as NODE_GATEWAY_PORT (default 10800)
+       --deploy-key FILE  injects a read-only per-repo key (mode 600, never in argv)
+       --gomodcache PATH  points the node at a sealed shared Go module cache
+       --staged-files     validates runtime references and prints the staging manifest without bunker

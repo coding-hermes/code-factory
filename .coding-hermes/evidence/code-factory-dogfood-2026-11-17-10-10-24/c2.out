@@ -1,0 +1,1 @@
+usage: scripts/verify-node.sh --agent ID [--server NAME] [--port P] [--transport T [--transport-address HOST:PORT]] [--artifact PATH] [--strict-freshness] [--strict-seed]

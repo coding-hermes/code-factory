@@ -1,0 +1,6 @@
+1. No residue WARN on a clean host: with `bunker status --server <s>` reporting `Residue:  0 orphan users, 0 orphan homes, 0 orphan keys, 0 stale linger entries`, `bash scripts/bunker-server-install.sh --check` prints either no residue row at all or a PASS row that carries those counts (`PASS  residue — 0 orphan homes, 0 orphan keys (server-reported)`). It must not print `WARN  residue — orphan homes/keys reported by the server`.
+2. The non-zero arm is proven in tests/selftest.sh with a stub status block: a fixture feeding `Residue:  0 orphan users, 3 orphan homes, 2 orphan keys, 1 stale linger entry` prints a row containing 3 and 2; the all-zero fixture prints no warning. FAILIF: both fixtures print the same row, or the zero fixture prints a warning.
+3. The row's text names the machine the two directories live on (server-side), or the WARN is replaced by the reaper path CF-003 shipped, so a control-host reader is told what to run next instead of being handed two unset variables.
+4. `bash tests/selftest.sh` reports no new failure at the fix commit and the new fixture goes green (AGENTS.md rule 2: every check must be able to fail).
+
+Chapter: III.M1.S1 (M1 provisioning — qualify the host, capacity/residue block of bunker-server-install.sh).

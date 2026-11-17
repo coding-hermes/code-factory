@@ -1,0 +1,18 @@
+Dogfood walk 2026-11-17 (tick code-factory-dogfood-2026-11-17-10-10-24) walking README Quick start step 1 at pinned origin/main 0014b76ac0b5a33081068d743e52754b928b4e0c, shared checkout clean (ownership.py status: 0 dirty, 0 untracked).
+
+Command, verbatim from README.md:23 — `BUNKER_SERVER=<bunker-server> bash scripts/bunker-server-install.sh --check` — exits 0 in 0.92 s with `RESULT: PASS`. Two consecutive rows of that run contradict each other:
+
+  ..      Residue:  0 orphan users, 0 orphan homes, 0 orphan keys, 0 stale linger entries (0 registered agents)
+  WARN  residue — orphan homes/keys reported by the server — set BUNKER_HOMES_DIR/BUNKER_KEYS_DIR and re-run with --reap-orphans
+
+The first line is the server's own status block, echoed by scripts/bunker-server-install.sh:87. The second is line 117:
+
+  say "$st" | grep -qi 'orphan' && warn "residue" "orphan homes/keys reported by the server — set BUNKER_HOMES_DIR/BUNKER_KEYS_DIR and re-run with --reap-orphans"
+
+The status text always contains the word "orphan" because it labels the counts, so the test is unconditional: the counts on the same line are never parsed. The row cannot distinguish 0 orphan homes from 12 — a host leaking a home per destroyed node prints byte-identically to a clean host, which is exactly the state CF-003's reaper exists to catch (the comment at :88-90 says the WARN "has always been" the fallback). The consequence is not cosmetic: this is the only control-host surface that reports residue, it is the one a provisioning operator reads before creating the next node, and it is capable of saying one thing only.
+
+Second defect in the same row: the remedy names BUNKER_HOMES_DIR / BUNKER_KEYS_DIR as if they were the reader's to set. They are SERVER-side paths — the script runs on the control host, where neither variable exists by default (this run: both unset), so a stranger's only instruction is to set two variables whose meaning the message does not state.
+
+Measured with the same command twice: `--check` and `--check --json` (see CF-057 note filed the same tick) print this row identically; the JSON surface does not carry the counts either.
+
+Not owned by CF-259 (board_lock.py residue classifier), CF-412 (ownership.py residue leaf), or CF-057 (argument parsing, not the capacity block). CI at filing: see the tick report.

@@ -1,0 +1,31 @@
+Dogfood walk 2026-11-17 (tick code-factory-dogfood-2026-11-17-10-10-24), pinned origin/main 0014b76ac0b5a33081068d743e52754b928b4e0c, shared checkout clean, control host python3 3.14.9 / python3.12 3.12.13.
+
+README.md:26-29, added by CF-473's fix (commit 5c79c29c) to satisfy that row's AC-4, reads:
+
+  #    If this host's python3 is outside >=3.11,<3.14 the python row fails and names
+  #    the fix it wants; the same check with an explicit interpreter passes:
+  #    HERMES_PYTHON_BIN=python3.12 ./scripts/project-node.sh --check --project myproject
+
+Measured both arms in one staged run, stdout and stderr captured separately, wall clock from /usr/bin/time:
+
+  arm A (documented step 2, README.md:30)
+    bash ./scripts/project-node.sh --check --project myproject
+    rc=1  38.16 s  HERMES: FAIL (1)  NODE: FAIL (5)
+    FAIL rows: footprint:floor, reach:http://crier.example:8767/health, python, crier_identity, repo
+
+  arm B (the remedy the sentence names)
+    HERMES_PYTHON_BIN=python3.12 bash ./scripts/project-node.sh --check --project myproject
+    rc=1  HERMES: FAIL (3)  NODE: FAIL (7)
+    PASS  python — 3.12.13 (hermes-agent 0.19.0 requires >=3.11,<3.14)
+    FAIL  binary — host-provided ~/.local/bin/hermes (not installed by this adapter — run --apply)
+    FAIL  version — 0.22.5+3032.g3f87b28 != pin 0.19.0
+    FAIL  port — nothing on :10800
+    plus the same footprint:floor, reach:, crier_identity and repo rows arm A carries
+
+So the remedy does what its first clause says (the `python` row flips to PASS) and the opposite of its second clause: the check does not pass, it gains two more FAIL rows, because an in-range interpreter lets the adapter reach the binary/version/port gates that a 3.14 host never reaches (CF-183's host-provided-binary refusal is what prints them). A stranger who applies the documented remedy reads 7 red rows instead of 5 and has no way to tell that this is the expected control-host result rather than a new breakage they caused.
+
+Why nothing caught it: CF-473 AC-4 graded only that the remedy TEXT appears in the Quick start (`awk '/^## Quick start/,/^## Provisioning/' README.md | grep -c HERMES_PYTHON_BIN` = 1). Prose truth was never graded, so the sentence written to close that row could assert any outcome. This is the same class as CF-467 (README quotes a transcript the template no longer produces) and CF-188 (a README census paragraph quoting an admission value the loader does not write), applied to the Quick start's own remedy.
+
+Fix direction: the sentence should say which ROW flips (`python` FAIL -> PASS) and that the rest of the check stays red on a control host until the node exists — i.e. name the two arms' totals — or drop the "passes" clause entirely. A selftest arm that binds the sentence to a measured count prevents the next rewrite from overclaiming.
+
+Chapter: III.M6 (documentation) — README Quick start truth for step 2.

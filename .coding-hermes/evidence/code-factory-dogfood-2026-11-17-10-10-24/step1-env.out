@@ -1,0 +1,12 @@
+bunker server: your-bunker-server
+  PASS  bunker_client — ~/.local/bin/bunker bunker 0.3.0
+  PASS  bunker_config — ~/.config/bunker/config.yaml
+  FAIL  server_declared — your-bunker-server not found in ~/.config/bunker/config.yaml
+  FAIL  server_reachable — your-bunker-server did not answer: bunker: reading server "your-bunker-server"
+  PASS  tool:python3 — ~/.hermes/installs/b0e47ae07995f891/environments/24f1df2ad984420181cb6be1707f6a03/venv/bin/python3
+  PASS  tool:git — /usr/bin/git
+  PASS  tool:curl — /usr/bin/curl
+  PASS  tool:jq — /usr/bin/jq
+  PASS  disk — 447.6 GB free (floor 5 GB)
+
+RESULT: FAIL (2)

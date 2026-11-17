@@ -1,0 +1,1 @@
+P3 — bunker-server-install.sh's residue row is a substring match on the word "orphan": it WARNs on a host the server reports as 0 orphans and can never report a real leak

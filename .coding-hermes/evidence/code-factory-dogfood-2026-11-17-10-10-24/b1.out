@@ -1,0 +1,56 @@
+  PASS  disk_floor — 5 GiB from role-default
+node provisioning — project=myproject harness=hermes host=<control-host>
+[00] preflight
+  PASS  arch — x86_64 (Linux 7.0.0-38-generic)
+  PASS  role — worker (floor 5 GiB from role-default)
+  PASS  disk — 447.7 GB free (floor 5 GB)
+  PASS  mem — 44649 MB
+  PASS  footprint — 276545.6 MiB measured at ~: repo 0.0 MiB, node_toolchain 0.0 MiB, go_toolchain 0.0 MiB, harness 276545.6 MiB, node_state 0.0 MiB, modcache 0.0 MiB
+  PASS  footprint:room — 278593.6 MiB required (276545.6 MiB + 2048 MiB working room), 458430.8 MiB free, headroom 179837.2 MiB
+  FAIL  footprint:floor — 276545.6 MiB exceeds the 5 GiB floor (5401.3 %) from role-default
+  PASS  crier_url — http://crier.example:8767
+  FAIL  reach:http://crier.example:8767/health — -> 000
+  PASS  reach:https://pypi.org/simple/ — 200
+[10] base
+  PASS  tool:python3 — ~/.hermes/installs/b0e47ae07995f891/environments/24f1df2ad984420181cb6be1707f6a03/venv/bin/python3
+  PASS  tool:git — /usr/bin/git
+  PASS  tool:curl — /usr/bin/curl
+  PASS  tool:tar — /usr/bin/tar
+  PASS  tool:sha256sum — /usr/bin/sha256sum
+  PASS  python:venv — importable
+  WARN  kinds — generic fallback — no --kinds/NODE_KINDS and no kind marker in ~/repo — grading the fixed base set only, so a Go/Rust/Node repo would go ungraded
+  ..    census: bash scripts/project-node.sh --check --project <p> --layers 10 grades one node — markers go.mod→go, Cargo.toml→rust, package.json→node, pyproject.toml|setup.py→python; CF-218 counted 61 distinct fleet repo origins: go 27, node 22, python 16, rust 5
+  PASS  tool:jq — /usr/bin/jq
+  PASS  tool:rg — /usr/bin/rg
+  PASS  tool:node — ~/.local/share/vite-plus/bin/node
+[20] harness
+  PASS  gateway_auth — dashboard.basic_auth present in ~/.hermes/config.yaml (presence only — the adapter's gate is the authority)
+harness: hermes (pin 0.19.0, port 10800)
+  ..    contract:CF_API_KEY_FILE — unset (no credential path; a paid lane supplies one)
+  ..    contract:CF_MODEL = unset
+  ..    contract:CF_PROVIDER = unset
+  ..    contract:CF_BASE_URL = unset
+  ..    contract:CF_API_KEY_FILE = unset
+  ..    contract:CF_WORKDIR = unset
+  ..    contract:CF_NAMESPACE = unset
+  ..    contract:CF_RUN_ID = unset
+  ..    contract:CF_LANE = unset
+  ..    contract:CF_SKILLS_DIR = unset
+  ..    contract:CF_HARNESS_OPTS = unset
+  ..    contract:CF_MAX_TURNS = unset
+  ..    contract:CF_TIMEOUT_S = unset
+  PASS  python — 3.12.13 (hermes-agent 0.19.0 requires >=3.11,<3.14)
+  FAIL  binary — host-provided ~/.local/bin/hermes (not installed by this adapter — run --apply)
+  FAIL  version — 0.22.5+3032.g3f87b28 != pin 0.19.0
+  FAIL  port — nothing on :10800
+  PASS  inference_key — a provider key is present in ~/.hermes/.env (value not read)
+
+HERMES: FAIL (3)
+[30] bus
+  FAIL  crier_identity — absent — stage a bundle and re-run; a node without an identity is invisible
+[40] repo
+  FAIL  repo — ~/repo absent (pass --repo to clone)
+[90] manifest
+  ..    manifest is written only when every layer passes
+
+NODE: FAIL (7)

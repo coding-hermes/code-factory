@@ -1,0 +1,28 @@
+node provisioning — project=myproject harness=hermes host=<control-host>
+SCOPE: layers 20 (fixture mode — not a node certification)
+  SKIP  layer 00 (out of scope)
+  SKIP  layer 10 (out of scope)
+[20] harness
+  PASS  gateway_auth — dashboard.basic_auth present in ~/.hermes/config.yaml (presence only — the adapter's gate is the authority)
+harness: hermes (pin 0.19.0, port 10800)
+  ..    contract:CF_API_KEY_FILE — unset (no credential path; a paid lane supplies one)
+  ..    contract:CF_MODEL = unset
+  ..    contract:CF_PROVIDER = unset
+  ..    contract:CF_BASE_URL = unset
+  ..    contract:CF_API_KEY_FILE = unset
+  ..    contract:CF_WORKDIR = unset
+  ..    contract:CF_NAMESPACE = unset
+  ..    contract:CF_RUN_ID = unset
+  ..    contract:CF_LANE = unset
+  ..    contract:CF_SKILLS_DIR = unset
+  ..    contract:CF_HARNESS_OPTS = unset
+  ..    contract:CF_MAX_TURNS = unset
+  ..    contract:CF_TIMEOUT_S = unset
+  FAIL  python — hermes-agent 0.19.0 requires python >=3.11,<3.14; found 3.14.9 — set HERMES_PYTHON_BIN to an in-range interpreter, e.g. HERMES_PYTHON_BIN=python3.12
+
+HERMES: FAIL (1)
+  SKIP  layer 30 (out of scope)
+  SKIP  layer 40 (out of scope)
+  SKIP  layer 90 (fixture mode: no manifest)
+
+NODE: FAIL (1)
