@@ -230,3 +230,73 @@ The "UNVERIFIED" line above is scoped to the moment it was written. The tier-2 j
   WARN does not change the exit status, so `--check` prints `RESULT: PASS` on a host leaking 3 homes
   and 2 keys. Verified from the leaking fixture, not inherited — filed as **`CF-495`** (P3, chapter
   `III.M1.S1`), because a surface automation reads must be able to fail.
+
+## 2026-11-17 — delivery 6 delta: CF-489's premise is dead, CF-496 filed
+
+- **Duplicate delivery, proven before work**: `grep -c '<tick-id>' ~/.hermes/logs/gateway.log` = **6**
+  inbound lines (05:10:31, 05:46:57, 06:11:09, 07:02:43, 09:33:53, 11:00:26 local). Deliveries 1-5 own
+  the walk and the records (`CF-483`/`CF-484`, `CF-489`/`CF-490`, the re-fire receipt, the CF-490 leg,
+  `CF-483`'s fix `2d06b79a` and the verdict record `a205414a`/`046802e4`). This delivery wrote a delta,
+  not a second copy.
+- **Delivery 5's UNVERIFIED tier-2 leg is CLOSED, from the committed record, not from prose**: its
+  report left the `CF-483` judge verdict unverified. `a205414a` records it — run `175640de`,
+  `passed=false`, tier 1 PASS, 6 items 5 PASS / 1 FAIL, the FAIL confined to the "suite stays green"
+  clause that three independent full-suite runs contradict — and `046802e4` re-applies the verdict
+  note the rebase union dropped. `CF-483` is `in_progress` on purpose: a FAIL verdict is not a close.
+- **The other UNVERIFIED leg was walkable, and walking it killed the row.** `CF-489` (P1) claimed no
+  ONLINE host can spawn. Re-measured with its own documented command and fixture
+  (`github/gitignore`, `--harness hermes`, `--ttl 2h`): **both** ONLINE hosts now print
+  `PASS  spawn` — `bunker-las-03` → `node-dogfood-probe-110346` (162 s), `bunker-las-02` →
+  `node-dogfood-probe2-110651` (152 s) — and both runs continue into `PASS  staged` and in-node
+  provisioning. No `FAIL spawn`, no slice-limits diagnostic. Host census the same fire: `-03` ONLINE
+  0/8, `-02` ONLINE 0/8, `-01`/`-04` OFFLINE (dial timeout). `CF-489` closed against that evidence;
+  criterion #4 respected — nothing tuned, no diagnostic suppressed.
+- **One new operator-facing defect filed as `CF-496` (P4, chapter `III.M1.S1`)**: layer 00 grades
+  `CRIER_URL` from INSIDE the node (`scripts/project-node.sh:289-299`) and prints a bare
+  `FAIL  reach:<url>/health — -> 000`, which reads as "crier is down" when the bus is up. One agent,
+  one variable, both hosts: control-host loopback → 200; inside `node-dogfood-probe-110346` loopback →
+  000, control-host LAN → 000, control-host tailnet → 200; inside `node-dogfood-probe2-110651` loopback
+  → 000, tailnet → 200. So the probe is right and the message is the defect.
+- **Harness attribution, stated so the next fire does not inherit a false red**: the `reach:` FAIL in
+  this fire's own transcripts is *this harness's* choice of a loopback `CRIER_URL` — not a product
+  fault, and deliberately NOT filed as one. The product finding that survives that check is the
+  message and the docs' silence on node-side reachability.
+- **Residue disposed**: both spawned agents destroyed after their transcripts were captured
+  (`d6-destroy-las03.out`, `d6-destroy-las02.out` — archived-then-deleted, rc 0, keys removed), so
+  neither host carries a probe agent.
+- **UNVERIFIED this fire**: `CF-489`'s closeout as a judged run — the tier-1/2 verdict for this
+  closeout is recorded in the closeout commit and is the artifact to read, not this entry;
+  `CF-496`'s own fix (correctly, it is pending).
+- **Evidence**: `.coding-hermes/evidence/code-factory-dogfood-2026-11-17-10-10-24/d6-*`
+  (`d6-create-bunker-las-03.out`, `d6-create-bunker-las-02.out`, `d6-host-census.out`,
+  `d6-node-reach-ab.out`, `d6-destroy-las03.out`, `d6-destroy-las02.out`, plus the two create
+  scripts, the reach A/B script and the elision scripts that ran). Addresses and host-home paths are
+  elided; the substitution table is in the evidence `INDEX.md`.
+
+## 2026-11-17 — delivery 6 addendum: the las-02 PASS did not reproduce; CF-489 stays open
+
+- **What forced this addendum**: the tier-2 judge on the closeout run (`gitreins task complete CF-489`
+  → verdict `fd3b385b`) rejected the closeout on two counts. One was mine and it was fair: the las-02
+  arm ran `--project dogfood-probe2` while `CF-489`'s criterion names `--project dogfood-probe`, so the
+  second host had not actually been walked with the documented command.
+- **Re-ran the arm with the documented argument, and it does not reproduce.** At 16:39 the same script,
+  same fixture, same host printed `FAIL  host — bunker-las-02 cannot spawn an agent: slice-limits` in
+  **17 s** — the exact refusal delivery 3 recorded. Both transcripts are now committed: the 16:06 PASS
+  is preserved as `d6-create-bunker-las-02-pass-1606.out` (it had been overwritten in the working tree
+  by the re-run; restored from `d389fb7a`), and the 16:39 documented run is `d6-create-bunker-las-02.out`.
+- **The honest reading of this fire's evidence is narrower than its commit claims.** `bunker-las-03`
+  spawns: `PASS  spawn — node-dogfood-probe-110346` at 16:03, 162 s, no host row. `bunker-las-02` is
+  **intermittent**: one PASS at 16:06 and one slice-limits refusal at 16:39, same host, same fixture,
+  no code change between the two runs, and no agent left behind by either. A nondeterministic spawn
+  refusal is a worse defect than the deterministic one delivery 3 recorded, and it is exactly what
+  `CF-489`'s title ("no ONLINE node host … can spawn") cannot express.
+- **Correction to `d389fb7a`'s own message and log entry**, which say "CF-489 closed against that
+  evidence": no close was ever written. The board gate needs `--evidence-run-id` from a judged run, and
+  the judge then graded the still-open row — which is the second of its two findings, and it was right.
+  The close is **dropped, not deferred**: `CF-489` stays open at P1 with both measurements recorded on
+  the row (`boardctl update CF-489 --note …`), and this addendum is what a later reader reconciles
+  against, not a retraction of the entry above.
+- **The mechanism worth keeping**: the judge's first finding (wrong `--project`) is what exposed the
+  second (intermittent refusal). A transcript that is not reproducible from its committed script hides
+  the arm's real result — the deviation was not cosmetic, it was the thing masking the failure.
+- Judge run for this addendum: `fd3b385b` (tier 1 + tier 2 over the closeout diff), recorded on the row.

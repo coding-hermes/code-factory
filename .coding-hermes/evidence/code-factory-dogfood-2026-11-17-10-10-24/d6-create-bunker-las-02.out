@@ -1,0 +1,8 @@
+node-create — project=dogfood-probe harness=hermes server=bunker-las-02
+  ..    spawning node-dogfood-probe-113904 (ttl 2h)
+  FAIL  host — bunker-las-02 cannot spawn an agent: slice-limits; log=/mnt/ssd/tmp/cf-spawn-node-dogfood-probe-113904-4Jxgt3.log; final diagnostic: bunker: spawn agent: internal: spawn node-dogfood-probe-113904 failed at stage slice-limits: containment landing did not converge within 5 reads: containment landing: memory.swap.max = "max", want "0" (bar swap)
+  ..    remedy: bunker-las-02 must let bunkerd land its per-agent slice — enable cgroup v2 swap accounting on that host so memory.swap.max can be set to 0; preflight the target from here with: bunker status --server bunker-las-02
+CREATE_EXIT=1
+CREATE_WALL_CLOCK_S=17
+STARTED_UTC=2026-11-17T16:39:03Z
+ENDED_UTC=2026-11-17T16:39:20Z

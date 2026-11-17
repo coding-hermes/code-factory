@@ -1,0 +1,3 @@
+Destroying agent node-dogfood-probe-110346 (home 432.9 MB; archiving before delete, deadline 12m0s)…
+Agent node-dogfood-probe-110346 destroyed.
+Removed local SSH key ~/.config/bunker/keys/node-dogfood-probe-110346
