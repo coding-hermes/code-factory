@@ -888,3 +888,5 @@
 {"id":887,"timestamp":"2026-11-17T10:21:46Z","event_type":"task_created","task_id":"CF-483","actor":"foreman","detail":"{\"id\":\"CF-483\",\"status\":\"pending\"}"}
 {"id":888,"timestamp":"2026-11-17T10:21:46Z","event_type":"task_created","task_id":"CF-484","actor":"foreman","detail":"{\"id\":\"CF-484\",\"status\":\"pending\"}"}
 {"id":889,"timestamp":"2026-11-17T10:21:46Z","event_type":"task_updated","task_id":"CF-057","actor":"foreman","detail":"{\"status\":\"pending\"}"}
+{"id":890,"timestamp":"2026-11-17T10:47:31Z","event_type":"task_completed","task_id":"CF-482","actor":"foreman","detail":"{\"status\":\"complete\"}"}
+{"id":891,"timestamp":"2026-11-17T10:48:46Z","event_type":"task_created","task_id":"CF-485","actor":"foreman","detail":"{\"id\":\"CF-485\",\"status\":\"pending\"}"}
