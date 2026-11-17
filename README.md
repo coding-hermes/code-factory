@@ -32,12 +32,29 @@ scripts/bunker-server-install.sh --check
 # 3. make one, from the control host
 #    (a repo whose default branch is not main: add --ref <branch-or-tag> here — node-create.sh
 #    forwards it, and it is the same flag the node's own check tells you to pass)
+#    the target server must be spawn-capable: step 1 qualifies only the control host, so a target
+#    whose per-agent slice cannot land refuses here — preflight it with
+#    `bunker status --server <name>` and read the `FAIL host` row, whose one remedy line names the
+#    setting to fix (cgroup v2 swap accounting on that host, so memory.swap.max can be 0)
+#    proof: tests/selftest.sh::cf490-host-spawn-class
 scripts/node-create.sh --project myrepo --repo https://github.com/you/myrepo --harness hermes
 ```
 
 On a host with no bunker server, no Crier and no repo, all three commands reach their checkers and
 fail with the missing value named. That is the honest result on a fresh host, and every message
 tells you which value to supply.
+
+**Step 3 needs a spawn-capable target, and step 1 does not test that.** `bunker-server-install.sh
+--check` qualifies only the *control* host (client, server entry, control tools, disk); it makes no
+claim about the agent host's container runtime. The target server must be spawn-capable: a host
+where bunkerd cannot land its per-agent slice — it wants `memory.swap.max = 0`, which needs cgroup
+v2 swap accounting on that host — refuses every spawn deterministically (the read budget in its
+message is not a flake counter), and this tree prints one `FAIL host — <server> cannot spawn an
+agent: <stage>` row plus one remedy line instead of bunkerd's internal vocabulary. Preflight the
+target with `bunker status --server <name>` before step 3. Proven by
+`tests/selftest.sh::cf490-host-spawn-class` (stub arm plus a red control against the pre-fix
+script); the live refusal that raised the row is transcribed in
+`docs/audits/code-factory-CF-490-2026-11-17.md`.
 
 **What step 3 writes for you.** A gateway on `0.0.0.0` needs `dashboard.basic_auth` in the node's
 `~/.hermes/config.yaml`, and the create path stages it instead of leaving it to you:

@@ -27,6 +27,12 @@
 # at a sealed shared Go module cache instead of its own 656 MB copy.
 # On failure, retain a newly spawned agent for diagnosis and print its exact, explicit-server
 # destroy command. Never suggest destroying an agent supplied with --agent.
+# A spawn-stage refusal whose diagnostic names bunkerd's container slice (slice-limits,
+# containment landing, bar swap, memory.swap.max) is classified as `FAIL host` — the TARGET
+# server cannot spawn an agent — and followed by exactly one remedy line naming the host setting
+# and the `bunker status --server <name>` preflight; every other spawn refusal (quota exhausted,
+# transport error) keeps the `FAIL spawn` row. Both keep the per-run log and final diagnostic
+# (CF-490; fixture tests/selftest.sh::cf490-host-spawn-class).
 # --staged-files validates runtime references and prints the staging manifest without bunker.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -371,6 +377,21 @@ if [ -z "$AGENT" ]; then
   else
     spawn_diag=$(sed '/^[[:space:]]*$/d' "$spawn_log" 2>/dev/null | tail -n 1 || true)
     [ -n "$spawn_diag" ] || spawn_diag="<no diagnostic output>"
+    # A refusal that names bunkerd's per-agent slice containment is the TARGET HOST's capability,
+    # not this factory's own failure: the slice cannot land (memory.swap.max stays "max" on a host
+    # without cgroup v2 swap accounting) and the read budget in bunkerd's text ("within 40 reads")
+    # is not a flake counter — the same state refuses every attempt. Give it its own class with one
+    # remedy line, and keep the log path + final diagnostic CF-056 requires. Every other spawn
+    # refusal (quota exhausted, transport error) keeps the `FAIL spawn` row below (CF-490).
+    case "$spawn_diag" in
+      *slice-limits*|*'containment landing'*|*'bar swap'*|*'memory.swap.max'*)
+        spawn_stage=${spawn_diag#*failed at stage }
+        [ "$spawn_stage" != "$spawn_diag" ] || spawn_stage="containment landing"
+        spawn_stage=${spawn_stage%%:*}
+        bad "host" "$SERVER cannot spawn an agent: $spawn_stage; log=$spawn_log; final diagnostic: $spawn_diag"
+        note "remedy: $SERVER must let bunkerd land its per-agent slice — enable cgroup v2 swap accounting on that host so memory.swap.max can be set to 0; preflight the target from here with: bunker status --server $SERVER"
+        exit 1 ;;
+    esac
     bad "spawn" "failed; log=$spawn_log; final diagnostic: $spawn_diag"
     exit 1
   fi

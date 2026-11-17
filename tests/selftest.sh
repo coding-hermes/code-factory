@@ -1306,6 +1306,12 @@ case "$1" in
   # agent exists, so the reuse path still runs as it did.
   info) exit 0 ;;
   spawn)
+    # CF-490: the host-capability arm emits the verbatim bunkerd diagnostic it is given; the
+    # default stays CF-056's quota refusal so that fixture keeps measuring what it did.
+    if [ -n "${FIXTURE_SPAWN_DIAG:-}" ]; then
+      printf '%s\n' "$FIXTURE_SPAWN_DIAG" >&2
+      exit 1
+    fi
     if [ "${FIXTURE_SPAWN_FAIL:-0}" = 1 ]; then
       printf '%s\n' 'fixture spawn refused: quota exhausted' >&2
       exit 1
@@ -1373,6 +1379,79 @@ fi
 
 # ch:trace row=CF-056 spec=docs/handbook/chapters/M1-provisioning.md#S2-staged-set wave=none:serial test=tests/selftest.sh::cf056-spawn-staging-failure doc=docs/handbook/chapters/M1-provisioning.md evidence=tests/selftest.sh::cf056-spawn-staging-failure witness=none:local-fixture verdict=none:foreman-judges-at-accepted-tip commit=none:worker-commit memory=none:foreman-writes
 # END CF-056
+
+# CF-490: a spawn-stage refusal whose diagnostic names bunkerd's container slice is a
+# HOST-CAPABILITY class, not the factory's own failure. Measured twice on 2026-11-17 — "within 40
+# reads" and "within 5 reads" for the same unsatisfiable state — so the budget in bunkerd's text
+# is not a flake counter and a retry cannot help. The arm asserts: one `FAIL host` row naming the
+# server and the stage, exactly ONE remedy line carrying the host setting AND the preflight, the
+# per-run log and the final diagnostic kept verbatim (CF-056), no `FAIL spawn` row for this class,
+# and no later PASS row. Both arms run through the same stub bunker; the RED control re-runs the
+# same fixture against the REAL pre-fix tree (70d02621, the base commit of this row), because a
+# weakened assertion is not a control.
+cf490_diag='bunker: spawn agent: internal: spawn node-fixture-000000 failed at stage slice-limits: containment landing did not converge within 40 reads: containment landing: memory.swap.max = "max", want "0" (bar swap)'
+mkdir -p "$tmpd/runtime"
+cf490_out=$(env -i HOME="$tmpd/control-home" PATH="$tmpd/bin:$PATH" BUNKER_SERVER=fixture-server \
+  CF_RUNTIME_DIR="$tmpd/runtime" FIXTURE_AGENT="$tmpd/agent" FIXTURE_SPAWN_DIAG="$cf490_diag" \
+  CRIER_URL=http://fixture.invalid:8767 \
+  /bin/bash "$tmpd/scripts/node-create.sh" --project fixture 2>&1); cf490_rc=$?
+cf490_log=$(printf '%s\n' "$cf490_out" | sed -n 's/.*log=\([^;]*\); final diagnostic:.*$/\1/p')
+cf490_host_rows=$(printf '%s\n' "$cf490_out" | grep -c '^  FAIL  host — ' || true)
+cf490_spawn_rows=$(printf '%s\n' "$cf490_out" | grep -c '^  FAIL  spawn — ' || true)
+cf490_remedy_rows=$(printf '%s\n' "$cf490_out" | grep -c 'remedy: ' || true)
+if [ "$cf490_rc" -eq 1 ] \
+  && [ "$cf490_host_rows" = 1 ] \
+  && printf '%s\n' "$cf490_out" | grep -Fq '  FAIL  host — fixture-server cannot spawn an agent: slice-limits; log=' \
+  && [ "$cf490_spawn_rows" = 0 ] \
+  && [ "$cf490_remedy_rows" = 1 ] \
+  && [ -n "$cf490_log" ] && [ -f "$cf490_log" ] \
+  && printf '%s\n' "$cf490_out" | grep -Fq 'cgroup v2 swap accounting' \
+  && printf '%s\n' "$cf490_out" | grep -Fq 'memory.swap.max' \
+  && printf '%s\n' "$cf490_out" | grep -Fq 'bunker status --server fixture-server' \
+  && printf '%s\n' "$cf490_out" | grep -Fq "final diagnostic: $cf490_diag" \
+  && ! printf '%s\n' "$cf490_out" | grep -Fq '  PASS  spawn' \
+  && ! printf '%s\n' "$cf490_out" | grep -Fq '  PASS  provision'; then
+  say "  PASS  CF-490 host spawn refusal -> one FAIL host row (fixture-server, stage slice-limits) + one remedy line, log $cf490_log and the diagnostic kept verbatim"
+else
+  say "  FAIL  CF-490 host spawn refusal not classified (exit $cf490_rc, host rows ${cf490_host_rows:-?}, spawn rows ${cf490_spawn_rows:-?}, remedy lines ${cf490_remedy_rows:-?})"
+  printf '%s\n' "$cf490_out" | sed 's/^/    | /'
+  fails=$((fails+1))
+fi
+# RED CONTROL: the pre-fix script at this row's base commit, paired with the project-node.sh of the
+# SAME revision so the staged-set validator cannot fail the control for the wrong reason.
+mkdir -p "$tmpd/cf490-before"
+cp -a "$tmpd/scripts/." "$tmpd/cf490-before/"
+cf490_srcs_ok=1
+for f in node-create.sh project-node.sh; do
+  git -C "$HERE" show "70d02621:scripts/$f" > "$tmpd/cf490-before/$f" 2>/dev/null || cf490_srcs_ok=0
+done
+if [ "$cf490_srcs_ok" -eq 1 ] \
+  && ! grep -Fq 'FAIL  host' "$tmpd/cf490-before/node-create.sh"; then
+  cf490_before_out=$(env -i HOME="$tmpd/control-home" PATH="$tmpd/bin:$PATH" BUNKER_SERVER=fixture-server \
+    CF_RUNTIME_DIR="$tmpd/runtime" FIXTURE_AGENT="$tmpd/agent" FIXTURE_SPAWN_DIAG="$cf490_diag" \
+    CRIER_URL=http://fixture.invalid:8767 \
+    /bin/bash "$tmpd/cf490-before/node-create.sh" --project fixture 2>&1); cf490_before_rc=$?
+  cf490_before_host=$(printf '%s\n' "$cf490_before_out" | grep -c '^  FAIL  host — ' || true)
+  cf490_before_spawn=$(printf '%s\n' "$cf490_before_out" | grep -c '^  FAIL  spawn — ' || true)
+  cf490_before_remedy=$(printf '%s\n' "$cf490_before_out" | grep -c 'remedy: ' || true)
+  if [ "$cf490_before_rc" -eq 1 ] \
+    && [ "$cf490_before_host" = 0 ] \
+    && [ "$cf490_before_spawn" = 1 ] \
+    && [ "$cf490_before_remedy" = 0 ] \
+    && printf '%s\n' "$cf490_before_out" | grep -Fq "final diagnostic: $cf490_diag"; then
+    say "  PASS  CF-490 red control: the pre-fix script prints only the bare FAIL spawn row (0 host rows, 0 remedy lines) — this fixture can fail"
+  else
+    say "  FAIL  CF-490 red control did not reproduce the unclassified refusal (exit $cf490_before_rc, host rows ${cf490_before_host:-?}, spawn rows ${cf490_before_spawn:-?}, remedy lines ${cf490_before_remedy:-?})"
+    printf '%s\n' "$cf490_before_out" | sed 's/^/    | /'
+    fails=$((fails+1))
+  fi
+else
+  say "  FAIL  CF-490 pre-fix source unavailable or already classified (git show 70d02621:scripts/node-create.sh)"
+  fails=$((fails+1))
+fi
+
+# ch:trace row=CF-490 spec=docs/handbook/chapters/M1-provisioning.md#III.M1.S2 wave=none:serial test=tests/selftest.sh::cf490-host-spawn-class doc=docs/OPERATIONS.md evidence=tests/selftest.sh::cf490-host-spawn-class witness=none:local-fixture verdict=none:foreman-judges-at-accepted-tip commit=none:worker-commit memory=none:foreman-writes
+# END CF-490
 
 # CF-126 ARM A: the same transport fixture executes the real, staged layer 00.
 # No install or network access: only the scoped checker runs, with curl stubbed.

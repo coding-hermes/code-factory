@@ -177,8 +177,41 @@ ch:trace row=CF-298 spec=docs/handbook/chapters/M1-provisioning.md test=tests/te
 | `ROLE_DEFAULTS` | `{"worker": 5, "builder": 10, "full": 20}` GiB (`disk_floor.py:40`) | 1..4096 GiB (`MIN_GIB`/`MAX_GIB`) | admission floor per role | a value outside the range is refused (`:85-91`); role-table parity is gated by `tests/selftest.sh` section 65 |
 | `DEFAULT_ROLE` | `"worker"` (`:41`) | one of the role keys | which floor applies when no role is named | an **unknown explicit role is refused**, not defaulted (F1-2; raise at `:123-125`) |
 
+<a id="III.M1.S1"></a>
+### III.M1.S1 — target-server spawn capability (qualify the host, CF-490)
+
+The S1 gates in this tree — `scripts/bunker-server-install.sh --check` (client, server entry,
+`bunker list|status --server`, control tools, disk) and `disk_floor.py` through
+`project-node.sh` layer 00 — qualify **only this control host and the node's own filesystem**. Neither
+asks the target server to create a container, so neither can answer whether that server is
+**spawn-capable**, and the S1 question therefore has a second half that no shipped `--check` answers:
+"can this agent host land a per-agent container slice?" The gate for that half is the operator
+preflight `bunker status --server <name>`, plus the create path's own refusal class (III.M1.S2).
+
+Measured on 2026-11-17 (twice, `within 40 reads` and `within 5 reads` for the same unsatisfiable
+state): a host whose cgroup v2 swap accounting leaves `memory.swap.max` at `max` cannot converge
+bunkerd's containment landing, which wants `memory.swap.max = 0`. The read budget in bunkerd's text
+is not a flake counter — the refusal is deterministic, and a retry cannot clear it. The host fix
+(swap accounting on the agent host) is a host-owner step outside this repository; what this
+repository owns is naming the class and the preflight (fixture
+`tests/selftest.sh::cf490-host-spawn-class`, live transcript
+`docs/audits/code-factory-CF-490-2026-11-17.md`, runbook `docs/OPERATIONS.md` §1 "The target server
+must be spawn-capable").
+
 <a id="III.M1.S2"></a>
 ### III.M1.S2 — create the container and its configuration
+
+**Spawn-stage host refusals (CF-490).** `scripts/node-create.sh` classifies a bunkerd spawn refusal
+by its final diagnostic. When that diagnostic names the container slice — it contains
+`slice-limits`, `containment landing`, `bar swap` or `memory.swap.max` — the refusal is the TARGET
+HOST's capability, not a factory failure: the script prints exactly one
+`FAIL host — <server> cannot spawn an agent: <stage>` row (the stage read from `failed at stage
+<stage>:`) followed by exactly ONE remedy line naming the host setting (cgroup v2 swap accounting so
+`memory.swap.max` can be 0) and the preflight (`bunker status --server <name>`), and exits 1. The
+per-run log path and the final diagnostic stay in the row (CF-056). Every other spawn refusal —
+quota exhausted, transport error — keeps the plain `FAIL spawn — failed; log=…; final diagnostic:
+…` row. Verified offline, both arms plus a red control against the pre-fix script at 70d02621:
+`bash tests/selftest.sh` §16, fixture `cf490-host-spawn-class`.
 
 **`bunker-provision.sh` (S2):**
 
@@ -341,6 +374,7 @@ The following citations describe legacy source coverage, not target qualificatio
 | verify-node usage and verdict contract (CF-273) | `bash -n scripts/verify-node.sh`; `bash tests/selftest.sh` CF-063 arm and §17/§62 fixture | `--server NAME` alone is sufficient; with neither server source the script names the refusal and exits 2; the fixture proves stats 000 becomes WARN/`VERIFY: UNVERIFIED`, exit 3, while HTTP 404/500/200 are FAIL | current tree | **PASS** (offline fixtures only; no live bunker contacted) |
 | staged-set validator (CF-087) | `bash tests/node-create-staged-set.sh all` | four spellings of one unstaged reference in the entry point, one arm per staged member (`lib.sh`, `disk_floor.py`, `install-node.sh`), a needed member dropped from the declared set and an unreferenced member added both exit nonzero with a named `staged_set` row, and the printed set is closed under every reference its own members carry: `STAGED_SET: PASS` | 2026-11-09 | **PASS** (offline probe, 1.1 s; the pre-fix `node-create.sh` from 23114f4 scores `STAGED_SET: FAIL (5)`) |
 | spawn/staging failure diagnostics (CF-056) | `bash tests/selftest.sh` §16 (`tests/selftest.sh::cf056-spawn-staging-failure`) | a staging failure names the failed artifact and emits no later `PASS provision`; a spawn failure names a unique per-run log containing the agent id and its final diagnostic | 2026-11-10 | **PASS** (offline fixture only — no live bunker evidence) |
+| host spawn-refusal class (CF-490) | `bash tests/selftest.sh` §16 (`tests/selftest.sh::cf490-host-spawn-class`) | one `FAIL host — fixture-server cannot spawn an agent: slice-limits` row, exactly one remedy line carrying `cgroup v2 swap accounting` + `memory.swap.max` + `bunker status --server fixture-server`, the log file and the final diagnostic kept verbatim, no `FAIL spawn` row and no later `PASS`; the red control runs the same arm against 70d02621 and prints only the bare `FAIL spawn` row (0 host rows, 0 remedy lines) | 2026-11-17 | **PASS** (offline fixture only — the live refusal is a transcript, not a run from here) |
 | identity-file union (CF-289) | `bash tests/selftest.sh` §47 — the `CF-289-node-json-union` arms; preconditions `bash -n scripts/project-node.sh`, `python3 -m py_compile scripts/node_identity.py` | `PASS CF-289-node-json-union — identity-then-apply leaves agent/namespace/duckbrain/provisioned_by AND the ladder's keys (mode 600, exit 0)` plus the red control `PASS pre-fix 23114f4 exits 0 while deleting agent/namespace/duckbrain/provisioned_by — this arm discriminates` | 2026-11-09 | **PASS** (offline fixture only — the identity step and the ladder both run on a fixture home; no live node run) |
 | certification ladder | `scripts/verify-node.sh --agent <id> --server <host>` on a live node | per-leg observation | not run | **UNVERIFIED** (needs a live node; legs documented in §11) |
 
@@ -392,6 +426,7 @@ Provisioning rate, refusal rate and per-leg latency are answerable only by readi
 | Footprint above the floor or the working room | `FAIL footprint:room — X required (Y + 2048 MiB working room) > Z free — short S` / `FAIL footprint:floor — … exceeds the N GiB floor` | a footprint with headroom (`PASS footprint:room — … headroom …`) | reap (`node_hygiene.py reap`, `reclaim_disk.py run`) or move the node; admission refuses before the host fills |
 | `node.json` present but not a JSON object | `FAIL manifest — <path> is not a readable JSON object (…); left untouched` and `NODE: FAIL (1)` | a first run with no file at all (layer 90 writes a fresh document) | inspect or restore the file; the ladder refuses rather than replacing a document whose keys it cannot read (CF-289) |
 | Orphan homes/keys on the server | `FAIL orphans — N orphan(s) would be reaped (… live kept, … inside grace): <paths>` (check), `PASS orphans — reaped N …` (`--reap-orphans`) | `PASS orphans — none — … live entries kept` | `bunker-server-install.sh --reap-orphans` with `BUNKER_HOMES_DIR`/`BUNKER_KEYS_DIR` named; generic `--apply` is an explicit unsupported refusal |
+| Target server cannot land a per-agent slice | `FAIL host — <server> cannot spawn an agent: <stage>; log=…; final diagnostic: bunker: spawn agent: internal: … failed at stage slice-limits: containment landing did not converge within N reads: containment landing: memory.swap.max = "max", want "0" (bar swap)`, followed by exactly one remedy line, exit 1 (`node-create.sh`, CF-490) | a factory-side refusal — quota exhausted or a transport error keeps the plain `FAIL spawn — failed; log=…; final diagnostic: …` row, and a *staging* failure keeps its own `FAIL staged`/`FAIL provision` rows (CF-056) | enable cgroup v2 swap accounting on the target host so `memory.swap.max` can be set to 0 (a host-owner step: nothing in this repo does it), then preflight with `bunker status --server <name>`; the `within N reads` budget is not a flake counter — the refusal is deterministic, so a retry is wasted. Fixture `tests/selftest.sh::cf490-host-spawn-class`; live transcript `docs/audits/code-factory-CF-490-2026-11-17.md` |
 
 ## 11. Limits and margins
 
