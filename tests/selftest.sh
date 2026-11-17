@@ -7964,6 +7964,30 @@ else
   fails=$((fails+1))
 fi
 
+# P5G-07 backup/restore: recompute the CV-06-B digest chain, then prove the same
+# checker fails when a copy's store_sha256 claim no longer matches the bytes it
+# covers. Unnumbered on purpose: the CF-198 arm census counts numbered headers.
+say "backup and restore vector recomputes the F15 manifest digests (P5G-07)"
+cfp507=$(mktemp -d)
+cp "$HERE/docs/handbook/contract-vectors.json" "$cfp507/contract-vectors.json"
+python3 -c 'import json,sys; p=sys.argv[1]; d=json.load(open(p, encoding="utf-8")); next(v for v in d["vectors"] if v.get("id")=="CV-06-B")["store_sha256"]="0"*64; json.dump(d, open(p,"w",encoding="utf-8"), indent=2); open(p,"a",encoding="utf-8").write("\n")' "$cfp507/contract-vectors.json"
+if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_backup_restore_vector.py"; then
+  cfp507_clean_rc=0
+else
+  cfp507_clean_rc=$?
+fi
+if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_backup_restore_vector.py" "$cfp507/contract-vectors.json" >"$cfp507/corrupt-output" 2>&1; then
+  cfp507_corrupt_rc=0
+else
+  cfp507_corrupt_rc=$?
+fi
+if [ "$cfp507_clean_rc" -eq 0 ] && [ "$cfp507_corrupt_rc" -eq 1 ] && grep -q "CV-06-B store_sha256 recomputes to" "$cfp507/corrupt-output"; then
+  say "  PASS  P5G-07 F15 digest chain recomputed (repo vector exit $cfp507_clean_rc) and the corrupt-copy control fails naming the store_sha256 mismatch (exit $cfp507_corrupt_rc)"
+else
+  say "  FAIL  P5G-07 F15 vector arms (repo vector exit $cfp507_clean_rc, corrupt copy exit $cfp507_corrupt_rc)"
+  fails=$((fails+1))
+fi
+
 # P5G-13 resident foreman contract: execute the checker, then prove its
 # fail-closed identity/version controls catch weakened scratch copies.
 say "resident foreman cancellation and reboot contract is wired and fail-closed (P5G-13)"
