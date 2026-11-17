@@ -567,6 +567,25 @@ class NodeFootprint(unittest.TestCase):
         self.assertIn("PASS  footprint:floor", result.stdout)
 
     def test_working_room_shortfall_is_a_refusal(self) -> None:
+        # The requirement is derived from the filesystem the fixture actually runs on.
+        # A fixed 1_000_000 MiB stopped being a shortfall on a host whose TMPDIR lives on a
+        # 1.8 TiB volume (free 1792 GiB > 977 GiB): the arm passed the room check and the
+        # test failed for a reason that had nothing to do with node_hygiene.py.
+        free_mib = shutil.disk_usage(self.root).free // 1048576
+
+        fits = py(
+            "node_hygiene.py",
+            "footprint",
+            "--root",
+            self.root,
+            "--modcache",
+            self.modcache,
+            "--working-room-mib",
+            str(max(0, free_mib // 2)),
+        )
+        self.assertEqual(fits.returncode, 0, fits.stdout + fits.stderr)
+        self.assertIn("PASS  footprint:room", fits.stdout)
+
         result = py(
             "node_hygiene.py",
             "footprint",
@@ -575,7 +594,7 @@ class NodeFootprint(unittest.TestCase):
             "--modcache",
             self.modcache,
             "--working-room-mib",
-            "1000000",
+            str(free_mib + 1024),
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("FAIL  footprint:room", result.stdout)

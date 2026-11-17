@@ -39,6 +39,17 @@ On a host with no bunker server, no Crier and no repo, all three commands reach 
 fail with the missing value named. That is the honest result on a fresh host, and every message
 tells you which value to supply.
 
+**What steps 1 and 2 cost and leave behind**, measured on a control host on 2026-11-17: step 1
+takes a few seconds and writes nothing; step 2 takes about a minute (66 s at load average 25) and
+creates `$HOME/.node` even in `--check` — it is not a pure read-only check (`docs/OPERATIONS.md:38`
+says so and this run confirms it). `--apply` adds `$HOME/.node/auth/gateway.pass`,
+`$HOME/.node/freshness.json` (the check's recorded verdict) and the clone at `$HOME/repo`. Step 2
+measures the home directory it runs in, not the repo: on a host whose home already holds hundreds
+of gigabytes, `footprint` passes and `footprint:floor` fails with the measured size named
+(`260387.0 MiB exceeds the 5 GiB floor`) — the checker working as designed on a control host, not a
+broken node. Run it inside the node's own home, or with `HOME` pointed at a scratch directory, to
+read the rows that describe a node.
+
 **What step 3 writes for you.** A gateway on `0.0.0.0` needs `dashboard.basic_auth` in the node's
 `~/.hermes/config.yaml`, and the create path stages it instead of leaving it to you:
 `scripts/node-create.sh` copies `node_gateway_auth.py` into the node (it is one of the files
@@ -107,15 +118,28 @@ credential store built from the token, and deletes both copies. No value is prin
 passed as an argument, and `$HOME/.node/node.json` carries names only
 (`scripts/bunker-provision.sh:172-214`).
 
-`--check` against the template, on a host that has the client but no such node:
+`--check` against the unedited template, on a host that has the client, the two exported values and
+no such node (measured 2026-11-17; `<redacted>` stands in for this host's own crier and DuckBrain
+addresses):
 
 ```
-PASS  config — bunker.example.conf — 25 lines, KEY=VALUE only
+  PASS  config — bunker.example.conf — 53 lines, KEY=VALUE only
+  FAIL  inputs — not readable: GITHUB_TOKEN_FILE(~/.config/code-factory/github.token)
+        CRIER_AGENT_KEY_FILE(~/.config/code-factory/<project>/agent.key)
+        S3_ENV_FILE(~/.config/code-factory/s3.env)
 bunker-provision --check — project=code-factory agent=cf-node server=bunker-node-01
+  ..    resolved repo=https://github.com/coding-hermes/code-factory.git ref=main harness=hermes
+        namespaces=code-factory,coder (primary code-factory) ttl=30d
+        crier=<redacted> duckbrain=<redacted>
+  FAIL  github_auth — GITHUB_TOKEN_FILE ~/.config/code-factory/github.token is unreadable
   PASS  bunker_cli — ~/.local/bin/bunker
   FAIL  server — bunker-node-01 not listed by 'bunker list'
   FAIL  agent — cf-node absent — run --apply to create it
 ```
+
+Every row names what it measured and the check writes nothing. The credential row is the one to
+expect first on a fresh copy: the template points its three `*_FILE` keys at paths that do not exist
+yet, and the check reports them unreadable rather than assuming them.
 
 `--apply` printing PASS is not evidence; `--check` is. Against the reference deployment on
 2026-11-05 the same command printed `PASS  repo — clone present (af67c3b branch main, 0 dirty)`,
@@ -189,7 +213,7 @@ instead of implying it works.
 | Piece | State | Command that can contradict it |
 |---|---|---|
 | Hermes in a bunker + HTTP gateway over tailnet | **works (historical measurement)** — observed on a live node on 2026-10-29: 32 s install, `/api/status` 200, 133 JSON-RPC methods. The recorded measurement is in `specs/HARNESS.md#adapters-and-their-measured-state` and the repo-local audit `docs/audits/code-factory-readme-2026-10-30-20-29-25.md#2-status-table-both-command-bearing-rows`; it is not reproducible from this repo alone. Current local evidence is only `scripts/harness/install-hermes.sh --check`. On this host's default `python3` (3.14) that command prints exactly one gate row — `FAIL python` — and never reaches the binary or port arms; the binary, port and `inference_key` rows print only on an interpreter inside the pin's range (`HERMES_PYTHON_BIN=python3.12` prints four when no `hermes` binary is installed — that is the recorded arm — and five when a binary is found, because a `version` row is added. The 2026-11-03 host-provided `hermes` result was historical, not certification of the pinned venv install: CF-183 now FAILs host-provided binaries and compares the measured version against the pin). Both arms, with the measured gate-row counts (1 vs 4), the binary/port rows they carry (0/1) and both exit codes, are in `docs/audits/cf092-install-check-arms.txt`; the `inference_key` pair is also in `docs/audits/code-factory-CF-064.probe.txt` (CF-064, CF-092). `--apply` needs Python `>=3.11,<3.14` — the pinned `hermes-agent==0.19.0` declares that range, and the installer now refuses Python 3.14 before pip with the detected version. The exact selftest/check output is recorded in `docs/audits/code-factory-CF-036.md` (CF-036). | Re-run the current local check with an interpreter inside the pin's range — `HERMES_PYTHON_BIN=python3.12 scripts/harness/install-hermes.sh --check` — which prints four gate rows when no `hermes` binary is installed (python, binary, port, `inference_key`) and five when a binary is found (adds `version`). Only `$HOME/hermes-venv/bin/hermes` passes the binary row; a PATH-provided binary is reported as host-provided, not certified. The version row compares the measured value against `HERMES_PIN` (default `0.19.0`); a mismatch FAILs and prints both values. `--apply` installs the pin when the venv binary is missing or mismatched, even if `hermes` exists on PATH. The unqualified `scripts/harness/install-hermes.sh --check` is the same command on the default `python3`, and there it prints one row: `FAIL python`. For the historical figures, read the committed artifact named in the state cell; no live endpoint or credential is claimed here. |
-| Repo clone in a node | **works (historical local measurement)** for public HTTPS — `PASS repo_clone … @ 9402f6a` was measured on 2026-10-30 with `https://github.com/github/gitignore` and is recorded in `docs/audits/code-factory-readme-2026-10-30-20-29-25.md#2-status-table-both-command-bearing-rows`. A re-run derives the current HEAD, which may move. Layer 40 clones only; no build step is shipped. Private repos now have a tested **procedure** — CF-003 shipped `scripts/deploy_key.py` (0600 per-repo key + one generated `ssh_config`) and `scripts/node-create.sh --deploy-key <file>` (validated before any agent is spawned, copied as a file, never argv), with `tests/test_node_provisioning.py` and `tests/selftest.sh` §58 proving the mechanism against fixtures and printing the single clone command. That is not a live result: no node has cloned the private GitLab with a real read-only key, so the clone itself stays **unverified** until a live run records it. | Re-run with a temporary HOME and the same public fixture: `home=$(mktemp -d); CRIER_URL=http://crier.example:8767 HOME="$home" ./scripts/project-node.sh --apply --project myproject --repo https://github.com/github/gitignore --ref main`. For a private repo, the documented path is `scripts/node-create.sh --project P --repo git@<gitlab>:<group>/<repo>.git --deploy-key <file>`; `scripts/deploy_key.py check --home <node home> --repo <url>` prints the one clone command and the key/config rows without printing key material. The node check is the last command on that line, so the line's exit status is the check's: `NODE: FAIL` exits nonzero. Read the clone back in a second command, not the same line: `git -C "$home/repo" rev-parse HEAD`. The committed audit records the historical output. |
+| Repo clone in a node | **works (historical local measurement)** for public HTTPS — `PASS repo_clone … @ 9402f6a` was measured on 2026-10-30 with `https://github.com/github/gitignore` and is recorded in `docs/audits/code-factory-readme-2026-10-30-20-29-25.md#2-status-table-both-command-bearing-rows`. A re-run derives the current HEAD, which may move. Layer 40 clones only; no build step is shipped. Private repos now have a tested **procedure** — CF-003 shipped `scripts/deploy_key.py` (0600 per-repo key + one generated `ssh_config`) and `scripts/node-create.sh --deploy-key <file>` (validated before any agent is spawned, copied as a file, never argv), with `tests/test_node_provisioning.py` and `tests/selftest.sh` §58 proving the mechanism against fixtures and printing the single clone command. That is not a live result: no node has cloned the private GitLab with a real read-only key, so the clone itself stays **unverified** until a live run records it. Re-measured on 2026-11-17 with the command beside this cell, in a fresh `mktemp -d` HOME: `PASS repo_clone — $HOME/repo @ b71db92`, `PASS freshness — branch=main head=b71db924d350 origin_main=b71db924d350 behind=0 ancestor=true`, then `NODE: FAIL (3)` — the three FAILs are `reach:<crier>/health -> 000`, `python` (3.14.9 against the pin's `>=3.11,<3.14`) and `crier_identity` (absent); the repo layer itself passes. The run took 66 s and left `$HOME/repo` plus `$HOME/.node/freshness.json` — the recorded verdict — inside that temporary home, so both disappear with it. | Re-run with a temporary HOME and the same public fixture: `home=$(mktemp -d); CRIER_URL=http://crier.example:8767 HOME="$home" ./scripts/project-node.sh --apply --project myproject --repo https://github.com/github/gitignore --ref main`. For a private repo, the documented path is `scripts/node-create.sh --project P --repo git@<gitlab>:<group>/<repo>.git --deploy-key <file>`; `scripts/deploy_key.py check --home <node home> --repo <url>` prints the one clone command and the key/config rows without printing key material. The node check is the last command on that line, so the line's exit status is the check's: `NODE: FAIL` exits nonzero. Read the clone back in a second command, not the same line: `git -C "$home/repo" rev-parse HEAD`. The committed audit records the historical output. |
 | Node inference credential | **missing** — a turn dies at `No inference provider configured`; the node needs its own key, never an operator key | This is a NODE state, not measurable from the control host: the `inference_key` gate is emitted by `scripts/harness/install-hermes.sh --check` and reads `$HOME/.hermes/.env` of whichever environment runs it. The node-scoped contradiction is that gate failing inside the node — `scripts/node-create.sh` stages the adapter into `~/node-scripts/harness/`, and the node's `~/node-scripts/project-node.sh --check --project <p>` echoes the adapter's rows through its layer 20, so an unkeyed node prints `FAIL inference_key` for its own missing key. Run on the control host, the same gate measures this host's own key, not a node's — control-host evidence only: `HERMES_PYTHON_BIN=python3.12 scripts/harness/install-hermes.sh --check` on this keyed host prints `PASS inference_key` (five gate rows, `HERMES: FAIL (1)` on `port`, rc 1), so a PASS there cannot witness the node's missing key. The adapter row prints only on an interpreter inside the pin's range — the default `python3` here is 3.14 and stops at `FAIL python` first. Both control-host arms are transcripted in `docs/audits/code-factory-CF-064.probe.txt` (CF-064). |
 | crier identity in a node | **missing** — no `~/.node/crier.json` yet | `./scripts/project-node.sh --check --project myproject` -> `FAIL crier_identity` |
 | Scheduler → crier dispatch | **built, disarmed** — needs 2 env vars, 1 target row, `payload.text` (CF-001) | not armed, so nothing to run |
@@ -268,7 +292,9 @@ project inventory before relying on a current deployment count.
 
 The six core lane rows are configured by `scripts/load_lane_config.py`; the eight added family rows
 (workdir, parent, admission mode) by `scripts/add_family_lanes.py`. Prompts are role files, not
-lane files: `prompts/` ships eleven files for fourteen lanes, and every QA-job lane (the three QA
+lane files: `prompts/` ships twelve files, eleven of which the fourteen lanes use — the twelfth,
+`prompts/unblock.md`, is a sub-procedure that `prompts/foreman.md` points at, not a lane role — and
+every QA-job lane (the three QA
 satellites and `code-factory-qa` itself) loads the same `prompts/qa.md`. The loader copies the
 prompt text into the scheduler's project row at setup, so edit the file in `prompts/` and re-run
 the loader; the database row is only a copy of it. `tests/selftest.sh` refuses a README that names
@@ -326,29 +352,34 @@ prints an empty or short census without any error. The recipe above refuses fail
 non-2xx responses, missing or invalid `.projects` arrays, and an unfiltered row count that differs
 from the first reported `total`; it prints no family census until all pages pass.
 
-That command is the authority, not this paragraph. On the reference deployment, on 2026-11-04, it
-printed nineteen rows: the fourteen above plus five `code-factory-duckbrain-*` satellites whose rows
-this repo does not create (they are not part of the shipped family and are not counted in the
-fourteen) and whose `enabled` state and admission mode live only in that scheduler. Of the fourteen,
-thirteen carried `enabled=true` and `code-factory-qa` carried `enabled=false` — the scheduler had
-disabled that lane on its own failure rate, which is the kind of drift a census catches and a
-hand-written count does not. The recorded 2026-11-04 run printed
-`code-factory-duckbrain admission=cooldown`, matching the value written by the loader; a later live
-run may differ, so use the census above as the authority rather than treating this snapshot as
-current scheduler state.
+That command is the authority, not this paragraph. Two runs against the same deployment, thirteen
+days apart, show why. On 2026-11-04 it printed nineteen rows: the fourteen above plus five
+`code-factory-duckbrain-*` satellites whose rows this repo does not create (they are not part of the
+shipped family and are not counted in the fourteen) and whose `enabled` state and admission mode
+live only in that scheduler. On 2026-11-17 the same recipe on the same host printed eleven:
 
-ch:trace row=CF-188 spec=README.md#the-lanes wave=code-factory-readme-2026-11-11-10-03-09#CF-188 test=bash-tests/selftest.sh::selftest doc=README.md evidence=README.md witness=README.md#the-lanes verdict=none:foreman-judges-after-merge commit=none:self-referential-hash memory=none:not-written
-STATUS: complete | partial | blocked
-TIER: T1
-EVIDENCE: README.md#the-lanes
+```
+code-factory-docs      enabled=true  admission=cooldown  parent=code-factory
+code-factory-dogfood   enabled=true  admission=cooldown  parent=code-factory
+code-factory-foreman   enabled=true  admission=tasks     parent=
+code-factory-ops       enabled=true  admission=           parent=
+code-factory-perf      enabled=true  admission=cooldown  parent=code-factory
+code-factory-pm        enabled=true  admission=cooldown  parent=code-factory
+code-factory-qa        enabled=false admission=cooldown  parent=
+code-factory-readme    enabled=true  admission=cooldown  parent=code-factory
+code-factory-releng    enabled=true  admission=cooldown  parent=code-factory
+code-factory-review    enabled=true  admission=cooldown  parent=code-factory
+code-factory-sync      enabled=true  admission=cooldown  parent=code-factory
+```
 
-Evidence for the state of this README: the clone figure is covered by the published audit `docs/audits/code-factory-readme-2026-10-30-20-29-25.md`; the prompt column and the eleven-file/layout census are covered by the published audit `docs/audits/code-factory-readme-2026-10-30-23-28-00.md` (whose command transcript is the `.probe.txt` beside it).
+Four departures from the shipped family are visible in that run, and none of them is a fact about
+this repo: the root lane is registered under the name `code-factory-foreman`, not `code-factory`;
+`code-factory-ops` is a prompt lane the fleet adds outside these fourteen and carries no admission
+mode; `code-factory-qa` is `enabled=false`, and — like `code-factory-ops` — has no `parent`, so it
+does not render nested; and the `duckbrain`, `docs-qa`, `readme-qa` and `releng-qa` lanes are absent
+altogether. That is drift in a live scheduler, which is exactly what a census catches and a
+hand-written count does not. Use the recipe above as the authority rather than treating either
+snapshot as current scheduler state.
 
-ch:trace row=CF-038 spec=README.md#evidence wave=none:serial test=bash-tests/selftest.sh doc=README.md evidence=docs/audits/code-factory-readme-2026-10-30-23-28-00.md witness=path@origin:README.md verdict=none:foreman-judges-after-merge commit=none:self-referential-hash memory=none:not-written
-
-ch:trace row=CF-014 spec=README.md#quick-start wave=code-factory-readme-2026-10-30-18-28-33#readme test=scripts/project-node.sh::check-project-demo doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-18-28-33.md witness=path@origin:README.md verdict=none:open-finding commit=none:open memory=/project/code-factory/readme-audit-2026-10-30-18-28-33
-ch:trace row=CF-013 spec=README.md#status wave=code-factory-readme-2026-10-30-18-28-33#readme test=scripts/harness/install-hermes.sh::check doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-18-28-33.md witness=none:no-live-bunker-or-gateway-available verdict=none:open-finding commit=none:open memory=/project/code-factory/readme-audit-2026-10-30-18-28-33
-ch:trace row=CF-065 spec=README.md#the-lanes wave=none:serial test=tests/selftest.sh::selftest doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-11-03-15-41-00-cf065.probe.txt witness=path@origin:README.md verdict=none:judged-after-commit commit=none:self-referential-hash memory=none:no-lane-role-token
-ch:trace row=CF-064 spec=README.md#status wave=code-factory-readme-2026-11-03-16-51-21#readme test=scripts/harness/install-hermes.sh::check doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-CF-064.probe.txt witness=cmd:exit-1/inference_key-rows-0-vs-1 verdict=none:judged-after-commit commit=none:self-referential-hash memory=none:no-lane-role-token
-
-ch:trace row=CF-151 spec=README.md#status test=tests/selftest.sh::selftest doc=README.md evidence=none:worker-transcript witness=cmd:exit-0/selftest-section-37 verdict=none:judged-after-commit commit=none:self-referential-hash memory=none:not-written
+Where the evidence for this file lives: every claim here that came from a run names that run, and
+the full transcripts of the 2026-10-30, 2026-11-03 and 2026-11-17 readme audits are in `docs/audits/`.
