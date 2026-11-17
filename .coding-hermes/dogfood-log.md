@@ -27,3 +27,22 @@ Newest last. Run ids are the tick ids, so `grep -n '<tick-id>'` finds the record
   UNVERIFIED in the report, not retried in another form.
 - **Artifacts**: `docs/dogfood/2026-11-17-dogfood-path.md`,
   `.coding-hermes/evidence/code-factory-dogfood-2026-11-17-10-10-24/`.
+
+### 2026-11-17 — re-fire receipt for `code-factory-dogfood-2026-11-17-10-10-24` (delivery 2)
+
+Duplicate delivery of the tick above: no re-walk, no new product measurements, zero rows filed.
+
+- **Tip unchanged**: `f2127dd9` = `origin/main` at parity 0/0 (the record commit itself).
+- **Verified from `origin/main`, not the working copy**: `CF-483` + `CF-484` `pending` with non-empty
+  `reasoning`/`acceptance_criteria` (2327/1258 and 2907/1074 chars) and one paired `task_created`
+  event each (ids 887/888) · `CF-057`'s `foreman_note` quotes `--json` (1738 chars) · three artifacts
+  non-empty (7607/2082/3888 bytes) · `step2.out` ends `NODE: FAIL (5)`, `b1.out` `NODE: FAIL (7)`,
+  both `.err` carrying `non-zero status 1` · gitreins `CF-DOGFOOD-20261117` complete, verdict at
+  `.gitreins/history/2026-11-17/ed488866` (tier1 PASS, tier2 PASS, COMPLETE).
+- **No residue**: the evidence INDEX names no `agent=` id — the node-create leg was never run, so
+  there is no agent to destroy.
+- **Stood down, no blocked receipt**: `docs/audits/cf-PERF-021-cold-cache-attribution.md` and
+  `docs/handbook/chapters/VIII-5-tests.md` are staged but are NOT unowned residue — live worker pid
+  2491440 (PERF-021 brief, started 05:06:25) owns them, and its dirty-path set matches its brief
+  exactly. Left untouched; no second dispatch into this checkout.
+- **CI**: last 5 runs on `coding-hermes/code-factory` all `success`; nothing filed.
