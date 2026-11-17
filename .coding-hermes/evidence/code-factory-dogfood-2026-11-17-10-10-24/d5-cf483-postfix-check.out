@@ -1,0 +1,34 @@
+bunker server: bunker-las-03
+  PASS  bunker_client — ~/.local/bin/bunker bunker 0.3.0
+  PASS  bunker_config — ~/.config/bunker/config.yaml
+  PASS  server_declared — bunker-las-03 present in config
+  PASS  server_reachable — bunker-las-03 answered (agents listed: 0)
+  PASS  agents_running — 0 running
+  ..    ── bunker-las-03 ──
+  ..      Hostname: bunker-las-03
+  ..      URL:      https://<host>:10001
+  ..      Version:  0.2.1
+  ..      Status:   ONLINE
+  ..      Uptime:   5d 17h 31m
+  ..      Agents:   0/8
+  ..      /tmp:     HOST-SHARED — agent sessions see the host /tmp
+  ..    
+  ..      ╔══════════════════════════════════════════════════════════╗
+  ..      ║  ⚠  WARNING: Private /tmp is NOT active on this host.           ║
+  ..      ║  Agent exec sessions share the host /tmp; the README's        ║
+  ..      ║  'Private /tmp per agent' promise does not hold here.         ║
+  ..      ╚══════════════════════════════════════════════════════════╝
+  ..      Reason:   the pam_namespace drop-in configuration is missing
+  ..      Net mode: shared — host network namespace (no network isolation: shared loopback, global port space) — NOT tenant isolation
+  ..      Egress:   open, allowlist, none
+  ..      Residue:  0 orphan users, 0 orphan homes, 0 orphan keys, 0 stale linger entries (0 registered agents)
+  ..      CPU:      147.6%
+  ..      Memory:   2.3 GB / 31.1 GB
+  PASS  residue — 0 orphan users, 0 orphan homes, 0 orphan keys, 0 stale linger entries (server-reported)
+  PASS  tool:python3 — ~/.hermes/installs/b0e47ae07995f891/environments/24f1df2ad984420181cb6be1707f6a03/venv/bin/python3
+  PASS  tool:git — /usr/bin/git
+  PASS  tool:curl — /usr/bin/curl
+  PASS  tool:jq — /usr/bin/jq
+  PASS  disk — 323.7 GB free (floor 5 GB)
+
+RESULT: PASS

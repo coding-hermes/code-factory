@@ -1,0 +1,865 @@
+=== merged-tree selftest 2026-11-17T10:05:25-05:00 head=5c9ede92 branch=cf483-residue-class ===
+1. every script parses
+  PASS  bash -n bunker-crier-connect.sh
+  PASS  bash -n bunker-provision.sh
+  PASS  bash -n bunker-server-install.sh
+  PASS  bash -n github-app-refresh.sh
+  PASS  bash -n github-app-setup.sh
+  PASS  bash -n install-gitreins.sh
+  PASS  bash -n install-go.sh
+  PASS  bash -n install-node.sh
+  PASS  bash -n land-node-branch.sh
+  PASS  bash -n lib.sh
+  PASS  bash -n node-create.sh
+  PASS  bash -n panel_supervise.sh
+  PASS  bash -n project-node.sh
+  PASS  bash -n verify-node.sh
+  PASS  bash -n verify-patch.sh
+  PASS  bash -n harness-vars.sh
+  PASS  bash -n install-aider.sh
+  PASS  bash -n install-claude-code.sh
+  PASS  bash -n install-codex.sh
+  PASS  bash -n install-deepseek.sh
+  PASS  bash -n install-dsh.sh
+  PASS  bash -n install-goose.sh
+  PASS  bash -n install-hermes.sh
+  PASS  bash -n install-opencode.sh
+  PASS  bash -n install-pi-agent.sh
+  PASS  bash -n harness-conformance.sh
+  PASS  bash -n harness-node-e2e.sh
+  PASS  bash -n node-create-staged-set.sh
+  PASS  bash -n selftest.sh
+  PASS  bash -n test_cf298_missing_lib.sh
+2. the node checker FAILS on an empty PATH
+  PASS  normal: named lib.sh FAIL, exit 1
+  PASS  no-nounset: named lib.sh FAIL, exit 1
+CF-298 PASS
+  PASS  CF-298 missing library fails closed
+  PASS  empty PATH -> exit 1
+  PASS  report contains named FAIL rows
+3. unreachable Crier reports one HTTP status code
+  PASS  unreachable URL -> one 000 status
+4. clone errors distinguish missing refs from repository access
+  PASS  missing ref names main and --ref without a private-repo hint
+  PASS  repository access failure retains deploy-key hint
+4b. clone failure after successful ref resolution is not an access failure
+  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints
+5. fetch_verified refuses a wrong digest
+  PASS  correct digest accepted
+digest mismatch for file:///mnt/ssd/tmp/tmp.ELPCPR9GfY/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03
+  PASS  wrong digest refused
+  PASS  uncreatable destination -> fetch_verified exit 1, no artifact installed
+  PASS  caller surfaced the failed install: 1 '^  FAIL  go:download' row, fixture exit 1
+  PASS  have() reports absence — absent: rc=1 stdout=0B; present(bash): rc=0 stdout=/usr/bin/bash
+  PASS  have() reports absence — caller: node-create.sh with the client off PATH -> 1 'FAIL bunker_cli' row, exit 1, no shell diagnostic
+  PASS  have() reports absence — pre-fix control: 06adfa6:scripts/lib.sh answers rc=0 for an absent tool; the arm is falsifiable
+  PASS  have() reports absence — caller control: the pre-fix library reports the absent client as 'FAIL spawn — …: command not found', exit 1
+6. no literal credential assignments
+  PASS  none found
+  section 6 tailnet-address (CF-378): no tracked file outside the board publishes a tailnet address
+  PASS  tailnet-address — 0 tailnet-address hits in 573 tracked file(s) outside .coding-hermes/board and .gitreins
+  PASS  seeded fixture -> FAIL names docs/seeded.md:3; the out-of-range subnet stays green
+  PASS  insecure mint (mode 644) -> exit 1, one '^  FAIL  mode' row, no '^  PASS  refresh' row, credential store byte-identical
+  PASS  token mtime 2h old -> re-minted: mtime 1794920729 -> 1794927929, digest changed, one '^  PASS  refresh' row
+  PASS  fresh token + minter skip -> exit 0, token and credential store byte-identical, the row says 'no-op'
+7. the board is valid JSONL
+  PASS  585/585 rows parse
+7b. board gate rejects invalid records with line-numbered FAIL rows (CF-088)
+  PASS  null fixture rejected: rc=1; named FAIL row present; 2-of-3 row present; no PASS row leaked
+  FAIL  board line 2: expected JSON object, got null
+  FAIL  2 of 3 rows parse
+  PASS  array fixture rejected: rc=1; named FAIL row present; 2-of-3 row present; no PASS row leaked
+  FAIL  board line 2: expected JSON object, got []
+  FAIL  2 of 3 rows parse
+  PASS  string fixture rejected: rc=1; named FAIL row present; 2-of-3 row present; no PASS row leaked
+  FAIL  board line 2: expected JSON object, got "fixture"
+  FAIL  2 of 3 rows parse
+  PASS  number fixture rejected: rc=1; named FAIL row present; 2-of-3 row present; no PASS row leaked
+  FAIL  board line 2: expected JSON object, got 42
+  FAIL  2 of 3 rows parse
+  PASS  missing-id fixture rejected: rc=1; named FAIL row present; 2-of-3 row present; no PASS row leaked
+  FAIL  board line 2: missing id
+  FAIL  2 of 3 rows parse
+  PASS  duplicate-id fixture rejected: rc=1; named FAIL row present; 2-of-3 row present; no PASS row leaked
+  FAIL  board duplicate id 'CF-001': lines 1 and 2
+  FAIL  2 of 3 rows parse
+  PASS  bad-status fixture rejected: rc=1; named FAIL row present; 2-of-3 row present; no PASS row leaked
+  FAIL  board line 2: invalid status "done"
+  FAIL  2 of 3 rows parse
+  PASS  missing-status fixture rejected: rc=1; named FAIL row present; 2-of-3 row present; no PASS row leaked
+  FAIL  board line 2: missing status
+  FAIL  2 of 3 rows parse
+  PASS  invalid-json fixture rejected: rc=1; named FAIL row present; 2-of-3 row present; no PASS row leaked
+  FAIL  board line 2: invalid JSON: Expecting property name enclosed in double quotes: line 1 column 2 (char 1)
+  FAIL  2 of 3 rows parse
+  ..    CF-482 duplicate-id fixture, five consecutive verdicts
+  PASS  CF-482 iteration 1 -> rc=1; named FAIL row present; 2-of-3 row present; no PASS row leaked
+          |   FAIL  board duplicate id 'CF-001': lines 1 and 2
+          |   FAIL  2 of 3 rows parse
+  PASS  CF-482 iteration 2 -> rc=1; named FAIL row present; 2-of-3 row present; no PASS row leaked
+          |   FAIL  board duplicate id 'CF-001': lines 1 and 2
+          |   FAIL  2 of 3 rows parse
+  PASS  CF-482 iteration 3 -> rc=1; named FAIL row present; 2-of-3 row present; no PASS row leaked
+          |   FAIL  board duplicate id 'CF-001': lines 1 and 2
+          |   FAIL  2 of 3 rows parse
+  PASS  CF-482 iteration 4 -> rc=1; named FAIL row present; 2-of-3 row present; no PASS row leaked
+          |   FAIL  board duplicate id 'CF-001': lines 1 and 2
+          |   FAIL  2 of 3 rows parse
+  PASS  CF-482 iteration 5 -> rc=1; named FAIL row present; 2-of-3 row present; no PASS row leaked
+          |   FAIL  board duplicate id 'CF-001': lines 1 and 2
+          |   FAIL  2 of 3 rows parse
+  PASS  all four offending line numbers reported in one board run
+  PASS  missing python3 -> named FAIL, exit 1
+  PASS  board-arm-unterminated-tail intact:   PASS  2/2 rows parse
+  PASS  board-arm-unterminated-tail tail:   FAIL  board: 1 unterminated row (line 2)
+  note  pre-fix parser control would accept 1 of 2 rows
+  PASS  board-arm-unterminated-tail empty:   PASS  0/0 rows parse
+8. project board entrypoint is real and fails closed without dependency
+  PASS  bash -n scripts/boardctl
+  PASS  local help
+  PASS  missing boardctl -> explicit FAIL, exit 127
+9. every prompt file the README relies on exists
+  PASS  every prompts/*.md named by README.md exists
+  PASS  absent prompt refused (absent: prompts/ghost-lane.md)
+10. Hermes refuses an unsupported Python without pip or network
+  PASS  Python 3.14 refusal names the supported range without pip
+  PASS  CF-071 no-PyYAML commented: exit 1, launch=not reached
+  FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — commented
+  PASS  CF-071 no-PyYAML empty-value: exit 1, launch=not reached
+  FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — empty value (username and password must both be non-empty)
+  PASS  CF-071 no-PyYAML real-value: exit 1, launch=serve launch reached
+  PASS  gateway_start — /api/status -> 200
+  PASS  CF-071 no-PyYAML block-absent: exit 1, launch=not reached
+  FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — block absent
+  PASS  CF-071 no-PyYAML wrong-key: exit 1, launch=not reached
+  FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — block absent
+  PASS  CF-071 no-PyYAML empty-username: exit 1, launch=not reached
+  FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — empty value (username and password must both be non-empty)
+  PASS  CF-071 no-PyYAML empty-password: exit 1, launch=not reached
+  FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — empty value (username and password must both be non-empty)
+  PASS  CF-071 no-PyYAML missing-password: exit 1, launch=not reached
+  FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — empty value (username and password must both be non-empty)
+  PASS  CF-071 no-PyYAML missing-username: exit 1, launch=not reached
+  FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — empty value (username and password must both be non-empty)
+  PASS  CF-071 no-PyYAML wrong-indent: exit 1, launch=not reached
+  FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — block absent
+  PASS  CF-071 no-PyYAML invalid-yaml: exit 1, launch=not reached
+  FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — block absent (invalid YAML)
+  PASS  CF-071 no-PyYAML invalid-scalar: exit 1, launch=not reached
+  FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — block absent (invalid YAML)
+  PASS  CF-071 no-PyYAML duplicate-key: exit 1, launch=not reached
+  FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — block absent (invalid YAML)
+  PASS  CF-071 no-PyYAML bad-indent: exit 1, launch=not reached
+  FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — block absent (invalid YAML)
+  PASS  CF-071 no-PyYAML tab-indent: exit 1, launch=not reached
+  FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — block absent (invalid YAML)
+  PASS  CF-071 no-PyYAML non-string: exit 1, launch=not reached
+  FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — empty value (username and password must both be non-empty)
+  PASS  CF-071 no-PyYAML trailing-comments: exit 1, launch=serve launch reached
+  PASS  gateway_start — /api/status -> 200
+  PASS  CF-071 no-PyYAML quoted-hash: exit 1, launch=serve launch reached
+  PASS  gateway_start — /api/status -> 200
+  PASS  CF-071 no-PyYAML plain-value: exit 1, launch=serve launch reached
+  PASS  gateway_start — /api/status -> 200
+  PASS  CF-071 no-PyYAML rejected grep-bypass mutation
+  PASS  CF-071 no-PyYAML rejected always-refuse mutation
+  PASS  CF-071 installed commented: exit 1, launch=not reached
+  FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — commented
+  PASS  CF-071 installed empty-value: exit 1, launch=not reached
+  FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — empty value (username and password must both be non-empty)
+  PASS  CF-071 installed real-value: exit 1, launch=serve launch reached
+  PASS  gateway_start — /api/status -> 200
+  PASS  CF-071 installed block-absent: exit 1, launch=not reached
+  FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — block absent
+  PASS  CF-071 installed wrong-key: exit 1, launch=not reached
+  FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — block absent
+  PASS  CF-071 installed empty-username: exit 1, launch=not reached
+  FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — empty value (username and password must both be non-empty)
+  PASS  CF-071 installed empty-password: exit 1, launch=not reached
+  FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — empty value (username and password must both be non-empty)
+  PASS  CF-071 installed missing-password: exit 1, launch=not reached
+  FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — empty value (username and password must both be non-empty)
+  PASS  CF-071 installed missing-username: exit 1, launch=not reached
+  FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — empty value (username and password must both be non-empty)
+  PASS  CF-071 installed wrong-indent: exit 1, launch=not reached
+  FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — block absent
+  PASS  CF-071 installed invalid-yaml: exit 1, launch=not reached
+  FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — block absent (invalid YAML)
+  PASS  CF-071 installed invalid-scalar: exit 1, launch=not reached
+  FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — block absent (invalid YAML)
+  PASS  CF-071 installed duplicate-key: exit 1, launch=not reached
+  FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — block absent (invalid YAML)
+  PASS  CF-071 installed bad-indent: exit 1, launch=not reached
+  FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — block absent (invalid YAML)
+  PASS  CF-071 installed tab-indent: exit 1, launch=not reached
+  FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — block absent (invalid YAML)
+  PASS  CF-071 installed non-string: exit 1, launch=not reached
+  FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — empty value (username and password must both be non-empty)
+  PASS  CF-071 installed trailing-comments: exit 1, launch=serve launch reached
+  PASS  gateway_start — /api/status -> 200
+  PASS  CF-071 installed quoted-hash: exit 1, launch=serve launch reached
+  PASS  gateway_start — /api/status -> 200
+  PASS  CF-071 installed plain-value: exit 1, launch=serve launch reached
+  PASS  gateway_start — /api/status -> 200
+  PASS  CF-071 installed rejected grep-bypass mutation
+  PASS  CF-071 installed rejected always-refuse mutation
+  PASS  CF-071 real-value red control: exit 1, launch reached, HTTP 503
+  FAIL  gateway_start — -> 503 (see ~/.node-serve-10800.log)
+11. lane workdir targets: local paths AND remote user@host/scheme targets
+  PASS  lane target parse/validate, home-repo rejection, remote structural-only
+12. node disk floor resolves from CLI/env/config with fail-closed values
+  PASS  floor precedence, role defaults, malformed values refused
+  PASS  CF-082 decimals preserved: 5.9G -> 5.9, 5.5G -> 5.5, 5.1G -> 5.1, 1.5G -> 1.5; integral 5G -> 5 in JSON and bare print
+  PASS  CF-082 admission on 5.5 GB free: floor 5.1 GB admitted, floor 5.9 GB refused, both rows name the written floor
+  PASS  disk — 5.5 GB free (floor 5.1 GB)
+  FAIL  disk — 5.5 GB free < floor 5.9 GB at ~
+  PASS  CF-082 pre-fix control: the deafbc3 resolver truncates 5.9G to {"role": "worker", "floor_gib": 5, "source": "cli"}
+  PASS  CF-357 clone_lane same-lane clone refused before the DB open, source row intact, genuine clone still lands
+  PASS  CF-230 harness resolution: directive > lane > matrix > hermes, every reason recorded
+  PASS  CF-406 ownership status distinguishes staged tracked changes and clean state
+test_clean (__main__.OwnershipResidueTest.test_clean) ... ok
+test_collapsed_rescue_directory_is_residue (__main__.OwnershipResidueTest.test_collapsed_rescue_directory_is_residue) ... ok
+test_nested_substring_is_not_residue (__main__.OwnershipResidueTest.test_nested_substring_is_not_residue) ... ok
+test_other_nested_file_is_not_residue (__main__.OwnershipResidueTest.test_other_nested_file_is_not_residue) ... ok
+test_rescue_and_other_file_are_unowned (__main__.OwnershipResidueTest.test_rescue_and_other_file_are_unowned) ... ok
+test_staged_tracked_changes_are_unowned (__main__.OwnershipResidueTest.test_staged_tracked_changes_are_unowned) ... ok
+
+----------------------------------------------------------------------
+Ran 6 tests in 0.560s
+
+OK
+  PASS  CF-412 ownership residue leaf classification
+13. node provisioning names its resolved floor and refuses below it
+  PASS  malformed floor refused before any install
+14. harness-adapter FAIL rows are counted in the node summary (CF-055)
+  PASS  AC2 no double counting: 2 printed FAIL rows -> NODE: FAIL (2)
+  PASS  AC1 silent adapter fails closed: parent row names exit 1, NODE: FAIL (1), no manifest
+  PASS  AC3 passing adapter with no FAIL rows keeps NODE: PASS and exit 0
+15. the README status re-run line carries the node check's exit status (CF-054)
+  PASS  documented line carries CRIER_URL= and no trailing read-back
+  PASS  old shape exits 0 on a failed check (NODE: FAIL (1)) — the defect is real
+  PASS  documented shape exits 1 on a failed check (NODE: FAIL (1))
+  PASS  documented shape exits 0 on a passing fixture (NODE: PASS)
+  .. CF-276: node-create stages node-bus-worker.py at the crier probe path
+  PASS  staged node-bus-worker.py is executable at ~/node-bus-worker.py and accepts --help
+  PASS  omitted node-bus-worker.py is rejected by the staged-set validator
+16. node-create staged set covers the disk floor and names missing dependencies
+  PASS  staged disk floor resolves: 4096 GiB from env; admission refuses before installs
+  PASS  missing disk floor -> one countable FAIL row, NODE: FAIL (1), exit 1
+  FAIL  disk_floor — resolver missing or unreadable: /mnt/ssd/tmp/tmp.KjCY61xAuF/scripts/disk_floor.py
+NODE: FAIL (1)
+  PASS  disk floor omitted from scratch manifest -> validation exit 1
+  PASS  owned failure names spawned agent and explicit-server destroy command
+  PASS  reused agent failure does not request destruction
+  PASS  copy-failure failure names spawned agent and explicit-server destroy command
+  PASS  CF-056 spawn/staging failure names unique log /mnt/ssd/tmp/tmp.KjCY61xAuF/runtime/cf-spawn-node-fixture-100555-z4Cl0m.log and emits no provision PASS
+  PASS  CF-490 host spawn refusal -> one FAIL host row (fixture-server, stage slice-limits) + one remedy line, log /mnt/ssd/tmp/tmp.KjCY61xAuF/runtime/cf-spawn-node-fixture-100555-SdW2Co.log and the diagnostic kept verbatim
+  PASS  CF-490 red control: the pre-fix script prints only the bare FAIL spawn row (0 host rows, 0 remedy lines) — this fixture can fail
+  PASS  crier_url handoff preserves exported URL and shell metacharacters
+  PASS  crier_url refusal rejects unset and empty bus before bunker invocation
+  PASS  braced project-node.sh — staged_set names unstaged.py (exit 1)
+  PASS  bare project-node.sh — staged_set names unstaged.py (exit 1)
+  PASS  quoted-double project-node.sh — staged_set names unstaged.py (exit 1)
+  PASS  quoted-single project-node.sh — staged_set names unstaged.py (exit 1)
+  PASS  member-lib-sh lib.sh — staged_set names unstaged.py (exit 1)
+  PASS  member-disk-floor-py disk_floor.py — staged_set names unstaged.py (exit 1)
+  PASS  member-install-node install-node.sh — staged_set names unstaged.py (exit 1)
+  PASS  derive-omit disk_floor.py — staged_set row names disk_floor.py (exit 1)
+  PASS  derive-stray verify-patch.sh — staged_set row names the unreferenced member (exit 1)
+  PASS  python-import-omit — staged_set names the omitted sibling import (exit 1)
+  PASS  derive-closed — staged_set prints exactly the derived closure
+17. auth verification fails closed, with a pre-fix detector control
+  PASS  pre-fix 404 incorrectly passes: fixture detects CF-077
+  PASS  auth stats 000 -> WARN gateway_reachable, exit 3 (UNVERIFIED, not FAIL)
+  PASS  auth stats 401 -> PASS, exit 0
+  PASS  auth stats 302 -> PASS, exit 0
+  PASS  auth stats 403 -> PASS, exit 0
+  PASS  auth stats 404 -> FAIL, exit 1
+  PASS  auth stats 500 -> FAIL, exit 1
+  PASS  auth stats 200 -> FAIL, exit 1
+  PASS  auth marker {"status":"ok"} -> named auth_gate FAIL, exit 1
+  PASS  auth marker {"auth_required":false} -> named auth_gate FAIL, exit 1
+  PASS  auth marker {"auth_required":trueish} -> named auth_gate FAIL, exit 1
+18. node creation requires both auth legs, not just successful provisioning
+  PASS  node-create refused -> NODE INCOMPLETE (1), exit 1
+  PASS  node-create missing-marker -> NODE INCOMPLETE (1), exit 1
+  PASS  node-create closed -> NODE CREATED: f, exit 0
+19. project repo_url must name a real git root (CF-085)
+  PASS  repo_url guard rejects a phantom local: root (1 rejected, 1 accepted)
+  PASS  repo-url refuses the home-rooted repo verify refuses (exit 4, not_home_repo)
+  PASS  pre-fix a32f234 accepts the home-rooted repo — the repo-url arm is falsifiable
+20. reclaim runs before disk refusal, while check never reaps
+  PASS  pip cache reaped before one final disk FAIL; admission still refuses
+  PASS  check preserves pip bytes, counts one disk failure and continues preflight
+  PASS  re-measure admits a recovered node without a stale FAIL row
+  PASS  missing reclaimer fails closed with one counted row
+  PASS  fresh build cache kept by the newest-subtree-mtime age gate, aged sibling reaped
+  PASS  pre-fix c32b53c reaps a fresh build cache — the age-gate arm is falsifiable
+  PASS  pre-fix c32b53c never returns on an outside-root path (timeout 5s -> exit 124)
+  PASS  outside-root path returns skipped:outside-root under a bounded containment walk
+  PASS  reclaim targets, cache+job TTL, symlink safety, protected files, dry-run and idempotence
+  PASS  scan scope names every surface outcome (unreadable != empty)
+21. project repo_url satellites must agree with their primary (CF-091)
+  PASS  repo_url family agreement: diverged fixture rejected naming both lanes, aligned accepted
+22. census refuses a failed fetch at a later offset
+  PASS  census fetch failure -> offset=500, exit 1, no census printed
+23. census refuses a non-2xx page
+  PASS  census HTTP 502 -> offset=500, exit 1, no census printed
+24. census requires a projects array even on HTTP 200
+  PASS  census missing-projects -> named .projects refusal, exit 1, no census printed
+  PASS  census wrong-projects -> named .projects refusal, exit 1, no census printed
+  PASS  census nonjson -> named .projects refusal, exit 1, no census printed
+25. census compares all received rows with the first reported total
+  PASS  census short page -> rows received=865, total reported=866, exit 1, no census printed
+26. healthy census counts matching rows on both sides of the page boundary
+  PASS  census healthy -> 2 matching rows, exact row format, exit 0
+27. census still refuses a missing total
+  PASS  census missing total -> named refusal, exit 1, no census printed
+28. README census and executable mirror agree except for BASE
+  PASS  census README/mirror byte parity (BASE parameterisation only)
+29. a workdir board that is not the published board is named as drift (CF-114)
+  PASS  publish-drift red fixture, exit 1
+  PASS  publish-drift green fixture, exit 0
+  PASS  publish-drift zero fixture, exit 1
+  PASS  publish-drift missing fixture, exit 1
+  PASS  publish-drift malformed fixture, exit 1
+  PASS  publish-drift nonobject fixture, exit 1
+  PASS  publish-drift event-drift fixture, exit 1
+  PASS  git-form ancestry present (HEAD=8fc3762853ba1b4dd5cb3b38d96ec564a0013c40 ancestor of main=ea7136d1c18d0e26b402ca4d03eaa0da00251d11) -> RESULT: OK
+  PASS  git-form ancestry absent (HEAD=78ff86d2bea3c5cacf694054c4a64dafc2669420 not an ancestor of main=ea7136d1c18d0e26b402ca4d03eaa0da00251d11) -> RESULT: DRIFT
+30. README Status rows 1 and 3 cite the interpreter-qualified --check
+  PASS  README Status rows 1 and 3 cite the interpreter-qualified --check
+  PASS  unqualified Status rows refused (missing-qualifier: Hermes in a bunker + HTTP gateway over tailnet missing-qualifier: Node inference credential )
+31. Hermes pip logs are private per run and distinguish filesystem failures (CF-127)
+  PASS  pip-log old shape: permission denied, exact misleading row, pip not invoked
+  PASS  pip-log --check: unchanged absent-binary rows, no log or pip invocation
+  PASS  pip-log new shape run 1: pip rc 23, distinct HOME log mode 600, fixed file untouched
+  PASS  pip-log new shape run 2: pip rc 23, distinct HOME log mode 600, fixed file untouched
+  PASS  pip-log creation failure: exact filesystem row, pip not invoked
+  PASS  pip-log successful install proceeds despite the unwritable fixed file
+  PASS  pip-log installed --check: unchanged binary rows, no new log or pip invocation
+31b. Hermes certifies the pinned venv binary, not a host-provided command (CF-183)
+  PASS  cf183 host-mismatch --check: ownership and measured version vs pin
+  PASS  cf183 host-mismatch --apply: pinned venv installed or matching venv retained
+  PASS  cf183 host-mismatch installed --check: owned pin passes, missing port/key still fail
+  PASS  cf183 host-pin --check: ownership and measured version vs pin
+  PASS  cf183 host-pin --apply: pinned venv installed or matching venv retained
+  PASS  cf183 host-pin installed --check: owned pin passes, missing port/key still fail
+  PASS  cf183 venv-mismatch --check: ownership and measured version vs pin
+  PASS  cf183 venv-mismatch --apply: pinned venv installed or matching venv retained
+  PASS  cf183 venv-mismatch installed --check: owned pin passes, missing port/key still fail
+  PASS  cf183 venv-pin --check: ownership and measured version vs pin
+  PASS  cf183 venv-pin --apply: pinned venv installed or matching venv retained
+  PASS  cf183 venv-pin installed --check: owned pin passes, missing port/key still fail
+  PASS  cf183 host-banner --check: ownership and measured version vs pin
+  PASS  cf183 host-banner --apply: pinned venv installed or matching venv retained
+  PASS  cf183 host-banner installed --check: owned pin passes, missing port/key still fail
+  PASS  cf183 venv-banner --check: ownership and measured version vs pin
+  PASS  cf183 venv-banner --apply: pinned venv installed or matching venv retained
+  PASS  cf183 venv-banner installed --check: owned pin passes, missing port/key still fail
+32. the Quick start control-host commands name BUNKER_SERVER in a check row (CF-145)
+  PASS  bunker-server-install without BUNKER_SERVER -> named FAIL row, exit 1
+  PASS  node-create without BUNKER_SERVER -> named FAIL row, exit 1
+33. the board lock adjudicator proves a holder before calling a lock held (CF-119)
+  PASS  unheld 0-byte lock -> RESIDUE, file untouched (RESIDUE consumers=0 commits_after_mtime=unknown)
+  PASS  flock-held lock -> HELD (HELD holder=pid-2128591)
+  PASS  unreadable lock -> not RESIDUE, exit 3 (ERROR lock=/mnt/ssd/tmp/tmp.lu8dsYjqwd/board/noread.lock probe=open-failed is not a clean negative — the lock state is UNKNOWN)
+34. a posture doc's gitleaks claim names its scan scope (CF-163 AC3)
+  PASS  posture docs name their scan scope
+  PASS  unscoped claim -> FAIL audit-scope
+  PASS  scoped claim -> OK
+  section 34 bytecode allowlist (CF-383): tier-1 grades the working tree, bytecode is gitignored
+  PASS  bytecode-allowlist — a PEM in tests/__pycache__/*.pyc yields no finding (18 bytes graded)
+  PASS  bytecode-allowlist-control — the same PEM outside __pycache__ is still reported
+  PASS  bytecode-allowlist-loadbearing — entry removed, the same .pyc is reported
+35. node-create accepts and forwards --ref (CF-153)
+  PASS  --staged-files --ref master -> exit 0, same fourteen-file staged set
+  PASS  ref 'master' crosses the transport as --ref 'master'
+  PASS  ref 're'lease' crosses the transport as --ref 're'\''lease'
+36. remote shell payloads preserve data without executing it (CF-159)
+  PASS  cf159 node-create project payload is data, not code
+  PASS  cf159 positive control NODE_PROJECT=my proj's --project=my proj's
+  PASS  cf159 node-create port payload is data, not code
+  PASS  cf159 node-create harness payload is data, not code
+  PASS  cf159 node-create repo payload is data, not code
+  PASS  cf159 node-create ref payload is data, not code
+  PASS  cf159 node-create crier payload is data, not code
+  PASS  cf159 verify-node artifact payload is data, not code; digest intact
+  PASS  cf159 bunker_exec trusted command text preserves quoted values and literal pipelines
+  PASS  cf159-escaping all remote-command sites
+37. the node credential row scopes its contradiction to the node (CF-151)
+  PASS  node credential row labels control-host evidence and names the node measurement
+  PASS  pre-fix node credential row refused (unlabelled-control-host-fail: Node inference credential missing-control-host-label: Node inference credential missing-node-scoped-measurement: Node inference credential )
+38. the milestone blocker list resolves every cited id in one namespace (CF-182)
+  PASS  prd-blocker — 13 cited ids, 13 rows, 0 requirement-only, exit 0
+  PASS  prd-blocker-red — CF-999 unresolved, exit 1
+  PASS  prd-blocker-closed — CF-006 complete, exit 1
+39. acceptance-plan section mapping covers the tree (CF-198)
+  PASS  section-mapping-real — green verdict, arms_plan=77 arms_tree=77
+  PASS  section-mapping-red — missing §38 names plan side, exit 1
+40. the bunker provisioner fails closed, and its config file is data not code (CF-214)
+  PASS  bash -n scripts/bunker-provision.sh
+  PASS  bash -n scripts/bunker-crier-connect.sh
+  PASS  absent config -> named FAIL, exit 1
+  PASS  a shell line in the config is refused, never executed, exit 1
+  PASS  no bunker client -> named FAIL, exit 1 (a vacuous PASS would be the bug)
+32a. bunker-server-install --apply refuses instead of false-green checking (CF-057)
+  PASS  CF-057 usage lists exactly parser flags: --apply --check --json --reap-orphans
+  PASS  CF-057 --apply -> named unsupported refusal, exit 2, no fixture command or HOME mutation
+  PASS  CF-057 --check remains a measured check path, exit 0
+  PASS  CF-057 --reap-orphans rejects an extra argument, exit 2
+32b. bunker-server-install classifies server-reported residue counts (CF-483)
+  PASS  CF-483 clean counts pass without warning; 3 homes/2 keys warn with values; unparseable counts stay unmeasured
+  PASS  CF-483 red control: pre-fix orphan-label predicate warns on the clean fixture; measured-count check does not
+  PASS  every flag handler assigns only CLI_* (so the command line survives load_config)
+  PASS  the preflight names every credential file it read
+  PASS  every documented config key parses (25 keys, no unknown-key row)
+  PASS  gitreins installer refuses an anonymous node, exit 1
+  PASS  CF-266: --check names the hook interpreter that is absent and never says GITREINS: PASS
+  PASS  CF-266: --apply refused with a named row instead of writing a hook it cannot run (exit 1)
+  PASS  CF-266: the hook apply wrote executes on a real commit (/mnt/ssd/tmp/tmp.26obmLZKvI/venv/bin/gitreins guard ran)
+  PASS  a bad namespace slug is refused before the host is touched, exit 1
+  PASS  node identity carries several namespaces as a list, idempotently (demo,coder)
+  PASS  an empty namespace list is refused, exit 2
+  PASS  destroy without --yes is refused, exit 2, naming the exact agent and server it would remove
+  PASS  CF-214: --check probed the node, left no file behind, and an unmeasured node is a FAIL (exit 1)
+  PASS  CF-214: one 600 bundle in, installed at 600, gone from both sides, no secret in stdout or argv, existing agent reused (no second agent)
+  PASS  CF-214: the auth row follows the mode the node reported (644 -> FAIL), it does not assert 'mode 600'
+  PASS  CF-214: an install that fails and a bundle the node cannot delete are both named FAIL rows (exit 1)
+  PASS  CF-214: the command line won over the config for agent/server/repo/ref/harness/namespace/crier/duckbrain/token-file
+  PASS  CF-214: crier connect names 401/403/404/000 distinctly and reports CONNECTED only when the inbox route returns 200
+  PASS  CF-214: provisioner crier row distinguishes unsigned 200 from signed_read and the old PASS inbox certification reds
+  PASS  CF-214: skills/code-factory-bunker/SKILL.md ships in the repo and names both scripts and check/apply/destroy(--yes)
+  PASS  CF-214: the fleet skill copy names the same two scripts as the repo copy
+41. repo freshness probe measures lag per workdir and refuses beyond the bound (CF-212)
+  PASS  scripts/repo_freshness.py parses (python3 -B, stdlib only)
+  PASS  workdir behind 2 commits -> one FAIL naming lag 2, --gate exit 1
+  PASS  a non-main default branch (trunk) is measured against origin/trunk
+  PASS  detached HEAD, no remote, non-git, bare, missing and non-directory workdirs -> 6 named WARN rows, no crash
+  PASS  workdirs enumerated from the DB: 9 enabled projects, 8 unique workdirs, disabled project skipped
+  PASS  the same workdir clears --bound 5 (bound is policy, not a constant), exit 0
+  PASS  one workdir probes on its own (--workdir) and refuses, exit 1
+  PASS  --no-fetch measured lag 2 with the remote absent: no network call, exit 0 without --gate
+  PASS  with the remote absent a fetch names the failure instead of inventing freshness
+  PASS  --strict escalates the 6 unmeasurable rows: 7 FAIL, exit 1
+  PASS  --json is parseable, lists 8 workdirs, and two runs agree (idempotent)
+  PASS  an absent scheduler DB is a named FAIL, exit 2
+42. a node branch lands on main with real gates, or refuses naming the reason (CF-213)
+  PASS  bash -n scripts/land-node-branch.sh
+  PASS  usage -> exit 2
+usage: ~/.hermes/cache/scratch/cfd5-wt-cf483/scripts/land-node-branch.sh --workdir DIR --branch BRANCH --commit SHA [--remote R] [--main M] [--gate-cmd CMD] [--no-ff] [--dry-run]
+  PASS  dirty workdir -> exit 1
+  FAIL  workdir_clean — 1 uncommitted path(s) in /mnt/ssd/tmp/tmp.0IyyAhw55X/wd (first: ?? untracked.txt) — commit or stash them first
+  PASS  commit off the branch -> exit 1
+  FAIL  commit_on_branch — fb8feb98d085ba134bb0035b4d24be0c97481e15 is not reachable from refs/remotes/origin/node/crier/fixture (tip 5c6c9b7f85f3)
+  PASS  unfetched commit -> exit 1
+  FAIL  commit — 0123456789abcdef0123456789abcdef01234567 is not a commit in /mnt/ssd/tmp/tmp.0IyyAhw55X/wd — fetch the node branch before landing it
+  PASS  ff-only refused -> exit 1
+  FAIL  ff_only — main at 264d1b25ab23 is not an ancestor of 5c6c9b7f85f3de72dd8026ee48965d57c82a2200 (1 local commit(s) on main are not in the branch) — not fast-forwardable; push or reset main, or pass --no-ff
+  PASS  stale branch -> exit 1
+  FAIL  descendant — refs/remotes/origin/node/crier/fixture 5c6c9b7f85f3 is not a descendant of origin/main 1f424048dc5e — 1 commit(s) on origin/main are not in the branch; rebase the branch onto origin/main
+  PASS  red gate -> exit 1
+  FAIL  gate — 'echo fixture gate refused; exit 7' exited 7 at 5fa50ad2d05e — fixture gate refused
+  PASS  red gate moved no ref — main cecc30aebeda, origin/main 1f424048dc5e
+  PASS  dry run -> exit 0
+LAND: DRY-RUN — 0 commands run, nothing merged or pushed, no ref moved
+  PASS  dry run named the merge and the push; no ref or worktree moved
+  PASS  landing -> exit 0
+  PASS  landed — 5fa50ad2d05e09746eed2686d1f3c88b555539cb is an ancestor of origin/main (5fa50ad2d05e)
+  PASS  the gate row and the LANDED line name the node commit, and the push row names the sha it pushed
+  PASS  a fresh clone of the remote contains 5fa50ad2d05e09746eed2686d1f3c88b555539cb and the node's file
+  PASS  already-landed red gate -> exit 1
+  FAIL  gate — 'echo fixture gate refused; exit 99' exited 99 at 5fa50ad2d05e — fixture gate refused
+  PASS  a red gate on an already-landed commit refused and moved no ref (main 5fa50ad2d05e)
+  PASS  idempotent re-run -> exit 0
+  PASS  gate — 'test -f node.txt' exited 0 at 5fa50ad2d05e (detached worktree)
+  PASS  second run exited 0, ran the gate, and moved no ref — main 5fa50ad2d05e, origin/main 5fa50ad2d05e
+  PASS  refused push -> exit 1
+  FAIL  push — git push origin 7c4704af23d9f422d14cc3b7947ece50dc23e379:refs/heads/main failed — remote: rejected by fixture hook; local main is now 7c4704af23d9 and origin/main was not updated
+  PASS  refused push printed no landed row and no LANDED line
+  PASS  no-ff over a local-only main -> exit 1
+  FAIL  no_ff_local — main at d918add76b90 is ahead of origin/main 56b2b77c00dd — 1 local commit(s) on main are not on origin/main (d918add76b90) and a --no-ff merge would publish them on its push; push or reset main, or land those commits first
+  PASS  no_ff_local merged nothing and moved no ref — origin/main 56b2b77c00dd, local main d918add76b90
+  PASS  a fresh clone of the remote does not contain the stray commit d918add76b90
+  PASS  dry run --no-ff -> exit 0
+LAND: DRY-RUN — 0 commands run, nothing merged or pushed, no ref moved
+  PASS  the --no-ff dry run named the capture and the explicit-sha push; no ref moved
+  PASS  no-ff landing -> exit 0
+  PASS  landed — dc1c3e2b23b0de53990ea86dd39c01ab10f4db42 is an ancestor of origin/main (421e3317c16e)
+  PASS  the push row and the LANDED line named 421e3317c16e, and that is the remote's tip
+  PASS  a fresh clone of the remote contains the merge commit 421e3317c16e and the node's file
+  PASS  no ref in the remote (3 commits reachable from --all) carries d918add76b90
+43. the node environment profile applies idempotently and refuses what cannot be declared
+  PASS  bash -n scripts/bunker-provision.sh
+  PASS  scripts/node_env.py compiles
+  PASS  absent profile -> named FAIL, exit 2
+  PASS  a secret declared inline is refused by name, and the value is never echoed, exit 2
+  PASS  an inline config section is refused by named row and line, exit 2
+  PASS  a duplicated config section is refused by named row and lines, exit 2
+  PASS  an unknown CONFIG_SET path is refused and the allowed set is named, exit 2
+  PASS  --check prints the diff (secret masked as ***), exits 1, and writes nothing
+  PASS  --apply writes both files at mode 600 and keeps every line it does not own
+  PASS  a second --apply changes nothing (sha256 unchanged), exits 0, and names the unmanaged var
+  PASS  --check is green after --apply, and unmanaged vars alone are not drift (exit 0)
+  PASS  NODE_ENV_FILE with an inline secret -> named env_profile FAIL from --check
+44. the node bus worker names the refusal it cannot proceed past (CF-215)
+  PASS  scripts/node-bus-worker.py compiles
+  PASS  §5 set accepted from the directive, receipt records name/set/len only, ambient CF_* scrubbed
+  PASS  project mismatch -> named FAIL, exit 1, no bus contact
+  PASS  unreadable identity -> named FAIL, exit 1
+  PASS  absent key -> named FAIL naming the file, exit 1, nothing invented, no bus contact
+  PASS  unreachable bus -> named FAIL with 000, exit 1, no inbox read attempted
+45. the harness conformance battery can go red (fixture mode)
+.......
+----------------------------------------------------------------------
+Ran 7 tests in 2.519s
+
+OK
+  PASS  shared memory fixture and missing/wrong namespace refusals (CF-231)
+.
+----------------------------------------------------------------------
+Ran 1 test in 0.119s
+
+OK
+  PASS  Codex evidence retention fixture preserves rollout/index and removes credentials (CF-329)
+......
+----------------------------------------------------------------------
+Ran 6 tests in 0.626s
+
+OK
+  PASS  Codex turn cache retention window prunes expired turns and keeps live/foreign ones (CF-446)
+  PASS  absent credential -> SKIP naming it, while the same adapter's check leg goes green
+  PASS  --write-doc wrote a matrix carrying the measured SKIP
+  PASS  missing adapter -> FAIL 'no adapter at', exit 1
+  PASS  empty adapter value -> FAIL from the empty-value guard, exit 1
+  PASS  a binary measured off PATH is resolved from the adapter's own row and that path runs the turn
+  PASS  no binary row and no binary anywhere -> SKIP naming the absence
+  PASS  the pre-CF-225 PATH-only leg prints SKIP 'absent from PATH' on the same fixture -> the new arm can fail
+  PASS  codex smoke argv carries -c model_provider="openai" -m fixture-codex-model and the needle; the FAIL names the provider and its base_url
+  PASS  codex exiting 0 with no artifact -> FAIL 'exited 0 without writing smoke.txt'
+  PASS  the pin-removed control records an argv with no model_provider -> the arm above can fail
+46. one provisioning config per project is generated from the registry, or refused
+  PASS  scripts/bunker_config_gen.py parses (python3 -B, stdlib only)
+  PASS  --dry-run prints the config on stdout and creates no directory, exit 0
+  PASS  one family -> demo.conf with 11 sorted keys, AGENT=cf-demo, token keys as paths
+  PASS  bunker-provision.sh parses the generated config with no unknown key
+  PASS  a PHANTOM repo_url is refused by name, exit 2, nothing written
+  PASS  two projects deriving one AGENT are refused by name, exit 2, nothing written
+  PASS  a group with no common name prefix is refused as AMBIGUOUS, exit 2
+  PASS  a second run is byte-identical and reports unchanged, exit 0
+  PASS  --check names the drifted key, exits 1 and writes nothing
+  PASS  a differing config is not rewritten without --force, exit 1
+  PASS  --force rewrites the file and --check is green afterwards (exit 0)
+47. a node checkout freshness check can go RED: drift and a local edit are named (CF-244)
+  PASS  scripts/node_freshness.py parses (python3 -B, stdlib only)
+  PASS  a clone in sync with its origin -> RESULT: PASS, exit 0 (the fixture can go green)
+  PASS  origin advances -> exit 1, RESULT names the lag and the differing file b.txt
+  PASS  an uncommitted edit -> exit 1, the path is named and called upstream's problem
+  PASS  a detached HEAD -> exit 1, the branch state is named
+  PASS  a checkout with no origin -> exit 1, the reason is named (no crash)
+  PASS  bunker mode: one exec round trip, home resolved from the agent, RESULT: PASS
+  PASS  bunker mode --json: status FAIL, behind 1, differing_files [b.txt] (provisioning stores this)
+  PASS  provisioning runs the clone's own probe after the clone -> PASS freshness, NODE: PASS
+  PASS  a dirty checkout at provision time -> WARN naming a.txt, no FAIL row, NODE: PASS
+  PASS  a drifted checkout at provision time -> FAIL naming behind=1, NODE: FAIL (1), exit 1
+  PASS  --apply records freshness{status:PASS, ladder:PASS, behind:0} in node.json, exit 0
+  PASS  a dirty checkout is recorded (status FAIL, ladder WARN, dirty_files [a.txt]) and the ladder still passes, exit 0
+  PASS  CF-289-node-json-union — identity-then-apply leaves agent/namespace/duckbrain/provisioned_by AND the ladder's keys (mode 600, exit 0)
+  PASS  pre-fix 23114f4 exits 0 while deleting agent/namespace/duckbrain/provisioned_by — this arm discriminates
+
+node_seed — the declared seed, its digests, and what it refuses
+  PASS  build writes a record with a sha256 per declared file, exit 0
+  PASS  apply installs prompts and skills and a green check follows (exit 0, 0)
+  PASS  a tampered file fails the check and is named (exit 1)
+  PASS  a digest mismatch refuses the whole seed and installs nothing (exit 1)
+  PASS  a seed over the size budget is refused (exit 1)
+  PASS  a backup artefact declared as seedable is refused (exit 1)
+
+node_seed - apply is non-destructive unless --force (CF-288)
+  PASS  CF-288 fixture seed built (exit 0)
+  PASS  CF-288 fixture fresh apply landed a seed (exit 0)
+  PASS  re-apply without --force preserves a changed prompt and a local note, naming both (exit 0)
+  PASS  re-apply with --force overwrites the changed prompt and names it (exit 0)
+48. verify-node.sh folds the seed record: a node's seeded prompts and skills are the digests the seed named (CF-250)
+  PASS  scripts/node_seed_drift.py parses (python3 -B, stdlib only)
+  PASS  the fixture seed record built (2 files, sha256 each)
+  PASS  the fixture node home carries the applied record at .hermes/seed-applied.json
+  PASS  a seed whose files match its record -> exit 0, RESULT: PASS, the row names the count
+  PASS  a tampered file -> exit 1, the path and both digest prefixes are named
+  PASS  the file restored -> exit 0, RESULT: PASS again (the red arm can go green)
+  PASS  a node with no seed record -> exit 3, the absent record's path is named
+  PASS  the SAME fixture under --strict-seed -> exit 1, FAIL (unknown is not a pass)
+  PASS  the record restored -> exit 0, RESULT: PASS again (the absent arm can go green)
+  PASS  bunker mode offline: ONE exec round trip stages the seeder, checks the node home, RESULT: PASS
+  PASS  bunker mode --json: status PASS, record_present true, file_count 2
+  PASS  a node whose seed matches its record -> VERIFY: PASS, exit 0 (the fixture can go green)
+  PASS  a 0-byte seed record -> exit 3, VERIFY: UNVERIFIED naming seed_drift (not a PASS)
+  PASS  pre-fix 436def5 certifies the same unmeasured seed: VERIFY: PASS, exit 0 (the fixture detects CF-291)
+  PASS  an unparseable seed record -> exit 3, VERIFY: UNVERIFIED naming seed_drift and the path
+  PASS  a seed record that declares no files -> exit 1, VERIFY: FAIL naming the empty collection (not a PASS)
+  PASS  pre-fix 226bae2 certifies the same empty record: VERIFY: PASS, exit 0 (the fixture detects CF-379)
+  PASS  the record restored with its 2 seeded files -> VERIFY: PASS, exit 0 (a pass names a count above zero)
+  PASS  an absent seed record -> exit 3, VERIFY: UNVERIFIED naming seed_drift and the path
+  PASS  an absent record under --strict-seed is still a FAIL, exit 1 (wording preserved)
+  PASS  the strict-seed sentence has one owning source: scripts/node_seed_drift.py
+  PASS  a 0-byte record under --strict-seed -> exit 1, FAIL via the verifier's exit-3 branch with the checker's sentence
+  PASS  a scratch tree whose single source lost the phrase -> the arm above goes red (exit 1, phrase absent)
+  PASS  a missing seeder -> exit 1, VERIFY: FAIL naming the unmeasured seed
+  PASS  seeder and record restored -> VERIFY: PASS, exit 0 again (the arms can go green)
+  ..  CF-270: --port is a port or a usage error, and it reaches the node as an argument
+  PASS  CF-270 --port not-a-port -> exit 2, stderr names --port, 0 recorded remote invocations
+  PASS  CF-270 --port 0 / 65536 / empty / ' 10800' -> exit 2 each, 0 recorded remote invocations
+  PASS  CF-270 injection --port -> exit 2, refused before the first remote call, canary never created
+  PASS  CF-270 --port 10800 -> both inside legs run, port and path travel as arguments, no canary in any command
+  PASS  CF-270 pre-fix inside() interpolates the port: the canary IS in the recorded remote command (the fixture detects the defect)
+49. layer 10 grades the toolchain the repository kind needs, Go included (CF-218)
+  PASS  fixture PATH carries no go
+  PASS  go.mod workspace without go -> exit 1 and ONE FAIL tool:go row (not a WARN)
+  PASS  the same tree with a go that resolves the pinned module -> go rows PASS, exit 0
+  PASS  a proxy that refuses -> FAIL go:proxy naming the proxy and the error
+  PASS  --kinds rust,node on a marker-less tree grades cargo and node, not go
+  PASS  a declared node kind with no node -> FAIL tool:node (the WARN shape is gone)
+  PASS  no evidence -> generic fallback is named on the row, and nothing else is graded
+  PASS  an unknown kind is a named FAIL before any layer runs (never a silent pass)
+50. install-go.sh can go red, and its pin is a digest (CF-219)
+  PASS  install-go negative: no Go -> named FAIL, exit 1
+  PASS  install-go digest: wrong sha256 refused and destination absent
+  PASS  install-go digest control: measured sha256 accepted
+  PASS  install-go positive: applied host pin read back (  PASS  go — go version go1.26.5 linux/amd64)
+
+51. the python lint lane can go red on one unused import, and green once it is removed (CF-254)
+  PASS  pinned checker: ruff 0.15.22 at ~/.local/bin/ruff (pin 0.15.22, rules E4,E7,E9,F)
+  PASS  one unused import -> exit 1 naming F401 (ruff 0.15.22, rules E4,E7,E9,F)
+  PASS  same file once the import is removed -> exit 0 (ruff 0.15.22, rules E4,E7,E9,F)
+  PASS  unsorted import block -> exit 1; quoted: I001 [*] Import block is un-sorted or un-formatted (ruff 0.15.22, --select I001)
+  PASS  tracked python surface clean: 87 files graded (ruff 0.15.22, rules E4,E7,E9,F)
+52. master-doc fills converge on runner-owned status without network (CF-257)
+  PASS  both fill writers stamp census/provider/UTC; missing status is rejected
+  PASS  local writer fixtures completed without provider calls
+  PASS  RED module selected, index and missing-Path document skipped
+skip 00-INDEX.md index
+skip 03-not-a-module.md no path field
+todo=1 provider=deepseek workers=2
+candidate 01-first.md
+  PASS  VERIFIED and bare VERIFIED Status rows are complete, never candidates
+  PASS  old selector would wrongly refill both completed modules
+  PASS  filled run 1: todo=0 exit=0 sha256sum unchanged
+todo=0 provider=deepseek workers=2
+  PASS  filled run 2: todo=0 exit=0 sha256sum unchanged
+todo=0 provider=deepseek workers=2
+  PASS  --force selects all four modules, VERIFIED ones included, never the non-modules
+  section 52 reachability (CF-374): the checker resolves its root and refuses a zero-module pass
+  PASS  absent root -> exit 2, both candidate roots named, no PASS
+  PASS  one-module root -> exit 0, summary reads 1 module(s)
+  PASS  zero-module root -> exit 1, FAIL names the root, 0 module(s), no PASS
+53. node-create refuses a --agent that does not exist, before any staging (CF-051)
+  PASS  missing --agent -> named FAIL agent, exit 1, info probed, zero staging calls
+  PASS  existing --agent -> reuse row printed, staging reached, node created (exit 0)
+  PASS  pre-fix revision reports the false reuse row and stages anyway (fixture detects CF-051)
+54. the bus worker decodes the wire directive member, and the pre-fix revision cannot (CF-354)
+  PASS  text_b64 decoded to the harness bytes, legacy text still runs, corrupt text_b64 / absent instruction / base64 digest each refused
+  PASS  pre-fix 5b11bdc refuses the text_b64 dispatch with the brief row (fixture detects CF-354)
+55. the create path stages dashboard.basic_auth before the adapter, and the gate still refuses without it (CF-150)
+  PASS  staged set carries node_gateway_auth.py (14 files)
+  PASS  no dashboard.basic_auth -> exit 1, refusal named, serve never launched
+  PASS  layer 20 staged a non-empty basic_auth block and a mode 600 password file, secret never printed
+  PASS  staged home: gateway_start PASSes, no refusal row, serve launched (exit 1 is inference_key)
+  PASS  a dashboard block without basic_auth -> one counted FAIL row, NODE: FAIL (1), config untouched
+  PASS  occupied :10800 without dashboard.basic_auth -> exit 1, named FAIL port row, HERMES: FAIL (1), nothing certified
+  FAIL  port — listening on :10800 (not started by this adapter; auth unverified — a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — block absent)
+  PASS  occupied :10800 WITH dashboard.basic_auth keeps PASS port / PASS status_probe (only inference_key fails)
+  PASS  fixture starts where a fresh node starts: HOME exists, .hermes does not
+  PASS  no ~/.hermes -> exit 0, block created, password mode 600, secret never printed
+  PASS  layer 20 on a fresh HOME -> gateway_auth PASSes, block written, secret never printed (exit 0)
+  PASS  pre-fix 2dcef4c on a fresh HOME -> exit 1, FileNotFoundError, nothing created (fixture detects CF-388)
+  PASS  pre-fix layer 20 on a fresh HOME -> one counted FAIL gateway_auth row, no block, exit 1
+56. a foreign harness is measured in a node, and verify-node.sh re-measures what the manifest records (CF-006)
+  PASS  node slice: the manifest records the measured harness, verify re-measures it, 4 red arms + a directive turn
+  PASS  with the adapter's binary row removed the manifest arm goes RED (exit 1) — the battery is falsifiable
+  PASS  adapter --check classification: measured installs reach PASS, the pre-fix adapters do not, and the ambient/credential-only negatives still refuse
+57. the brief digest binds every effectful field, and the pre-fix worker runs a tampered gate (CF-275)
+  PASS  a bound text+gate+repo/ref digest runs its gate; a tampered gate.cmd, a legacy text-only digest beside a gate, and a gate with no digest are each refused without the gate starting
+  PASS  pre-fix c05880d runs the gate whose cmd was altered after the digest was minted (fixture detects CF-275)
+58. per-repo deploy key, node runtime, shared module cache, footprint, orphan reap (CF-003)
+  PASS  five mechanisms with their refusal arms (deploy key, node pin, sealed GOMODCACHE, footprint, reap)
+  PASS  MEASURED shared GOMODCACHE 2097910 bytes; sealed rebuild added 0 bytes
+  PASS  layer 10 grades the owned node pin, not a PATH runtime
+  PASS  layer 40 clones with the declared key and pins core.sshCommand in that repo only
+  PASS  a 0644 deploy key is refused and the clone is not attempted
+  PASS  node-create refuses public.key at the spawn gate, before any agent exists (exit 1)
+  PASS  node-create refuses junk.key at the spawn gate, before any agent exists (exit 1)
+  PASS  node-create refuses enc at the spawn gate, before any agent exists (exit 1)
+  PASS  node-create refuses a deploy key on an HTTPS remote at the spawn gate (exit 1)
+  PASS  a usable read-only key passes the spawn gate and the run continues past it
+  PASS  pre-fix 4f32a50 accepts the public key as a deploy key — the gate arm is falsifiable
+  PASS  layer 00 measures the node footprint and admits it against the floor
+59. an adapter's verdict counts its WARN rows, not just its FAIL rows (CF-141)
+  PASS  a WARN row -> 'STUB: UNVERIFIED', exit 3, never PASS (2 WARN rows)
+  PASS  a FAIL row -> 'STUB: FAIL (1)', exit 1, never PASS/UNVERIFIED
+  PASS  all rows PASS -> 'STUB: PASS', exit 0
+  PASS  install-opencode.sh --check on the row's stub -> 'OPENCODE: UNVERIFIED', exit 3, never PASS
+  PASS  pre-fix d4f2600 prints 'OPENCODE: PASS' with exit 0 beside the same two WARN rows — the arm is falsifiable
+  PASS  all six adapters end with the verdict their row counts require (table in the scratch dir)
+  PASS  an unsupported interpreter ends 'HERMES: FAIL (1)', exit 1, after the named row
+60. every harness the spec names now has an adapter: aider and goose go red by name, never silent (CF-006)
+  PASS  aider --check — 1 named row(s), one verdict line 'AIDER: FAIL (1)', exit 1 (the rows require it)
+  PASS  aider --apply — refused by name (1 row + 'AIDER: FAIL (2)'), exit 1, 0 executable(s) placed in a scratch $HOME
+  PASS  goose --check — 1 named row(s), one verdict line 'GOOSE: FAIL (1)', exit 1 (the rows require it)
+  PASS  goose --apply — refused by name (1 row + 'GOOSE: FAIL (2)'), exit 1, 0 executable(s) placed in a scratch $HOME
+61. the published tree does not add absolute host-home paths (CF-050)
+  PASS  publish paths — baseline 0, current 0
+  PASS  publish paths — private IPv4 — baseline 0, current 0
+  PASS  seeded fixture -> FAIL names docs/fixture.md; gate is falsifiable
+  PASS  staged clean file cannot hide a committed leak; gate grades index + HEAD
+  PASS  removed fixture -> clean control passes
+  PASS  staged removal -> committed leak is a named repair
+  PASS  seeded private address -> FAIL names the anchored pattern and docs/leak.md:1; gate is falsifiable
+  PASS  prose list numbering does not trip the address arm; the loose spelling matches the same line 1x and cannot pass
+  PASS  staged removal of a private address -> named repair (a redaction commit is not self-refused)
+62. verify-node names its transport, and a probe that never leaves the node is a FAIL (CF-224)
+  PASS  pre-fix bf16c05 has no --transport: exit 2, 'unknown arg: --transport' (CF-224 premise)
+  PASS  pre-fix bf16c05 certifies a loopback-only node: VERIFY: PASS, exit 0, no transport row (the fixture detects CF-224)
+  PASS  a loopback-only node -> exit 3, named transport refusal, VERIFY: UNVERIFIED (never a PASS row)
+  PASS  a reachable node-address -> VERIFY: PASS, exit 0, the row names node-address and the measured 200
+  PASS  --transport published-port -> VERIFY: PASS, exit 0, the gateway row names the transport and the code
+  PASS  no published port -> exit 3, 'no published port for cf-fixture:10800' in the row, and no 000 anywhere in the output
+  PASS  --transport tunnel 127.0.0.1:18080 -> VERIFY: PASS, exit 0 (a declared forward, not a node-internal loopback)
+  PASS  --transport bunker-exec -> exit 1, named loopback FAIL, VERIFY: FAIL (2) (never PASS, never UNVERIFIED)
+  PASS  a bad transport, a missing address and an address with no transport are each exit 2 with a named refusal
+  CF-063 verify-node usage is parse-first, environment-independent, and operational refusal remains named
+  PASS  CF-063 pre-fix verifier -> exit 2, named unknown-arg control
+  PASS  CF-063 bare -> usage, exit 2
+  PASS  CF-063 help -> usage, exit 2
+  PASS  CF-063 help-with-server -> usage, exit 2
+  PASS  CF-063 operational invocation -> exit 2, missing-server refusal names BUNKER_SERVER
+  PASS  CF-063 --server alone satisfies the server guard before transport validation, exit 2
+63. a node result completes a tick, fails one, and a wrong corr_id completes nothing (CF-211)
+  PASS  completed + failed results POST to reply_to before the ack; a mismatched corr_id expires the tick and is named; a refused/lost delivery retries with the same key and never re-runs the work
+  PASS  pre-fix 9af58a0 completes a failed gate and re-runs on redelivery (fixture detects CF-211)
+  PASS  specs/ENVELOPE.md states the verdict field, the path home, the correlation rule, the delivery budget/key and the ack-after-delivery rule
+64. a credential-less --turn reaches the dsh adapter's documented SKIP before the §5 run set is required (CF-226)
+  PASS  tests/harness/dsh-install-test.sh is green (43 rows), with the live turn skipped by name
+  PASS  the rows that decide the ordering are present: SKIP/3, no run-set refusal before it, nothing started, and the strict refusal kept
+  PASS  pre-fix 899bfe5 fails the same test on the ordering row (exit 1) — this section discriminates
+65. resolver and ladder role tables stay in pair parity (CF-299)
+  PASS  clean role tables -> exit 0: PASS role parity: ~/.hermes/cache/scratch/cfd5-wt-cf483/scripts/disk_floor.py ROLE_DEFAULTS and ~/.hermes/cache/scratch/cfd5-wt-cf483/scripts/project-node.sh case "$ROLE" in; builder=10, full=20, worker=5
+  PASS  ladder mutation -> exit 1: FAIL role builder: resolver=10; ladder=12
+  PASS  resolver mutation -> exit 1: FAIL role full: resolver=25; ladder=20
+  PASS  case marker mutation -> exit 1: FAIL role-set drift: resolver=builder=10, full=20, worker=5; ladder=builder=10, full=20, wkr=5
+  PASS  fixture mutations stayed in scratch copies; tracked role-table files are unchanged
+  PASS  CF-008 lifecycle supervisor restart evidence, TTL renewal/refusal, process-group cancellation and destroy/create replay
+  PASS  CF-398 evidence checker contract on fixtures: an allowlisted finding set exits 0 (1 under --strict), an unaccepted empty-evidence row and an unaccepted unresolved run exit 1 naming the row, and a run that resolves in events.jsonl is no finding
+durable records and crash recovery oracle is checkable (P5G-02)
+PASS M9 names the P5G-02-V1 oracle
+PASS M9 contains 'target contract'
+PASS M9 contains 'logical records'
+PASS M9 contains 'The scheduler\nowns'
+PASS M9 contains 'the supervisor\nowns'
+PASS M9 contains 'Crier owns'
+PASS M9 contains 'store_version: 1'
+PASS M9 contains 'state_version'
+PASS M9 contains 'transition_id'
+PASS M9 contains 'Foreign keys'
+PASS M9 contains 'allowance >= consumed + reserved'
+PASS M9 contains 'One local atomic transaction'
+PASS M9 contains 'only then call create-or-discover'
+PASS M9 contains 'only then send result'
+PASS M9 contains 'only then acknowledge report custody'
+PASS M9 contains 'only then emit success/follow-up'
+PASS M9 contains 'unknown/hold'
+PASS M9 contains 'integrity incident'
+PASS M9 contains 'This vector is a specification oracle, not a runtime test'
+PASS vector contains 'No admission commit'
+PASS vector contains 'Admission and Crier delivery'
+PASS vector contains 'l=NEVER_ACCEPTED'
+PASS vector contains 'l=?'
+PASS vector contains 'native is running'
+PASS vector contains 'Result `R` and outbox durable'
+PASS vector contains 'sink contains matching `P`'
+PASS vector contains 'sink authoritatively absent'
+PASS vector contains 'final commit absent'
+PASS vector contains 'Crier says acked but supervisor has no result'
+PASS vector has ten named crash cases
+PASS vector includes expected count (0,0,0,0)
+PASS vector includes expected count (0,1,0,0)
+PASS vector includes expected count (1,0,1,0)
+PASS vector includes expected count (1,0,1,1)
+PASS F1/F8 points to the single M9 recovery oracle
+PASS F1 names Crier custody version 16
+PASS F1 labels measured legacy behavior separately
+PASS M9 has one P5G-02 trace marker for this command
+PASS trace marker names the outline authority
+  PASS  P5G-02 durable-record vector and trace marker
+resident foreman cancellation and reboot contract is wired and fail-closed (P5G-13)
+  PASS  resident foreman checker executes 8 tests
+  PASS  dropping native_session_id is rejected without touching the tree
+  PASS  weakening expected_state_version handling is rejected without touching the tree
+66. GitHub App mode refuses incomplete credentials and proves repository access
+  PASS  bash -n scripts/github-app-setup.sh
+  PASS  bash -n scripts/github-app-refresh.sh
+  PASS  scripts/github-app-token.py parses
+  PASS  absent key file refused
+  PASS  key mode 0644 refused with remediation
+  PASS  --check refuses without measurable App/repository evidence
+  PASS  repository token 403 -> named repo_read FAIL, no setup PASS
+  PASS  CF-238 timer installation writes both units with node, server, age, cadence, mode
+  PASS  CF-238 second timer installation leaves both hashes unchanged
+  PASS  CF-238 failed daemon-reload refuses and names unarmed timer
+  PASS  CF-238 absent systemctl refuses before writing any unit
+  PASS  CF-238 setup check accepts matching node and 20-minute cadence
+  PASS  CF-238 setup check warns on wrong node
+67. load_lane_config.py is read-only unless --apply is explicit (CF-304)
+PASS default read-only report
+PASS dry-run exact update set
+PASS explicit apply
+PASS named missing DB/prompt refusals
+PASS red control: pre-fix script writes the fixture
+LANE-CONFIG-READONLY: PASS (5 arms; default and dry-run byte-identical, apply scoped, refusals named, red control caught)
+  PASS  CF-304 default and dry-run leave copied DBs byte-identical; --apply is scoped; red control caught
+68. github app check reads the named repo and fails closed (CF-319)
+Arm A — unreadable repo (403): exit 1
+Arm B — readable repo (200): exit 0
+Arm C — no repo named: exit 1
+  PASS  CF-319 GitHub App repository-read fixture arms A/B/C
+69. node_env --check measures both target file modes and --apply repairs them (CF-268)
+  PASS  a. --check fails a 644 .env, names the path and mode 644 (exit 1)
+  PASS  b. --check passes the 600 .env control (exit 0)
+  PASS  c. --apply reports the .env correction and leaves mode 600 (exit 0)
+  PASS  d. second --apply is an idempotent no-op (exit 0)
+  PASS  e. --check fails a 644 config.yaml, names the path and mode 644 (exit 1)
+74. handbook spine grades the selected corpus, not a hardcoded checkout (CF-432)
+  PASS  CF-432 dirty fixture from / finds planted count claim (exit 1)
+  PASS  CF-432 clean fixture from / reports findings=0
+  PASS  CF-432 missing corpus fails closed with a named error
+  PASS  CF-432 hardcoded ~/code-factory corpus path is absent
+75. node-create --harness names the adapter set it derived, and --help asks nothing of the environment (CF-125)
+  PASS  a. typo -> exit 1, one FAIL harness row naming the adapters this tree ships
+  PASS  b. declared adapter with no installer -> exit 1, a different row citing specs/HARNESS.md and CF-006
+  PASS  c. the restored installer makes the name shipped: manifest exit 0 carries it, create reaches server_declared
+  PASS  d. --help and -h -> exit 0 with CRIER_URL/BUNKER_SERVER unset, usage line names all 10 parser flags
+  PASS  e. pre-fix revision c1890a52 answers 'unknown arg: --help' and reports the typo as a missing staged file (red control)
+  PASS  a. the out-of-range python row names HERMES_PYTHON_BIN=python3.12
+  PASS  b. with the remedy stripped the FAIL row no longer names it (red control)
+  PASS  c. README Quick start names HERMES_PYTHON_BIN (1 occurrence)
+76. README carries no traceability block (CF-481)
+  PASS  published README.md carries no ch:trace / STATUS: / TIER: / EVIDENCE: line
+  PASS  a. red control: a planted ch:trace line is rejected, exit 1
+  PASS  b. red control: a planted STATUS: line is rejected, exit 1
+  PASS  b. red control: a planted TIER: line is rejected, exit 1
+  PASS  b. red control: a planted EVIDENCE: line is rejected, exit 1
+  PASS  c. a mid-sentence mention is accepted (the check is anchored to line starts)
+77. section 7b never pipes a producer into grep -q (CF-485)
+  PASS  a. shipped tests/selftest.sh section 7b scans clean — block 28 lines, 0 offending
+  PASS  b. red control: the planted producer-piped grep -q is the one offending line — line 587:   if printf '%s\n' "$out" | grep -q '^  PASS'; then leaked=1; fi
+
+SELFTEST: PASS
+EXIT=0
+EXIT=0
+=== CF-483 rows ===
+grep: ~/.hermes/cache/scratch/cfd5-20261117-1030/d5-merged-selftest.log: input file is also the output
+=== verdict ===
+grep: ~/.hermes/cache/scratch/cfd5-20261117-1030/d5-merged-selftest.log: input file is also the output
+NO SELFTEST VERDICT LINE
+=== FAIL rows ===
+grep: ~/.hermes/cache/scratch/cfd5-20261117-1030/d5-merged-selftest.log: input file is also the output
+no FAIL rows

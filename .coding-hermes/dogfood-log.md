@@ -156,3 +156,50 @@ the retry — a shared-checkout snapshot, not a repo defect, and not filed.
   (`cf490-proof.out`, the merged-tree selftest log + its verdict excerpt, and a provenance record
   naming the fix commit, merge commit, base and remote tip).
 
+
+## 2026-11-17 — delivery 5 delta: CF-483 fixed, judged and landed (run `code-factory-dogfood-2026-11-17-10-10-24`)
+
+- **Duplicate delivery, proven before work**: `grep -c '<tick-id>' ~/.hermes/logs/gateway.log` = **5**
+  inbound lines (05:10:31, 05:46:57, 06:11:09, 07:02:43, 09:33:53 local); this is the fifth. Deliveries
+  1-4 own the walk and the records: `CF-483`/`CF-484` (control-host path at `0014b76a`), `CF-489`/`CF-490`
+  (node-create leg), the re-fire receipt `82972156` + addendum `f892cbd6`, and the CF-490 foreman leg
+  (`56c3a2b1` → merge `96e119e5` → close `c71f7f95`).
+- **Provenance re-verified from `origin/main`, not the working copy** (585 board rows, 915 event rows,
+  0 unparsed either side): `CF-483`/`CF-484`/`CF-489` `pending` with one paired `task_created` event
+  each; `CF-490` `complete` with its fixture (9 `CF-490` mentions in the committed `tests/selftest.sh`),
+  its proof script `docs/audits/cf490-host-spawn-proof.sh`, and judge history `.gitreins/history/2026-11-17/921f41d7`.
+- **This delivery took ONE row, and it was not a re-walk.** `CF-483` (P3, complexity 1, chapter
+  `III.M1.S1`) had no owner and a live premise: at `c71f7f95` the documented step-1 command still
+  printed `Residue:  0 orphan homes …` and `WARN  residue` on the same screen, because
+  `scripts/bunker-server-install.sh:117` greps the status block for the word "orphan" — which labels
+  the counts. Re-measured this fire before claiming: rc 0 in 1.40 s, both lines present.
+- **Dispatch**: claim commit `04ff8f9d`, GitReins task `CF-483` created+started, worker in an isolated
+  worktree `~/.hermes/cache/scratch/cfd5-wt-cf483` (branch `cf483-residue-class` at `c71f7f95`) so the
+  shared checkout's index was never taken. **The brief's model was unavailable**: `openai/gpt-6.1-terra`
+  @ xkiro answered `503 model_maintenance` ("use another model in the meantime", resume
+  2026-11-19T16:25:12Z); `gpt-6-luna` @ xkiro gave the same 503 and `gpt-6.1-sol` @ xkiro never answered.
+  A probe of `openai-codex/gpt-6-luna` returned `READY` rc 0, so the worker ran there — same family,
+  subscription lane. The first dispatch was killed by exact pid after the provider's 600 s backoff
+  parked it with an unchanged worktree, and it is disclosed here rather than dropped.
+- **What landed** (`2d06b79a`, merged as `5c9ede92`): a `residue_counts()` parser reads the four
+  server-reported numbers, `0/0/0/0` prints `PASS residue — 0 orphan users, …, 0 stale linger entries
+  (server-reported)`, a non-zero count prints `WARN residue — 3 orphan homes, 2 orphan keys …`, and a
+  status block whose counts cannot be parsed prints its own `WARN … could not be parsed` — "unmeasured"
+  is never read as "0". Remedy text now names the machine the two directories live on. `tests/selftest.sh`
+  §32b adds the zero, leaky and unparseable arms plus a red control against the pre-fix predicate; the
+  `M1-provisioning.md` §10 failure-table row now states what `--check` prints and what the CF-003 reaper
+  prints, instead of implying the installer reaps.
+- **Gates measured by the foreman, not inherited**: `bash -n` rc 0; the live arm against `bunker-las-03`
+  now prints the `PASS residue` row and no WARN (`ev-d5-postfix.out`, pre-fix capture in
+  `ev-d5-prefix.out`); `bash tests/selftest.sh` on the MERGED tree → `SELFTEST: PASS`, `EXIT=0`,
+  **602 PASS rows**, both CF-483 rows green (`ev-d5-merged-selftest.log`).
+- **Landed and pushed**: `git push origin HEAD:main` → `25f73546..5c9ede92`; remote `main` re-read as
+  `5c9ede92` after a fresh fetch.
+- **UNVERIFIED this fire**: the tier-2 judge verdict (the tier-1 leg was still evaluating when this
+  entry was written — its run id is recorded in the closeout commit, which is the artifact to read);
+  `CF-489`'s PASS arm (still owner-blocked: no ONLINE host can spawn, `bunker-las-03`/`-02` refuse at
+  `slice-limits`, `-01`/`-04` are offline — unchanged from delivery 3, and not re-probed here to avoid
+  restating an earlier fire's numbers).
+- **Evidence**: `.coding-hermes/evidence/code-factory-dogfood-2026-11-17-10-10-24/d5-*`
+  (`d5-cf483-prefix-check.out`, `d5-cf483-postfix-check.out`, `d5-merged-selftest.txt`,
+  `d5-provenance.txt`; the selftest log is stored as `.txt` because `.gitignore:3` ignores `*.log`).

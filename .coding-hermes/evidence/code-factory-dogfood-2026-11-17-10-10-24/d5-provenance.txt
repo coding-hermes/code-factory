@@ -1,0 +1,41 @@
+CF-483 — delivery-5 provenance record (code-factory-dogfood-2026-11-17-10-10-24)
+
+Row            : CF-483 (P3, complexity 1, type bug) — chapter III.M1.S1
+Tick           : code-factory-dogfood-2026-11-17-10-10-24, delivery 5
+Base tip       : c71f7f95 = origin/main at tick start (parity 0/0, ownership.py state=clean)
+Claim commit   : 04ff8f9d  board: claim CF-483 for the delivery-5 foreman leg
+Fix commit     : 2d06b79a  fix(CF-483): classify the server-reported orphan counts
+Merge commit   : 5c9ede92  Merge remote-tracking branch 'origin/main' into cf483-residue-class
+Remote tip     : 5c9ede92 = origin/main after `git push origin HEAD:main` (25f73546..5c9ede92)
+Worker         : openai-codex/gpt-6-luna @ openai-codex, skill coding-hermes-worker,
+                 isolated worktree ~/.hermes/cache/scratch/cfd5-wt-cf483, branch cf483-residue-class
+
+MODEL-SEAT DISCLOSURE — the configured authoritative worker lane was NOT available:
+  the brief's model openai/gpt-6.1-terra @ xkiro answered HTTP 503
+  "Model \"openai/gpt-6.1-terra\" is temporarily unavailable for scheduled maintenance.
+   Service is expected to resume by 2026-11-19T16:25:12Z (UTC)."
+  The sibling generation openai/gpt-6-luna @ xkiro answered the same 503 (resume 16:25:28Z),
+  and openai/gpt-6.1-sol @ xkiro did not answer inside a 40 s probe. A direct probe of
+  openai-codex/gpt-6-luna returned "READY" with rc 0, so the worker was dispatched on that
+  seat — the same model family, on the subscription lane. The first dispatch (terra) was
+  killed after the provider's 600 s retry backoff parked it with an unchanged worktree
+  (launcher pid 1574751 / child 1575043, killed by exact pid; no diff, no commit).
+
+GATES, measured on this delivery (not inherited):
+  bash -n < scripts/bunker-server-install.sh                      rc 0
+  live arm, pre-fix   BUNKER_SERVER=bunker-las-03 ... --check      rc 0, prints
+      "Residue:  0 orphan users, 0 orphan homes, 0 orphan keys, 0 stale linger entries"
+      and "WARN  residue — orphan homes/keys reported by the server …"   (ev-d5-prefix.out)
+  live arm, post-fix  same command                                 rc 0, prints
+      "PASS  residue — 0 orphan users, 0 orphan homes, 0 orphan keys, 0 stale linger
+       entries (server-reported)" and no residue WARN                (ev-d5-postfix.out)
+  merged tree         bash tests/selftest.sh                       SELFTEST: PASS, EXIT=0,
+      602 PASS rows, including the two new CF-483 rows (ev-d5-merged-selftest.log)
+  worker's own report: bash tests/selftest.sh ended SELFTEST: PASS; commit-time guard on the
+      worktree reported "Tier 1: DEGRADED PASS (lint skipped: no staged files)". The suite
+      the foreman cites is the one run on the MERGED tree above, not the hook lane.
+
+The worker's diff: scripts/bunker-server-install.sh (+39), tests/selftest.sh (+52, three
+fixture arms plus a red control), docs/handbook/chapters/M1-provisioning.md (§10 failure
+table row rewritten to match what --check now prints and to separate the --check counts
+from the CF-003 reaper's rows).

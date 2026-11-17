@@ -92,3 +92,31 @@ same argv-list logic that filed `CF-489`/`CF-490`, not a second implementation.
 
 
 
+
+
+## Delivery 5 (tick `code-factory-dogfood-2026-11-17-10-10-24`, 2026-11-17)
+
+Fifth inbound dispatch of the tick. Deliveries 1-4 own the walk and the CF-490 foreman leg; this
+delivery re-verified their provenance from `origin/main`, took one owned row (`CF-483`) and closed it
+end-to-end. Artifact map for this delivery:
+
+| File | What it is |
+|---|---|
+| `d5-cf483-prefix-check.out` | the pre-fix live arm against `bunker-las-03`: `Residue: 0 orphan homes …` and `WARN residue` on the same screen (34 lines) |
+| `d5-cf483-postfix-check.out` | the same command at the fix: `PASS residue — 0 orphan users, 0 orphan homes, 0 orphan keys, 0 stale linger entries (server-reported)`, no WARN, `RESULT: PASS` (34 lines) |
+| `d5-merged-selftest.txt` | `bash tests/selftest.sh` on the MERGED tree `5c9ede92`: `SELFTEST: PASS`, `EXIT=0`, 602 `PASS` rows, both CF-483 arms green (865 lines; stored as `.txt` because `.gitignore:3` ignores `*.log` — same bytes, renamed, disclosed rather than forced with `-f`) |
+| `d5-provenance.txt` | base/claim/fix/merge/remote SHAs, the model-seat disclosure (xkiro 503 maintenance), and which gate produced which number |
+
+Host paths in these files are elided to `~`; the numbers, exit codes and PASS/FAIL tokens are
+byte-identical to what the runs printed. Substitution table (the publish gate refuses both an
+absolute host-home path and a tailnet address literal in tracked evidence, measured:
+`FAIL tailnet-address — 2 tracked file(s) publish a tailnet address …`):
+
+| Committed text | Real value it stood for |
+|---|---|
+| `~` | the operator's home directory under `/home/` |
+| `<host>` (in the `URL:` line of both `.out` files) | the bunker server's tailnet address, which lives in the operator's own `bunker` config |
+
+Line counts and every other byte are unchanged by the elision (34 lines in each `.out`, before and
+after). The worker's own report is not the evidence: the merged-tree
+suite and the post-fix live arm are.
