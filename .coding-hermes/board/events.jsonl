@@ -924,3 +924,5 @@
 {"id": 923, "timestamp": "2026-11-17T17:05:54Z", "event_type": "task_created", "task_id": "CF-497", "actor": "foreman", "detail": "{\"id\":\"CF-497\",\"status\":\"pending\"}"}
 {"id": 924, "timestamp": "2026-11-17T17:23:15Z", "event_type": "task_updated", "task_id": "CF-495", "actor": "foreman", "detail": "{\"status\":\"in_progress\"}"}
 {"id": 925, "timestamp": "2026-11-17T23:12:08Z", "event_type": "task_completed", "task_id": "CF-495", "actor": "foreman", "detail": "{\"status\":\"complete\"}"}
+{"id": 926, "timestamp": "2026-11-18T19:03:35Z", "event_type": "task_completed", "task_id": "CF-356", "actor": "foreman", "detail": "{\"status\": \"complete\", \"commit\": \"9f3bd6450795356fcdc415a278bfbd682b8aa9ed\", \"run_id\": \"eaa48a1c\"}"}
+{"id": 927, "timestamp": "2026-11-18T19:03:35Z", "event_type": "task_created", "task_id": "CF-498", "actor": "foreman", "detail": "{\"id\": \"CF-498\", \"status\": \"pending\"}"}
