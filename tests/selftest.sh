@@ -8645,5 +8645,18 @@ fi
 rm -rf "$tmpd"
 # END cf485-7b-pipe-grep-guard
 
+say "78. configure_family commits one lane per transaction and a shortfall exits non-zero (CF-356)"
+# ch:trace row=CF-356 spec=specs/NODE.md#workdir-targets test=tests/test_configure_family.py doc=docs/handbook/chapters/M2-dispatch.md#10-failure-modes-indications-and-recovery evidence=tests/test_configure_family.py::PerLaneTransactionTest::test_each_lane_is_committed_before_the_next_api_call witness=none:local-fixture verdict=none:foreman-will-run-gitreins commit=none:worker-commit memory=none:foreman-close
+# The suite carries its own red control: it materialises the pre-fix body from the pinned
+# revision (tests/test_configure_family.py PrefixSource) and requires that body to exit 0 with
+# every lane unconfigured. A body that silently "passes" the new arms therefore cannot make
+# this section green — the red arm fails instead.
+if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_configure_family.py" >"${TMPDIR:-/tmp}/cf356-suite.out" 2>&1; then
+  say "  PASS  per-lane transaction, busy retry and non-zero shortfall exit (CF-356)"
+else
+  say "  FAIL  configure_family write contract (CF-356); suite output:"; fails=$((fails+1))
+  sed 's/^/    | /' "${TMPDIR:-/tmp}/cf356-suite.out" | tail -20
+fi
+
 say ""
 [ "$fails" -eq 0 ] && finish 0 || finish 1
