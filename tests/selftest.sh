@@ -67,6 +67,26 @@ selftest_exit_trap() {
 trap selftest_exit_trap EXIT
 t() { if eval "$2" >/dev/null 2>&1; then say "  PASS  $1"; else say "  FAIL  $1"; fails=$((fails+1)); fi; }
 
+# CF-503: a fixture root must be a REAL, absolute directory. `mktemp -d` returns an EMPTY string
+# when TMPDIR is unusable (the lane case: `TMPDIR=$PWD/.tmp` with no `.tmp`, so mktemp prints
+# "failed to create directory ... No such file or directory" and nothing else), and a fixture that
+# then derives its paths from that empty string addresses the CURRENT directory — the checkout
+# root. That is exactly how `published/ red/ zero/` (plus the other CF-114 arms and `expected`)
+# were found sitting untracked in this repository: `Path("")` is `.`, so `fixture / "red"` became
+# `./red`. Print nothing when the root is unusable and let the caller fail closed, so an unusable
+# TMPDIR costs one named row instead of a fixture tree inside the repository.
+# A root BELOW the checkout is legitimate — that is what `TMPDIR=$PWD/.tmp` produces and what the
+# CF-501 ceiling fixtures rely on — so only the checkout root itself is refused.
+fixture_root() {
+  local dir real
+  dir=$(mktemp -d 2>/dev/null) || return 1
+  [ -n "$dir" ] && [ -d "$dir" ] || return 1
+  case "$dir" in /*) ;; *) return 1 ;; esac
+  real=$(cd "$dir" && pwd -P) || return 1
+  [ "$real" = "$HERE" ] && return 1
+  printf '%s\n' "$dir"
+}
+
 # ch:trace row=CF-443 spec=docs/handbook/OUTLINE.md#M4-board wave=none:serial test=docs/audits/cf443-selftest-abort-proof.sh doc=docs/audits/cf443-selftest-abort-proof.md evidence=docs/audits/cf443-selftest-abort-proof.md witness=none:local-hermetic-fixture verdict=none:foreman-runs-and-judges commit=none:worker-commit memory=none:foreman-closeout
 
 say "1. every script parses"
@@ -2005,14 +2025,17 @@ fi
 # END census-fail-closed
 
 say "29. a workdir board that is not the published board is named as drift (CF-114)"
-tmpd=$(mktemp -d)
-if python3 - "$HERE" "$tmpd" <<'PY'
+tmpd=$(fixture_root) || tmpd=
+if [ -n "$tmpd" ] && python3 - "$HERE" "$tmpd" <<'PY'
 from pathlib import Path
 import json
 import shutil
 import sys
 
 root, fixture = map(Path, sys.argv[1:])
+# CF-503: an empty/relative root would put every arm in the current directory (the checkout).
+if not fixture.is_absolute() or fixture.resolve() == root.resolve():
+    raise SystemExit(f"refusing to build the board-drift fixture at '{fixture}': not a throwaway root")
 board = Path(".coding-hermes/board")
 published = fixture / "published"
 published.mkdir()
@@ -2084,7 +2107,7 @@ then
     fi
   done
 else
-  say "  FAIL  publish-drift fixture setup"; fails=$((fails+1))
+  say "  FAIL  publish-drift fixture setup (fixture root '${tmpd}' — empty means mktemp -d could not build a throwaway directory, so the arms would land in the checkout)"; fails=$((fails+1))
 fi
 # ch:trace row=CF-128 spec=AGENTS.md#rules wave=none:serial test=tests/selftest.sh::drift-head-ancestry doc=none:board-row prompt=none:foreman-brief evidence=tests/selftest.sh::drift-head-ancestry witness=none:local-fixture verdict=none:foreman-judges commit=none:self-referential-hash memory=none:foreman-writes
 # CF-128: every arm above passes --published-dir, and that flag suppresses the HEAD-ancestry leg
@@ -2185,15 +2208,18 @@ rm -rf "$tmpd"
 # ch:trace row=CF-127 spec=specs/HARNESS.md wave=none:serial test=tests/selftest.sh::pip-log-path doc=docs/audits/code-factory-CF-127-fix-2026-11-03.md prompt=none:foreman-brief evidence=docs/audits/code-factory-CF-127-fix-2026-11-03.md witness=tests/selftest.sh::pip-log-path verdict=none:foreman-judges commit=none:self-referential-hash memory=none:foreman-writes
 # BEGIN pip-log-path
 say "31. Hermes pip logs are private per run and distinguish filesystem failures (CF-127)"
-tmpd=$(mktemp -d)
+tmpd=$(fixture_root) || tmpd=
 # Use a private equivalent of /tmp/hermes-install.log here: the suite must not
 # modify a host's existing log. The audit captures the literal /tmp reproduction.
-if python3 - "$HERE" "$tmpd" <<'PY'
+if [ -n "$tmpd" ] && python3 - "$HERE" "$tmpd" <<'PY'
 from pathlib import Path
 import shutil
 import sys
 
 root, fixture = map(Path, sys.argv[1:])
+# CF-503: an empty/relative root would put bin/, home/ and scripts/ in the current directory.
+if not fixture.is_absolute() or fixture.resolve() == root.resolve():
+    raise SystemExit(f"refusing to build the pip-log fixture at '{fixture}': not a throwaway root")
 (fixture / "bin").mkdir()
 (fixture / "home").mkdir()
 (fixture / "scripts" / "harness").mkdir(parents=True)
@@ -2328,7 +2354,7 @@ then
   unset -f pip_fixture_run
   unset pip_fixture_rc pip_fixture_deny
 else
-  say "  FAIL  pip-log fixture setup"; fails=$((fails+1))
+  say "  FAIL  pip-log fixture setup (fixture root '${tmpd}' — empty means mktemp -d could not build a throwaway directory)"; fails=$((fails+1))
 fi
 rm -rf "$tmpd"
 # END pip-log-path
