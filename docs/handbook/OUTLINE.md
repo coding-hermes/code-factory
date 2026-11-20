@@ -171,7 +171,9 @@ modules get their own chapter.
   `configure_family.py`, `load_lane_config.py`) · S2 resolve a target (`lane_target.py`) ·
   S3 consume the inbox, sign, reply (`node-bus-worker.py`)
 - **M3 REPOSITORY** — S1 clone and track freshness (`clone_lane.py`,
-  `repo_freshness.py`) · S2 land a branch (`land-node-branch.sh`) · **S3 commit hooks and
+  `repo_freshness.py`) · S2 land a branch (`land-node-branch.sh`) · **S2b the node's commit
+  path** (`node-commit.sh` — writes the `Run-Id: <run_id>` trailer and refuses a commit with no
+  run id, closing TRACE.md T6 on the node side) · **S3 commit hooks and
   gates** (`hooks/`, `commit_hook`, `core.hooksPath`, the gitleaks and board-lint
   pre-commit gates, and the bypass that must be disclosed when used) — *added on 5-seat
   consensus; every seat named hooks as a gap, and a hook that silently does not run is

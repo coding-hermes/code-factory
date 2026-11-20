@@ -3,7 +3,7 @@
 #
 #   ./land-node-branch.sh --workdir ~/repos/foo --branch node/crier/<dispatch_id> \
 #                         --commit <sha> [--remote origin] [--main main] \
-#                         [--gate-cmd 'go test ./...'] [--no-ff] [--dry-run]
+#                         [--gate-cmd 'go test ./...'] [--run-id <run_id>] [--no-ff] [--dry-run]
 #
 # The result envelope (specs/ENVELOPE.md) names `branch` and `commit`; no step in this repo
 # merges them, so a finished node task has no path into origin/main. This is that path.
@@ -11,6 +11,9 @@
 # Refuses, naming the measured value, before it merges anything:
 #   - the workdir is not a git worktree, is not checked out on <main>, or is dirty
 #   - <commit> is not a commit in this clone, or is not reachable from <branch>
+#   - --run-id (or $CF_RUN_ID) is supplied and the commit does not carry that `Run-Id:` trailer:
+#     absent, or a different id than the one this run is attributed to — row `run_trailer`, both
+#     values named; specs/TRACE.md:64 owns that hop, scripts/node-commit.sh writes the trailer
 #   - <branch> is not a descendant of <remote>/<main> (rebase it, do not merge it)
 #   - --ff-only (the default) and <main> is not an ancestor of <commit>
 #   - --no-ff and the local <main> is not <remote>/<main>: the merge commit's first parent is
@@ -36,6 +39,9 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 . "$HERE/lib.sh"
 
 WORKDIR="" BRANCH="" COMMIT="" REMOTE=origin MAIN=main GATE="" FF_ONLY=1 DRY=0
+# An expected run id: `--run-id` wins, else the ambient `CF_RUN_ID` the node harness exports.
+# Empty means "not asserted" — a landing that never claimed attribution must not be refused.
+RUN_ID="${CF_RUN_ID:-}"
 GATE_WT="" TOP=""
 
 # Print the leading comment block only: a hard-coded line range leaks code when the header grows.
@@ -106,6 +112,7 @@ while [ $# -gt 0 ]; do
     --remote)  [ $# -ge 2 ] || { say "refusing: --remote needs a value"; exit 2; }; REMOTE="$2"; shift 2 ;;
     --main)    [ $# -ge 2 ] || { say "refusing: --main needs a value"; exit 2; }; MAIN="$2"; shift 2 ;;
     --gate-cmd) [ $# -ge 2 ] || { say "refusing: --gate-cmd needs a value"; exit 2; }; GATE="$2"; shift 2 ;;
+    --run-id)  [ $# -ge 2 ] || { say "refusing: --run-id needs a value"; exit 2; }; RUN_ID="$2"; shift 2 ;;
     --ff-only) FF_ONLY=1; shift ;;
     --no-ff)   FF_ONLY=0; shift ;;
     --dry-run) DRY=1; shift ;;
@@ -115,9 +122,9 @@ while [ $# -gt 0 ]; do
 done
 
 [ -n "$WORKDIR" ] && [ -n "$BRANCH" ] && [ -n "$COMMIT" ] \
-  || { say "usage: $0 --workdir DIR --branch BRANCH --commit SHA [--remote R] [--main M] [--gate-cmd CMD] [--no-ff] [--dry-run]"; exit 2; }
+  || { say "usage: $0 --workdir DIR --branch BRANCH --commit SHA [--remote R] [--main M] [--gate-cmd CMD] [--run-id R] [--no-ff] [--dry-run]"; exit 2; }
 
-say "land-node-branch — workdir=$WORKDIR branch=$BRANCH commit=$COMMIT $REMOTE/$MAIN"
+say "land-node-branch — workdir=$WORKDIR branch=$BRANCH commit=$COMMIT $REMOTE/$MAIN run-id=${RUN_ID:-none}"
 
 # --- preconditions ------------------------------------------------------------------------
 if ! TOP=$(git -C "$WORKDIR" rev-parse --show-toplevel 2>/dev/null); then
@@ -178,6 +185,29 @@ if git -C "$TOP" merge-base --is-ancestor "$commit_sha" "$branch_sha"; then
   ok commit_on_branch "$commit_sha is reachable from $branch_ref (tip ${branch_sha:0:12})"
 else
   refuse commit_on_branch "$commit_sha is not reachable from $branch_ref (tip ${branch_sha:0:12})"
+fi
+
+# --- run attribution -----------------------------------------------------------------------
+# specs/TRACE.md:64 gives the node -> git hop one job: the commit carries `Run-Id: <run_id>`, so
+# an artifact can be traced to the attempt that made it and §6 statement 4 (`git log --grep`
+# finds it) can pass. The trailer is READ here, never written: attribution invented at merge time
+# attributes nothing, and the merge commit below would then be the only record of who merged, not
+# of who ran. So an expected id (--run-id, or $CF_RUN_ID) must already be ON the commit.
+# No expected id is not a defect: a caller that never claimed attribution gets a NOTE rather than
+# a refusal, so every leg that existed before this check behaves exactly as it did.
+commit_msg=$(git -C "$TOP" log -1 --format=%B "$commit_sha" 2>/dev/null || true)
+run_trailer_line=$(printf '%s\n' "$commit_msg" | grep -E '^Run-Id:' | tail -1 || true)
+run_trailer=$(printf '%s' "$run_trailer_line" | sed -E 's/^Run-Id:[[:space:]]*//; s/[[:space:]]+$//')
+if [ -n "$RUN_ID" ]; then
+  if [ -z "$run_trailer_line" ]; then
+    refuse run_trailer "${commit_sha:0:12} carries no 'Run-Id:' trailer — this landing is attributed to Run-Id: $RUN_ID, so the commit must name it; commit on the node through scripts/node-commit.sh --run-id $RUN_ID"
+  fi
+  if [ "$run_trailer" != "$RUN_ID" ]; then
+    refuse run_trailer "${commit_sha:0:12} carries Run-Id: ${run_trailer:-<empty>}, but this landing is attributed to Run-Id: $RUN_ID — expected and found must agree; commit on the node through scripts/node-commit.sh --run-id $RUN_ID"
+  fi
+  ok run_trailer "${commit_sha:0:12} carries Run-Id: $RUN_ID"
+else
+  note "run_trailer" "not asserted — no run id supplied (the landed commit carries Run-Id: ${run_trailer:-none})"
 fi
 
 # Idempotence: the same command twice must change nothing and exit 0 — and the gate still runs,

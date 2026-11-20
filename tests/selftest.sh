@@ -3841,6 +3841,11 @@ bash -n "$HERE/scripts/land-node-branch.sh" \
 tmpd=$(mktemp -d)
 export GIT_AUTHOR_NAME=fixture GIT_AUTHOR_EMAIL=fixture@example.invalid
 export GIT_COMMITTER_NAME=fixture GIT_COMMITTER_EMAIL=fixture@example.invalid
+# CF-315: the lander now reads an expected run id from $CF_RUN_ID when --run-id is absent. A node
+# harness exports it, so an inherited value would make every leg in this arm assert attribution it
+# never asked for and fail for the wrong reason. Unset it so the arm measures what it declares; the
+# legs that need one set it on the command line.
+unset CF_RUN_ID
 cf213() {  # cf213 <label> <expect-rc> <needle> [args...]
   local label="$1" want="$2" needle="$3"; shift 3
   out=$(/bin/bash "$HERE/scripts/land-node-branch.sh" "$@" 2>&1); rc=$?
@@ -4092,6 +4097,112 @@ elif git -C "$tmpd/noff-verify" merge-base --is-ancestor "$stray" HEAD 2>/dev/nu
 else
   say "  PASS  no ref in the remote ($(printf '%s\n' "$n_all" | wc -l | tr -d ' ') commits reachable from --all) carries ${stray:0:12}"
 fi
+
+# n. CF-315 — the node -> git hop names its run (specs/TRACE.md:64; §6 statement 4 is the proof:
+# `git log --grep` finds the trailer). scripts/node-commit.sh writes it at commit time and the
+# lander refuses a commit whose trailer is absent or names a different run. A fresh fixture origin
+# keeps the two refusal legs able to prove origin/main did not move: both run BEFORE the success
+# leg, so "not advanced" is measured against the base, not against an already-landed tip.
+bash -n "$HERE/scripts/node-commit.sh" \
+  && say "  PASS  bash -n scripts/node-commit.sh" \
+  || { say "  FAIL  node-commit syntax"; fails=$((fails+1)); }
+c_src="$tmpd/run-src"; c_origin="$tmpd/run-origin.git"; c_wd="$tmpd/run-wd"
+git init -q -b main "$c_src"
+printf 'base\n' > "$c_src/README"
+git -C "$c_src" add README && git -C "$c_src" commit -qm base
+git clone -q --bare "$c_src" "$c_origin"
+git clone -q "$c_origin" "$c_wd"
+c_base=$(git -C "$c_wd" rev-parse HEAD)
+git -C "$c_wd" checkout -q -b node/crier/run
+printf 'traced work\n' > "$c_wd/traced.txt"
+git -C "$c_wd" add traced.txt
+c_out=$(CF_RUN_ID=run-fixture-1 /bin/bash "$HERE/scripts/node-commit.sh" --workdir "$c_wd" --message 'node: traced work' 2>&1); c_rc=$?
+c_node=$(git -C "$c_wd" rev-parse HEAD)
+c_trailer=$(git -C "$c_wd" log -1 --format=%B "$c_node" | grep -E '^Run-Id:' | tail -1)
+c_grep=$(git -C "$c_wd" log --format=%H --grep 'Run-Id: run-fixture-1')
+if [ "$c_rc" -eq 0 ] \
+  && printf '%s\n' "$c_out" | grep -Fq "  PASS  run_trailer — Run-Id: run-fixture-1 written on $c_node" \
+  && [ "$c_trailer" = "Run-Id: run-fixture-1" ] \
+  && [ "$c_node" != "$c_base" ] \
+  && [ "$c_grep" = "$c_node" ]; then
+  say "  PASS  node-commit.sh wrote 'Run-Id: run-fixture-1' on ${c_node:0:12} and git log --grep returned exactly that sha"
+else
+  say "  FAIL  node-commit.sh did not produce a grep-findable Run-Id trailer (exit $c_rc, trailer '${c_trailer:-none}', grep '${c_grep:-none}')"; fails=$((fails+1))
+  printf '%s\n' "$c_out" | sed 's/^/    | /'
+fi
+
+# n2. no run id at all is a refusal, never an untrailed commit — and the refusal must not move HEAD.
+c_out=$(env -u CF_RUN_ID /bin/bash "$HERE/scripts/node-commit.sh" --workdir "$c_wd" --message 'node: no attribution' 2>&1); c_rc=$?
+if [ "$c_rc" -ne 0 ] \
+  && printf '%s\n' "$c_out" | grep -Fq "  FAIL  run_id — the run id is required" \
+  && [ "$(git -C "$c_wd" rev-parse HEAD)" = "$c_node" ]; then
+  say "  PASS  an absent run id was refused with the run_id row and HEAD stayed at ${c_node:0:12}"
+else
+  say "  FAIL  an absent run id did not refuse, or the refusal moved HEAD (exit $c_rc)"; fails=$((fails+1))
+  printf '%s\n' "$c_out" | sed 's/^/    | /'
+fi
+
+# a second node branch whose commit carries NO trailer, for the absent case
+git -C "$c_wd" checkout -q -b node/crier/untraced "$c_node"
+printf 'untraced work\n' > "$c_wd/untraced.txt"
+git -C "$c_wd" add untraced.txt
+git -C "$c_wd" commit -qm "node: untraced work"
+c_untraced=$(git -C "$c_wd" rev-parse HEAD)
+git -C "$c_wd" checkout -q main
+git -C "$c_wd" push -q origin node/crier/run:refs/heads/node/crier/run node/crier/untraced:refs/heads/node/crier/untraced
+
+# n3. an asserted run id against a commit that carries none refuses, naming the remedy
+cf213 "run trailer missing" 1 "  FAIL  run_trailer — ${c_untraced:0:12} carries no 'Run-Id:' trailer — this landing is attributed to Run-Id: run-fixture-1, so the commit must name it; commit on the node through scripts/node-commit.sh --run-id run-fixture-1" \
+  --workdir "$c_wd" --branch node/crier/untraced --commit "$c_untraced" --run-id run-fixture-1
+
+# n4. a trailer naming a DIFFERENT run refuses and prints both values
+cf213 "run trailer mismatch" 1 "  FAIL  run_trailer — ${c_node:0:12} carries Run-Id: run-fixture-1, but this landing is attributed to Run-Id: other-run — expected and found must agree; commit on the node through scripts/node-commit.sh --run-id other-run" \
+  --workdir "$c_wd" --branch node/crier/run --commit "$c_node" --run-id other-run
+if [ "$(git -C "$c_origin" rev-parse refs/heads/main)" = "$c_base" ] \
+  && [ "$(git -C "$c_wd" rev-parse HEAD)" = "$c_base" ]; then
+  say "  PASS  both attribution refusals left origin/main and local main at ${c_base:0:12}"
+else
+  say "  FAIL  an attribution refusal merged or pushed: origin/main $(git -C "$c_origin" rev-parse --short refs/heads/main), local $(git -C "$c_wd" rev-parse --short HEAD)"; fails=$((fails+1))
+fi
+
+# n5. the same commit lands once the asserted id matches the trailer on it
+cf213 "run attribution landing" 0 "  PASS  landed — $c_node is an ancestor of origin/main" \
+  --workdir "$c_wd" --branch node/crier/run --commit "$c_node" --run-id run-fixture-1
+if printf '%s\n' "$out" | grep -Fq "  PASS  run_trailer — ${c_node:0:12} carries Run-Id: run-fixture-1" \
+  && [ "$(git -C "$c_origin" rev-parse refs/heads/main)" = "$c_node" ]; then
+  say "  PASS  the attributed landing asserted the trailer and advanced origin/main to ${c_node:0:12}"
+else
+  say "  FAIL  the attributed landing did not assert the trailer, or did not advance origin/main"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+# n6. no run id supplied means "not asserted": a NOTE, and every leg that existed before this
+# check behaves exactly as it did (this landing carries no trailer at all and still lands).
+cf213 "no run id supplied" 0 "  ..    run_trailer not asserted — no run id supplied (the landed commit carries Run-Id: none)" \
+  --workdir "$c_wd" --branch node/crier/untraced --commit "$c_untraced"
+if [ "$(git -C "$c_origin" rev-parse refs/heads/main)" = "$c_untraced" ]; then
+  say "  PASS  an unasserted landing still landed and reached origin/main at ${c_untraced:0:12}"
+else
+  say "  FAIL  an unasserted landing did not reach origin/main"; fails=$((fails+1))
+fi
+
+# n7. a body that already carries the SAME trailer is not given a second one
+git -C "$c_wd" checkout -q -b trace-dup
+printf 'dup work\n' > "$c_wd/dup.txt"
+git -C "$c_wd" add dup.txt
+printf 'node: dup work\n\nRun-Id: run-fixture-1\n' > "$tmpd/run-dup-msg.txt"
+c_out=$(CF_RUN_ID=run-fixture-1 /bin/bash "$HERE/scripts/node-commit.sh" --workdir "$c_wd" --message-file "$tmpd/run-dup-msg.txt" 2>&1); c_rc=$?
+c_dup=$(git -C "$c_wd" rev-parse HEAD)
+c_dup_count=$(git -C "$c_wd" log -1 --format=%B "$c_dup" | grep -c '^Run-Id:' || true)
+if [ "$c_rc" -eq 0 ] \
+  && printf '%s\n' "$c_out" | grep -Fq "  ..    run_trailer the body already carries Run-Id: run-fixture-1 — not duplicated" \
+  && [ "$c_dup_count" = "1" ]; then
+  say "  PASS  an identical trailer in the body was not duplicated (1 'Run-Id:' line on ${c_dup:0:12})"
+else
+  say "  FAIL  an identical trailer was duplicated or the commit failed (exit $c_rc, count '$c_dup_count')"; fails=$((fails+1))
+  printf '%s\n' "$c_out" | sed 's/^/    | /'
+fi
+
 unset GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL
 unset -f cf213
 rm -rf "$tmpd"
