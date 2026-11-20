@@ -60,7 +60,7 @@ With a recorder stub placed first on `PATH` — a client that logs its arguments
 
 Empty parentheses, green row. The run then continued into fourteen further rows (`repo`, `node_json`, `auth_github`, `harness`, …) that the real client never reaches, because it stops at `FAIL agent ... absent`. In the same stub run, `server` correctly failed (`FAIL server — ... not listed by 'bunker list'`), so the two rows disagree about the same silent client: one measures emptiness, one does not.
 
-Today's 0.2.x client exits nonzero for an absent agent, so a normal first run is not misled. The defect is structural: the row checks an exit status and calls it an existence measurement — the thing `AGENTS.md` forbids ("nothing is installed until `--check` names the measured value"). A wrapper, an older client, or a future client that returns an empty array with rc 0 turns the gate green and `--apply` then provisions against an agent it never saw.
+Today's 0.2.x client exits nonzero for an absent agent, so a normal first run is not misled. The defect is structural: the row checks an exit status and calls it an existence measurement — the thing `AGENTS.md:31` forbids ("Nothing is installed until `--check` says PASS and names the value it measured"). A wrapper, an older client, or a future client that returns an empty array with rc 0 turns the gate green and `--apply` then provisions against an agent it never saw.
 
 ### F-3 — the repo scheme is never validated (filed CF-508, P4)
 
