@@ -63,6 +63,8 @@ usage() {
 
 # A CLI path with a leading ~/ is not expanded by the shell when it arrives as a quoted argument;
 # without this a --*-token-file ~/... silently reads as the literal string and the leg is skipped.
+# EVERY path-valued flag is routed through it (CF-262 — --config and --node-env-file were the two
+# that were not, so a "~/" config was reported unreadable and a "~/" profile was named literally).
 expand_tilde() { case "$1" in "~/"*) printf '%s/%s' "$HOME" "${1#\~/}" ;; *) printf '%s' "$1" ;; esac }
 
 # --- namespaces: a project may need more than one DuckBrain namespace -------------------------
@@ -690,7 +692,7 @@ destroy() {
 # --- args ---------------------------------------------------------------------------------
 while [ $# -gt 0 ]; do
   case "$1" in
-    --config) CONFIG="${2:-}"; shift 2 ;;
+    --config) CONFIG="$(expand_tilde "${2:-}")"; shift 2 ;;
     --check|--apply|--destroy) MODE="${1#--}"; shift ;;
     --project) CLI_PROJECT="$2"; shift 2 ;;
     --agent) CLI_AGENT="$2"; shift 2 ;;
@@ -709,7 +711,7 @@ while [ $# -gt 0 ]; do
     --crier-agent-key-file) CLI_CRIER_AGENT_KEY_FILE="$(expand_tilde "$2")"; shift 2 ;;
     --crier-auth-token-file) CLI_CRIER_AUTH_TOKEN_FILE="$(expand_tilde "$2")"; shift 2 ;;
     --s3-env-file) CLI_S3_ENV_FILE="$(expand_tilde "$2")"; shift 2 ;;
-    --node-env-file) CLI_NODE_ENV_FILE="$2"; shift 2 ;;
+    --node-env-file) CLI_NODE_ENV_FILE="$(expand_tilde "$2")"; shift 2 ;;
     --config-set) CLI_CONFIG_SET+=("$2"); shift 2 ;;
     --yes) YES=1; shift ;;
     -h|--help) usage 0 ;;

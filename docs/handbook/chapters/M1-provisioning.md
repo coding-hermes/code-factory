@@ -220,6 +220,8 @@ quota exhausted, transport error — keeps the plain `FAIL spawn — failed; log
 | config keys | `PROJECT AGENT SERVER REPO REF HARNESS NAMESPACE NAMESPACES TTL CRIER_URL DUCKBRAIN_URL GIT_AUTHOR_* CONFIG_SET_* *_TOKEN_FILE …` (`:38-46` declares the full var surface; `:108-123` loads it) | KEY=VALUE lines only | provisioning inputs | an unknown key is refused (`:119`); a non-`KEY=VALUE` line is refused (`:103`) |
 | `TTL` | **6h** (spawn fallback `${TTL:-6h}` at `:356`) | a Go duration | container spawn TTL | an absent/empty TTL falls back to 6h, not an error |
 | mode | `check`/`apply`/`destroy` (`:561-609`) | one of three | what the run does | `--destroy` requires `--yes` and a non-empty `--agent`, else exit 2 (`:552-554` — `:550` is `destroy() {`) |
+| `--node-env-file` | none | a path; a leading `~/` is expanded | which declared profile (`ENV_<NAME>=…` / `@path`) the apply stages on the node | an unreadable path is named twice — in the `inputs` row and in `  FAIL  env_profile — NODE_ENV_FILE <path> is unreadable` (`:337`) — before any host is touched |
+| path-valued flags — `--config` plus the seven `*_FILE` flags | none | a path | the file the flag names | **a leading `~/` in any path-valued flag is expanded to `$HOME` before use** (`expand_tilde`, `:68`, called in every path arm `:695-714`); a flag that skipped it handed `load_config` and the `env_profile` row the literal `~/…` (CF-262) |
 
 **`node_seed.py` (S4):**
 

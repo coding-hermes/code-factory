@@ -100,6 +100,15 @@ if bash "$HERE/tests/test_cf298_missing_lib.sh"; then
 else
   say "  FAIL  CF-298 missing library fixture"; fails=$((fails+1))
 fi
+# CF-262: every path-valued CLI flag expands a leading ~/ before the value is used. The two that
+# did not (--config, --node-env-file) handed the literal string to load_config and to the inputs /
+# env_profile rows, so a "~/" profile read as an unreadable file. The fixture prints nothing on
+# success but its own PASS lines, so the detail is held for the failing case.
+if cf262_out=$(bash "$HERE/tests/test_cf262_tilde_paths.sh" 2>&1); then
+  say "  PASS  CF-262 tilde path flags expand ($(printf '%s\n' "$cf262_out" | grep -c '^  PASS  ') arm(s))"
+else
+  say "  FAIL  CF-262 tilde path flags fixture"; printf '%s\n' "$cf262_out"; fails=$((fails+1))
+fi
 out=$(env -i PATH=/nonexistent HOME="$HOME" NODE_PROJECT=t /bin/bash "$HERE/scripts/project-node.sh" --check 2>&1); rc=$?
 [ "$rc" -ne 0 ] && say "  PASS  empty PATH -> exit $rc" || { say "  FAIL  empty PATH reported success"; fails=$((fails+1)); }
 # The rows must be REAL named checks, not a bootstrap crash that happens to contain
