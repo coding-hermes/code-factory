@@ -113,3 +113,16 @@ Each row carries `FAILIF:` and `PROOF:` so its acceptance criterion can fail. No
 - No node was created, and no `--apply` was run: no node host, and the lane forbids spending on one.
 - The `..` status word in the README's block (`README.md:154`) has no legend that this walk could find in the README or the handbook chapters. Not filed: absence of a legend was not measured against the handbook text, only searched for.
 - CI health is reported in the tick summary, not here.
+
+## 7. The tick's own judge leg, measured
+
+`gitreins task complete CF-DOGFOOD-2026-11-20` was run on the committed tree (`ce17783a`, a docs-only diff: one report, four board rows, five evidence files). Tier 1 ran and passed. Tier 2 did not produce a verdict:
+
+```
+gitreins.evaluator: WARNING: jev pre-screen unavailable (empty-bundle) — tier-2 judge runs at full authority
+gitreins.evaluator: WARNING: Context budget 9070642/10000000 input tokens (largest single prompt 136321) — compacting (compaction #1)
+```
+
+The run was killed by the caller's 1500s wall clock (`rc=124`); no `.gitreins/history/2026-11-20/<run>/verdict.json` exists for this task. The binding rung was the **input token budget** — 9.07M of 10.0M consumed before any criterion was graded — not the 800-iteration cap and not the output budget. That is the CF-426 shape again (one-criterion docs row, nothing graded, the cap named in the log instead of a merits verdict), so it was recorded as evidence on CF-426 (board event 947) rather than filed as a fifth row: five rows for one defect is churn, and CF-426 is already P1 and pending.
+
+Consequence for a reader of this report: the seven-row, five-verdict findings above rest on the commands and outputs reproduced in `.coding-hermes/evidence/code-factory-dogfood-2026-11-20-14-19-33/`, not on a judge verdict. Tier 1's gate log is `.gitreins/logs/guard-20261120T161426.699914Z.log`.
