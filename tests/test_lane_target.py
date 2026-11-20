@@ -44,6 +44,33 @@ _GIT_CONFIG = {
 
 GIT_BIN = shutil.which("git") or "git"
 
+_CEILINGS: list[str] = []
+
+
+def hermetic(root: str) -> str:
+    """Register `root` as a git ceiling for this process and every child (CF-501).
+
+    `tempfile.mkdtemp` honours TMPDIR, so a lane that isolates scratch inside its own
+    worktree (`TMPDIR=$PWD/.tmp`) makes each fixture root a subdirectory of a real
+    checkout. `git rev-parse --show-toplevel` in a plain fixture directory then ascends
+    into the ENCLOSING repository, and the "not a git root" arm reads a repo this test
+    never built. A ceiling at the fixture's own throwaway root stops that ascent, while
+    a real repository *below* the ceiling (the shared `repo` fixture) still resolves.
+    The value lives in the environment because `lane_target` spawns git itself.
+    """
+    if root not in _CEILINGS:
+        _CEILINGS.append(root)
+        inherited = [
+            d for d in os.environ.get("GIT_CEILING_DIRECTORIES", "").split(os.pathsep) if d
+        ]
+        os.environ["GIT_CEILING_DIRECTORIES"] = os.pathsep.join(inherited + _CEILINGS)
+    return root
+
+
+def fixture_root(prefix: str) -> str:
+    """A throwaway root no git invocation may ascend out of."""
+    return hermetic(tempfile.mkdtemp(prefix=prefix))
+
 
 def _git(cwd: str, *args: str) -> None:
     subprocess.run(
@@ -72,7 +99,7 @@ def fixture() -> dict[str, str]:
     """
     global _FIXTURE
     if _FIXTURE is None:
-        root = tempfile.mkdtemp(prefix="lane-target-")
+        root = fixture_root("lane-target-")
         atexit.register(shutil.rmtree, root, ignore_errors=True)
         home = os.path.join(root, "home")
         os.makedirs(home)
@@ -180,7 +207,7 @@ class VerifyLocal(unittest.TestCase):
     def test_home_repo_rejected_as_standin_locator(self):
         # git init $HOME: the exact defect five satellites exhibited. This one needs
         # its own repo (the target IS the home dir), so it keeps a throwaway dir.
-        standin = tempfile.mkdtemp(prefix="lane-target-home-")
+        standin = fixture_root("lane-target-home-")
         self.addCleanup(shutil.rmtree, standin, ignore_errors=True)
         _git(standin, "init", "-q", "-b", "main")
         out = lane_target.verify_local(standin, home=standin)
@@ -236,6 +263,47 @@ class RepoURL(unittest.TestCase):
         self.assertEqual(out.returncode, 4, out.stderr)
         self.assertIn(
             f"FAIL repo_url '{path}' — not a git root (git: fatal:", out.stdout
+        )
+        # CF-501 red control: the ceiling is load-bearing, not decoration. Without it an
+        # enclosing repository IS reached — the exact pre-fix reading, measured here on a
+        # nested no-repo directory — and with the ceiling at that directory's own
+        # throwaway root git genuinely fails. A real repo below the ceiling still verifies
+        # `test_real_checkout_verifies`, so the ceiling is not broad enough to refuse one.
+        outer = tempfile.mkdtemp(prefix="lane-target-enclosing-")
+        self.addCleanup(shutil.rmtree, outer, ignore_errors=True)
+        _git(outer, "init", "-q", "-b", "main")
+        _git(outer, "commit", "-q", "--allow-empty", "-m", "outer")
+        nested = os.path.realpath(os.path.join(outer, "nested"))
+        os.makedirs(nested)
+        unceiled = {
+            k: v for k, v in os.environ.items() if k != "GIT_CEILING_DIRECTORIES"
+        }
+        escaped = subprocess.run(
+            [GIT_BIN, "-C", nested, "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            env=unceiled,
+        )
+        self.assertEqual(escaped.returncode, 0, escaped.stderr)
+        self.assertEqual(os.path.realpath(escaped.stdout.strip()), os.path.realpath(outer))
+        ceiled = {**unceiled, "GIT_CEILING_DIRECTORIES": os.path.realpath(outer)}
+        stopped = subprocess.run(
+            [GIT_BIN, "-C", nested, "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            env=ceiled,
+        )
+        self.assertNotEqual(stopped.returncode, 0, stopped.stdout)
+        self.assertIn("fatal:", stopped.stderr)
+        out = subprocess.run(
+            [sys.executable, "-B", str(lane_target.__file__), "repo-url", nested],
+            capture_output=True,
+            text=True,
+            env=ceiled,
+        )
+        self.assertEqual(out.returncode, 4, out.stdout + out.stderr)
+        self.assertIn(
+            f"FAIL repo_url '{nested}' — not a git root (git: fatal:", out.stdout
         )
 
     def test_subdirectory(self):
@@ -316,7 +384,7 @@ class RepoURLHomeRoot(unittest.TestCase):
     """
 
     def setUp(self):
-        self.root = tempfile.mkdtemp(prefix="lane-target-home-root-")
+        self.root = fixture_root("lane-target-home-root-")
         self.addCleanup(shutil.rmtree, self.root, ignore_errors=True)
         self.home = os.path.join(self.root, "home")
         os.makedirs(self.home)
@@ -368,7 +436,7 @@ class RepoURLHomeRoot(unittest.TestCase):
 
 def two_roots() -> dict[str, str]:
     """Two real, different git roots for the CF-091 family-agreement tests."""
-    root = tempfile.mkdtemp(prefix="lane-family-")
+    root = fixture_root("lane-family-")
     atexit.register(shutil.rmtree, root, ignore_errors=True)
     made = {"root": root}
     for name in ("repo-a", "repo-b"):
@@ -522,7 +590,7 @@ class RepoURLFamilyAgreement(unittest.TestCase):
 class ScanProjects(unittest.TestCase):
     def test_scan_mixed_rows(self):
         f = fixture()
-        tmp = tempfile.mkdtemp(prefix="lane-scan-")
+        tmp = fixture_root("lane-scan-")
         self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
 
         path = os.path.join(tmp, "projects.jsonl")
@@ -546,7 +614,7 @@ class VerifyBunker(unittest.TestCase):
     """bunker:// targets are proved by asking the agent, never assumed."""
 
     def setUp(self):
-        self.tmp = tempfile.mkdtemp(prefix="bunker-shim-")
+        self.tmp = fixture_root("bunker-shim-")
         self.bin = os.path.join(self.tmp, "bin")
         os.makedirs(self.bin)
         self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)

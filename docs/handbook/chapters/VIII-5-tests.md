@@ -97,6 +97,24 @@ the whole-gate wall/CPU delta is therefore recorded as **unresolved in this wind
 saving. The removable work is bounded by the exec census: six provisioning events per gate run at
 ~7.45 s each.
 
+### 4d. Fixtures under an in-worktree `TMPDIR`
+
+`tempfile.mkdtemp()` and `mktemp -d` honour `TMPDIR`, so a lane that isolates its scratch inside its
+own worktree (`TMPDIR=$PWD/.tmp`) makes every fixture root a subdirectory of a real checkout. Git
+then walks out of the fixture: `git rev-parse --show-toplevel` in a plain fixture directory reported
+`top level is '/home/kara/code-factory'` instead of `fatal:`, so the "not a git root" arm read a
+repository the test never built, and `scripts/repo_freshness.py` measured that same plain directory
+as a fresh workdir of the enclosing repo — one silent `WARN` row lost, `SELFTEST: FAIL (4)` at the
+2026-11-20 baseline (measured `FAIL (3)`: this arm plus two section-41 counting arms).
+
+The contract: a fixture that turns out to sit inside an enclosing repository puts
+`GIT_CEILING_DIRECTORIES` at its **own throwaway root** — never `/tmp` or `$HOME` — and exports it,
+because the code under test spawns git itself (`tests/test_lane_target.py` does this in
+`fixture_root()`; section 41 of `tests/selftest.sh` exports it for `repo_freshness.py`, saving and
+restoring any inherited value). A ceiling stops the ascent at that root and nothing else: real
+repositories created *below* it, such as the shared `repo` fixture and the stand-in `$HOME` repo,
+still verify as genuine git roots.
+
 What an empty cache does — and does not do — to a fixture environment, measured at one tip with a
 cold root that really was provisioned (12 KB → 230 MB mid-run): it costs wall time and changes no
 verdict. Same tree, adjacent windows: 265 s cold vs 231 s warm (+14.7 %), with an identical

@@ -3701,6 +3701,14 @@ else
   say "  FAIL  scripts/repo_freshness.py does not parse"; fails=$((fails+1))
 fi
 tmpd=$(mktemp -d)
+# CF-501: `mktemp` honours TMPDIR, so when a lane isolates scratch inside its own
+# worktree this fixture root sits inside this checkout and git ascends into it — the
+# plain `notgit` directory was then measured as a fresh workdir of the enclosing repo
+# instead of "not a git workdir", costing the 6th WARN row and the --strict count.
+# Ceiling every git invocation (repo_freshness copies the environment) at the fixture's
+# own root; the real repositories created below it still resolve. Restored afterwards.
+_fresh_ceiling_saved=${GIT_CEILING_DIRECTORIES-}
+export GIT_CEILING_DIRECTORIES="$tmpd"
 git init -q -b trunk "$tmpd/seed"
 git -C "$tmpd/seed" -c user.email=fixture@example.invalid -c user.name=fixture commit -qm one --allow-empty
 git init -q --bare "$tmpd/origin.git"
@@ -3829,6 +3837,12 @@ else
   say "  FAIL  absent scheduler DB did not fail closed (exit $rc)"; fails=$((fails+1))
 fi
 rm -rf "$tmpd"
+if [ -n "${_fresh_ceiling_saved}" ]; then
+  export GIT_CEILING_DIRECTORIES="$_fresh_ceiling_saved"
+else
+  unset GIT_CEILING_DIRECTORIES
+fi
+unset _fresh_ceiling_saved
 # BEGIN cf213-land-node-branch
 say "42. a node branch lands on main with real gates, or refuses naming the reason (CF-213)"
 # Nothing in this repo merged a result envelope's branch+commit, so a finished node task had no
