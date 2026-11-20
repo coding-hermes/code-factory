@@ -933,3 +933,5 @@
 {"id": 932, "timestamp": "2026-11-20T08:45:44Z", "event_type": "task_completed", "task_id": "P5G-36", "actor": "foreman", "detail": "{\"status\":\"complete\",\"evidence_run_id\":\"78678d11\",\"probe\":\"docs/audits/p5g36-c1-probe.sh\",\"probe_red_at\":\"52e2e3fc^\"}"}
 {"id": 933, "timestamp": "2026-11-20T08:45:44Z", "event_type": "task_created", "task_id": "CF-500", "actor": "foreman", "detail": "{\"id\":\"CF-500\",\"status\":\"pending\"}"}
 {"id": 934, "timestamp": "2026-11-20T08:46:49Z", "event_type": "task_completed", "task_id": "P5G-36", "actor": "foreman", "detail": "{\"status\":\"complete\"}"}
+{"id": 935, "timestamp": "2026-11-20T09:55:10Z", "event_type": "task_completed", "task_id": "P5G-16", "actor": "foreman", "detail": "{\"status\":\"complete\"}"}
+{"id": 936, "timestamp": "2026-11-20T09:55:11Z", "event_type": "task_created", "task_id": "CF-501", "actor": "foreman", "detail": "{\"id\":\"CF-501\",\"status\":\"pending\"}"}
