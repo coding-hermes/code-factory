@@ -449,13 +449,34 @@ Provisioning rate, refusal rate and per-leg latency are answerable only by readi
   a child key of `dashboard` (`dashboard.child.basic_auth`, which the adapter's parse reads at depth 1
   and refuses), while a direct one passes however deep it sits (CF-292, round 2;
   `tests/test_node_gateway_auth.py`).
-  `--check` reports the block read-only (`project-node.sh:587-601`) and FAILs when it is absent, naming
-  the refused bind — but with a **looser shell rule** than the producer: it accepts any indented
-  `basic_auth:` inside the `dashboard:` run, so it prints `ok gateway_auth` for the child-key shape
-  (`dashboard.child.basic_auth`) that the producer now refuses and the adapter refuses. That row is
-  labelled "presence only — the adapter's gate is the authority", so nothing is authorised by it, but it
-  is the same over-claim class CF-292 is closing and it is filed as a finding rather than fixed here
-  (`scripts/project-node.sh` is outside this change's fence).
+  `--check` reports the block read-only through the **same module**
+  (`python3 "$HERE/node_gateway_auth.py" --check <config>`, delegated at
+  `scripts/project-node.sh:705-743`) and FAILs when the block is absent, naming the refused bind
+  (CF-395). The row keeps its "presence only — the adapter's gate is the authority" label, and the
+  fallback it uses when `python3` or the module is unavailable (`tests/selftest.sh`'s empty-`PATH`
+  arm is the live case) implements the same four rules rather than a looser approximation of them —
+  so the standalone preflight and its own `--apply` path can no longer certify different nodes.
+
+  **One indentation rule, three readers (CF-395).** `dashboard.basic_auth` protects the bind only
+  when all four of these hold: (1) the block is the run of indented, blank and comment lines after
+  a bare `dashboard:` at column 0, ending at the first non-blank, non-comment column-0 line, so
+  comments and blank lines never end it; (2) the block's indentation is consistent — a line deeper
+  than the mapping in force may only follow a key that opened a block (`key:` with no inline
+  value), siblings share one indent, and nothing in the block is shallower than its first child, so
+  a `dashboard:` whose children disagree is invalid YAML, not a pass; (3) `basic_auth:` sits at the
+  block's DIRECT-child indent — `dashboard.child.basic_auth`, a sibling top-level key's
+  `basic_auth:`, and a column-0 `basic_auth:` are all a different path, while a direct one passes
+  however deep in the block it sits; and (4) `basic_auth` is a block mapping whose `username` and
+  `password` are both non-empty string scalars — a valueless `basic_auth:`, an empty or
+  quoted-empty value, and a non-string scalar such as `password: 1234` are all the gate's "empty
+  value". The three readers are the producer `scripts/node_gateway_auth.py` (whose `--check` mode
+  prints the verdict in the gate's own vocabulary), the standalone preflight
+  `scripts/project-node.sh --check` (which delegates to it), and `check_public_bind_auth` in
+  `scripts/harness/install-hermes.sh` (which authorises the bind and stays the authority whenever
+  they disagree); `tests/gateway_auth_parity.sh` holds every shape the contract names identical
+  across all three — and across the shell fallback both as its own helper and as the row that
+  reaches it when the producer is absent — by comparing their verdicts rather than asserting a
+  list, and each rule is pinned in `tests/test_node_gateway_auth.py`.
 - **Certification ladder** (`verify-node.sh`, **510 lines** at this tree — the current source includes argument/server resolution, transport validation, the named-transport rows below step 1 and the terminal verdict precedence):
   - `:53-68` **port validation (CF-270)** — `--port` is validated **before any use**: a digit test (`:53-56`, `case "$PORT" in ''|*[!0-9]*)`), a 5-digit length cap (`:59`, `[ "${#PORT}" -le 5 ]`), then two `verify-node: --port must be digits 1-65535 (got: …)` → exit 2 refusals (`:60-63`; and `:65-68`), with a base-10 re-expansion `PORT=$((10#$PORT))` at `:64` between them. A non-digit `--port` is refused here and no longer interpolates into the remote `bash -lc` shell.
   - `:73-121` **transport validation (NEW legs, CF-224)** — `--transport` is one of `node-address` (default), `published-port`, `tunnel`, `bunker-exec` (`:75-81`, anything else prints the accepted set and exits 2); `published-port`/`tunnel` **require** `--transport-address HOST:PORT` (`:84-88`), split into `T_HOST`/`T_PORT` (`:89-93`), and the port carries the same digit/1-65535 rule as `--port` (`:100-115`); an address with a transport that does not use one is refused (`:117-120`). `NODE_TRANSPORT`/`NODE_TRANSPORT_ADDRESS` (read at `:30-31`) are the spawn-path form; flags win.

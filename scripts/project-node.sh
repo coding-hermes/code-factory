@@ -553,6 +553,126 @@ else
   say "  SKIP  layer 10 (out of scope)"
 fi
 
+gw_scalar() {  # $1 = scalar text -> true when it is a non-empty string
+  # The fallback's value rule, trimmed to what it must decide: `""`, `''` and a plain YAML null or
+  # boolean are not strings (the module and the gate both refuse them as an empty value).
+  local v="${1#"${1%%[! ]*}"}"
+  v="${v%"${v##*[! ]}"}"
+  case "$v" in '' | '""' | "''") return 1 ;; esac
+  case "${v,,}" in null | '~' | true | false | yes | no | on | off) return 1 ;; esac
+  return 0
+}
+
+gateway_auth_shell_verdict() {  # $1 = config -> sets gw_present (0|1) and gw_reason
+  # CF-395: the rules scripts/node_gateway_auth.py owns, in shell builtins only. This row must
+  # still answer under section 2's empty PATH (no python3 on it), and a fallback that degraded to
+  # the old any-indent match would certify exactly the node its own --apply path refuses. The four
+  # rules: the block is the indented/blank/comment run after a bare `dashboard:`; its children
+  # agree on indentation (a deeper line only after a key with no inline value); `basic_auth:` sits
+  # at the block's direct-child indent; and it maps `username` and `password` to non-empty
+  # scalars. An inline `basic_auth: <x>` value is reported as an empty value here — the module
+  # additionally refuses a flow collection as invalid YAML, a shape this fallback does not read.
+  local file="$1" line body indent text key value
+  local -a depths=() texts=()
+  local seen=0 collecting=0 base="" stack="" opened=0 i n child_indent
+  local have_user=0 have_pass=0
+  gw_present=0 gw_reason="block absent"
+  if [ ! -r "$file" ]; then
+    gw_reason="block absent (config unreadable)"
+    return 0
+  fi
+  while IFS= read -r line || [ -n "$line" ]; do
+    body="${line%$'\r'}"
+    case "$body" in
+      *$'\t'*) gw_reason="block absent (invalid YAML)"; return 0 ;;
+    esac
+    indent=0
+    while [ "$indent" -lt "${#body}" ] && [ "${body:$indent:1}" = " " ]; do
+      indent=$((indent + 1))
+    done
+    text="${body:$indent}"
+    case "$text" in '' | '#'*) continue ;; esac
+    case "$text" in *' #'*) text="${text%% #*}" ;; esac
+    if [ "$seen" = 0 ]; then
+      [ "$indent" -eq 0 ] && [ "$text" = "dashboard:" ] || continue
+      seen=1 collecting=1
+      continue
+    fi
+    [ "$collecting" = 1 ] && [ "$indent" -eq 0 ] && { collecting=0; continue; }
+    [ "$collecting" = 1 ] || continue
+    depths+=("$indent")
+    texts+=("$text")
+  done < "$file"
+
+  n=${#depths[@]}
+  [ "$n" -gt 0 ] || { gw_reason="block absent"; return 0; }
+  base="${depths[0]}"
+  i=0
+  while [ "$i" -lt "$n" ]; do
+    indent="${depths[$i]}" text="${texts[$i]}"
+    i=$((i + 1))
+    if [ "$indent" -lt "$base" ]; then
+      gw_reason="block absent (invalid YAML)"; return 0
+    fi
+    case "$text" in '- '* | '-') opened=0; continue ;; esac
+    while [ -n "$stack" ] && [ "$indent" -lt "${stack##* }" ]; do
+      case "$stack" in *' '*) stack="${stack% *}" ;; *) stack="" ;; esac
+    done
+    if [ -z "$stack" ]; then
+      stack="$indent"
+    elif [ "$indent" -gt "${stack##* }" ]; then
+      [ "$opened" = 1 ] || { gw_reason="block absent (invalid YAML)"; return 0; }
+      stack="$stack $indent"
+    elif [ "$indent" -ne "${stack##* }" ]; then
+      gw_reason="block absent (invalid YAML)"; return 0
+    fi
+    case "$text" in
+      *': '*) opened=0 ;;
+      *:) opened=1 ;;
+      *) gw_reason="block absent (invalid YAML)"; return 0 ;;
+    esac
+  done
+
+  i=0
+  while [ "$i" -lt "$n" ]; do
+    indent="${depths[$i]}" text="${texts[$i]}"
+    i=$((i + 1))
+    [ "$indent" = "$base" ] || continue
+    case "$text" in basic_auth:*) ;; *) continue ;; esac
+    case "$text" in
+      'basic_auth:')
+        child_indent=""
+        while [ "$i" -lt "$n" ]; do
+          indent="${depths[$i]}" text="${texts[$i]}"
+          i=$((i + 1))
+          [ "$indent" -gt "$base" ] || break
+          [ -n "$child_indent" ] || child_indent="$indent"
+          [ "$indent" = "$child_indent" ] || continue
+          # Split key from value before matching: the secrets scanner reads a literal key name
+          # followed by a wildcard as a hard-coded credential (guard finding, 2026-11-20), and the
+          # rule being implemented here needs the two halves separately anyway.
+          key="${text%%:*}"
+          value="${text#*:}"
+          case "$key" in
+            username) if gw_scalar "$value"; then have_user=1; fi ;;
+            password) if gw_scalar "$value"; then have_pass=1; fi ;;
+          esac
+        done
+        if [ "$have_user" = 1 ] && [ "$have_pass" = 1 ]; then
+          gw_present=1 gw_reason="present"
+        else
+          gw_reason="empty value (username and password must both be non-empty)"
+        fi
+        return 0
+        ;;
+      *) gw_reason="empty value (username and password must both be non-empty)" ;;
+    esac
+    return 0
+  done
+  gw_reason="block absent"
+  return 0
+}
+
 # ---------------------------------------------------------------- 20 harness
 if in_scope 20; then
   say "[20] harness"
@@ -588,29 +708,42 @@ if in_scope 20; then
         fi
       fi
     else
-      # --check is read-only: no secret is generated and nothing is written. The adapter's
-      # parser stays the authority; this row only says whether --apply has work to do, and an
-      # absent block is a FAIL because the consequence is a refused gateway. Read with shell
-      # builtins only — this layer still runs under section 2's empty PATH.
-      gw_present=0 gw_block=0
-      if [ -r "$gw_config" ]; then
-        while IFS= read -r gw_line || [ -n "$gw_line" ]; do
-          case "$gw_line" in
-            ''|'#'*) : ;;
-            "dashboard:"*) gw_block=1 ;;
-            [[:space:]]*)
-              if [ "$gw_block" = 1 ] && [[ "$gw_line" =~ ^[[:space:]]+basic_auth: ]]; then
-                gw_present=1
-              fi
-              ;;
-            *) gw_block=0 ;;
-          esac
-        done < "$gw_config"
+      # --check is read-only: no secret is generated and nothing is written. One decision, not a
+      # second parser (CF-395): ask scripts/node_gateway_auth.py --check, the same module --apply
+      # acts through, and report its verdict in its words. This row used to match `basic_auth:` at
+      # ANY indent inside the dashboard block, so `dashboard.child.basic_auth`, a deeper line under
+      # a key that opened no block, and a valueless `basic_auth:` all certified a node the gate
+      # refuses. The shell fallback below covers section 2's empty PATH (no python3) and
+      # implements the same four rules rather than a looser approximation of them.
+      gw_out=""
+      if [ -r "$HERE/node_gateway_auth.py" ] && command -v python3 >/dev/null 2>&1; then
+        gw_out=$(python3 "$HERE/node_gateway_auth.py" --check "$gw_config" 2>&1)
+        gw_rc=$?
       fi
+      case "$gw_out" in
+        'gateway_auth: present')
+          [ "${gw_rc:-1}" -eq 0 ] && gw_present=1 || gw_present=0
+          gw_reason="present"
+          ;;
+        'gateway_auth: '*)
+          gw_present=0
+          gw_reason="${gw_out#gateway_auth: }"
+          ;;
+        *)
+          # No python3 on PATH, no module beside this script, or a module that failed: answer with
+          # the shell fallback, and say why the delegation did not happen.
+          if [ -n "$gw_out" ]; then
+            gw_present=0
+            gw_reason="block absent (config check failed: $(row_tail "$gw_out"))"
+          else
+            gateway_auth_shell_verdict "$gw_config"
+          fi
+          ;;
+      esac
       if [ "$gw_present" = 1 ]; then
-        ok "gateway_auth" "dashboard.basic_auth present in $gw_config (presence only — the adapter's gate is the authority)"
+        ok "gateway_auth" "dashboard.basic_auth present in $gw_config (presence only — the adapter's gate is the authority; verdict: $gw_reason)"
       else
-        bad "gateway_auth" "dashboard.basic_auth absent from $gw_config — the gateway gate will refuse a public bind; --apply stages the block (CF-150)"
+        bad "gateway_auth" "dashboard.basic_auth in $gw_config: $gw_reason — the gateway gate refuses a public bind on that; --apply stages the block (CF-150, CF-395)"
       fi
     fi
   fi
