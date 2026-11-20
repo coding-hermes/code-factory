@@ -101,8 +101,8 @@ saving. The removable work is bounded by the exec census: six provisioning event
 
 `tempfile.mkdtemp()` and `mktemp -d` honour `TMPDIR`, so a lane that isolates its scratch inside its
 own worktree (`TMPDIR=$PWD/.tmp`) makes every fixture root a subdirectory of a real checkout. Git
-then walks out of the fixture: `git rev-parse --show-toplevel` in a plain fixture directory reported
-`top level is '/home/kara/code-factory'` instead of `fatal:`, so the "not a git root" arm read a
+then walked out of the fixture: `git rev-parse --show-toplevel` in a plain fixture directory answered
+`top level is '<the enclosing checkout>'` instead of `fatal:`, so the "not a git root" arm read a
 repository the test never built, and `scripts/repo_freshness.py` measured that same plain directory
 as a fresh workdir of the enclosing repo — one silent `WARN` row lost, `SELFTEST: FAIL (4)` at the
 2026-11-20 baseline (measured `FAIL (3)`: this arm plus two section-41 counting arms).
