@@ -100,6 +100,8 @@ The malformed-config refusal is the strongest thing in this surface: the exact q
 
 Each row carries `FAILIF:` and `PROOF:` so its acceptance criterion can fail. Nothing in this report is filed for taste: every row quotes a command and the output that contradicts a document.
 
+One postscript on CF-509, added after the row was filed. The discarded value did come back — not from the original writer, but from a sibling commit three minutes after the loss was observed (`40368445`, "board: re-point CF-474 defer review date", 10:34:52 -0500). Measured across the commits that touch the board: `grep -c 2026-11-27` in `a6ef8941` is `0`, in `40368445` is `1`. So the update was real and wanted, it never landed the first time, and only a second, deliberate write made it durable. That is the finding, not a contradiction of it: the write path lost it silently and a human-equivalent retry was required to recover it.
+
 ## 5. What a new user would have done next
 
 1. Copy `config/bunker.example.conf`, fill in `PROJECT`, `AGENT`, `SERVER`, `REPO`.
