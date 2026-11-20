@@ -36,6 +36,9 @@ finish() {
   # An unexpected abort is itself one attributable failure, even when no named
   # row had a chance to run. This keeps AGENTS.md rule 2 visible to pollers.
   [ "$count" -gt 0 ] || count=1
+  # CF-510: name every arm the count is made of, immediately before the tally, so a red is
+  # attributable from the LAST lines of the log instead of a diff of the whole run.
+  selftest_report_failures "$count"
   say "SELFTEST: FAIL ($count)"
   say "EXIT=1"
   exit 1
@@ -65,7 +68,59 @@ selftest_exit_trap() {
   return "$rc"
 }
 trap selftest_exit_trap EXIT
-t() { if eval "$2" >/dev/null 2>&1; then say "  PASS  $1"; else say "  FAIL  $1"; fails=$((fails+1)); fi; }
+t() { if eval "$2" >/dev/null 2>&1; then say "  PASS  $1"; else say "  FAIL  $1"; selftest_fail; fi; }
+
+# CF-510: the tally must NAME the arms that make up n. `fails` and the names are ONE
+# accounting — every increment is a selftest_fail() call, and it records the `  FAIL  ` row the
+# arm just printed in THIS shell (a fixture's captured output cannot pose as an arm). An
+# increment that printed no row is still recorded, with the live section and the command that
+# failed, because a red nobody can attribute is the defect. Run A of this row ended
+# `SELFTEST: FAIL (2)` and the two arms were only findable by diffing a 950-line log.
+selftest_fail_arms=()
+selftest_pending_fail=""
+# The name rides on the row the arm prints, so it is captured where it is printed instead of
+# restated at 495 call sites that could drift from it. `say` in scripts/lib.sh is exactly one
+# printf; this keeps that byte-identical output and adds no other effect.
+say() {
+  local line="$*"
+  case "$line" in
+    "  FAIL  "*) selftest_pending_fail="${line#  FAIL  }" ;;
+    "  PASS  "*|"  WARN  "*|"  ..    "*) selftest_pending_fail="" ;;
+  esac
+  printf '%s\n' "$line"
+}
+selftest_fail() {
+  local name="${selftest_pending_fail}"
+  selftest_pending_fail=""
+  [ -n "$name" ] || name="counted with no FAIL row (last command: ${selftest_last_command:-<none>})"
+  selftest_fail_arms+=("${selftest_section:-<none>}|${name}")
+  fails=$(( fails + 1 ))
+}
+# "<n>. heading" -> "<n>"; an unnumbered heading is carried whole, so a row never names a
+# section it was not in.
+selftest_section_label() {
+  case "${1:-<none>}" in
+    [0-9]*) printf '%s' "${1%%.*}" ;;
+    *) printf '%s' "${1:-<none>}" ;;
+  esac
+}
+# One line per counted failure, printed before the tally: `section=<n>  <arm label>`. The
+# gap rows keep the invariant exact — a count of n always comes with n naming lines, including
+# the abort path that bumps an empty tally to 1.
+selftest_report_failures() {
+  local count="${1:-0}" gap arm
+  local recorded="${#selftest_fail_arms[@]}"
+  [ "$count" -gt 0 ] || return 0   # a green tally names nothing, even if names were recorded earlier
+  say "SELFTEST: failing arms ($count):"
+  for arm in "${selftest_fail_arms[@]}"; do
+    say "FAIL ARM  section=$(selftest_section_label "${arm%%|*}")  ${arm#*|}"
+  done
+  gap=$((count - recorded))
+  while [ "$gap" -gt 0 ]; do
+    say "FAIL ARM  section=$(selftest_section_label "${selftest_section:-<none>}")  counted with no FAIL row (last command: ${selftest_last_command:-<none>})"
+    gap=$((gap - 1))
+  done
+}
 
 # CF-503: a fixture root must be a REAL, absolute directory. `mktemp -d` returns an EMPTY string
 # when TMPDIR is unusable (the lane case: `TMPDIR=$PWD/.tmp` with no `.tmp`, so mktemp prints
@@ -91,14 +146,14 @@ fixture_root() {
 
 say "1. every script parses"
 for f in "$HERE"/scripts/*.sh "$HERE"/scripts/harness/*.sh "$HERE"/tests/*.sh; do
-  bash -n "$f" && say "  PASS  bash -n $(basename "$f")" || { say "  FAIL  bash -n $f"; fails=$((fails+1)); }
+  bash -n "$f" && say "  PASS  bash -n $(basename "$f")" || { say "  FAIL  bash -n $f"; selftest_fail; }
 done
 
 say "2. the node checker FAILS on an empty PATH"
 if bash "$HERE/tests/test_cf298_missing_lib.sh"; then
   say "  PASS  CF-298 missing library fails closed"
 else
-  say "  FAIL  CF-298 missing library fixture"; fails=$((fails+1))
+  say "  FAIL  CF-298 missing library fixture"; selftest_fail
 fi
 # CF-262: every path-valued CLI flag expands a leading ~/ before the value is used. The two that
 # did not (--config, --node-env-file) handed the literal string to load_config and to the inputs /
@@ -107,18 +162,18 @@ fi
 if cf262_out=$(bash "$HERE/tests/test_cf262_tilde_paths.sh" 2>&1); then
   say "  PASS  CF-262 tilde path flags expand ($(printf '%s\n' "$cf262_out" | grep -c '^  PASS  ') arm(s))"
 else
-  say "  FAIL  CF-262 tilde path flags fixture"; printf '%s\n' "$cf262_out"; fails=$((fails+1))
+  say "  FAIL  CF-262 tilde path flags fixture"; printf '%s\n' "$cf262_out"; selftest_fail
 fi
 out=$(env -i PATH=/nonexistent HOME="$HOME" NODE_PROJECT=t /bin/bash "$HERE/scripts/project-node.sh" --check 2>&1); rc=$?
-[ "$rc" -ne 0 ] && say "  PASS  empty PATH -> exit $rc" || { say "  FAIL  empty PATH reported success"; fails=$((fails+1)); }
+[ "$rc" -ne 0 ] && say "  PASS  empty PATH -> exit $rc" || { say "  FAIL  empty PATH reported success"; selftest_fail; }
 # The rows must be REAL named checks, not a bootstrap crash that happens to contain
 # the substring FAIL (CF-005 AC2: "FAILED: unbound variable" is not a FAIL row).
 if printf '%s' "$out" | grep -q 'unbound variable'; then
-  say "  FAIL  report is a bootstrap crash, not named FAIL rows"; fails=$((fails+1))
+  say "  FAIL  report is a bootstrap crash, not named FAIL rows"; selftest_fail
 elif printf '%s' "$out" | grep -Eq '^  FAIL  tool:'; then
   say "  PASS  report contains named FAIL rows"
 else
-  say "  FAIL  no FAIL rows"; fails=$((fails+1))
+  say "  FAIL  no FAIL rows"; selftest_fail
 fi
 
 say "3. unreachable Crier reports one HTTP status code"
@@ -138,7 +193,7 @@ expected='  FAIL  reach:http://closed.test:8767/health — -> 000'
 if [ "$rc" -ne 0 ] && [ "$(printf '%s\n' "$out" | grep -Fxc -- "$expected")" = 1 ]; then
   say "  PASS  unreachable URL -> one 000 status"
 else
-  say "  FAIL  unreachable URL status was duplicated or missing"; fails=$((fails+1))
+  say "  FAIL  unreachable URL status was duplicated or missing"; selftest_fail
 fi
 rm -rf "$tmpd"
 
@@ -162,7 +217,7 @@ if [ "$rc" -ne 0 ] && [ "$(printf '%s\n' "$missing_ref" | grep -Fxc -- "$expecte
   && ! printf '%s\n' "$missing_ref" | grep -Fq 'private repos need a deploy key'; then
   say "  PASS  missing ref names main and --ref without a private-repo hint"
 else
-  say "  FAIL  missing ref was not distinguished from repository access"; fails=$((fails+1))
+  say "  FAIL  missing ref was not distinguished from repository access"; selftest_fail
 fi
 mkdir "$tmpd/bin"
 cat > "$tmpd/bin/git" <<'EOF'
@@ -182,7 +237,7 @@ private_repo=$(env PATH="$tmpd/bin:$PATH" REAL_GIT="$(command -v git)" HOME="$tm
 if [ "$rc" -ne 0 ] && printf '%s\n' "$private_repo" | grep -Fq 'private repos need a deploy key'; then
   say "  PASS  repository access failure retains deploy-key hint"
 else
-  say "  FAIL  repository access failure lost deploy-key hint"; fails=$((fails+1))
+  say "  FAIL  repository access failure lost deploy-key hint"; selftest_fail
 fi
 rm -rf "$tmpd"
 
@@ -232,7 +287,7 @@ if [ "$rc" -ne 0 ] && [ "$(printf '%s\n' "$resolved_ref" | grep -Fxc -- "$expect
   && ! printf '%s\n' "$resolved_ref" | grep -Fq 'private repos need a deploy key'; then
   say "  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints"
 else
-  say "  FAIL  resolved-ref clone failure was misclassified"; fails=$((fails+1))
+  say "  FAIL  resolved-ref clone failure was misclassified"; selftest_fail
   printf '%s\n' "$resolved_ref" | grep -F 'repo_clone'
 fi
 rm -rf "$tmpd"
@@ -241,9 +296,9 @@ rm -rf "$tmpd"
 say "5. fetch_verified refuses a wrong digest"
 tmpd=$(mktemp -d); echo hello > "$tmpd/src"
 want=$(sha256sum "$tmpd/src" | cut -d' ' -f1)
-fetch_verified "file://$tmpd/src" "$tmpd/out" "$want" && say "  PASS  correct digest accepted" || { say "  FAIL  correct digest refused"; fails=$((fails+1)); }
+fetch_verified "file://$tmpd/src" "$tmpd/out" "$want" && say "  PASS  correct digest accepted" || { say "  FAIL  correct digest refused"; selftest_fail; }
 fetch_verified "file://$tmpd/src" "$tmpd/out2" "0000000000000000000000000000000000000000000000000000000000000000" \
-  && { say "  FAIL  wrong digest accepted"; fails=$((fails+1)); } || say "  PASS  wrong digest refused"
+  && { say "  FAIL  wrong digest accepted"; selftest_fail; } || say "  PASS  wrong digest refused"
 # CF-280 red-proof: revert fetch_verified to the pre-fix body (an unchecked `mkdir -p`/`mv` followed
 # by `chmod ... || true`) and BOTH arms below go RED — the positive arm sees exit 0 (the chmod's
 # status) and the caller arm prints no `go:download` FAIL row. They are regression arms, not
@@ -255,7 +310,7 @@ fetch_verified "file://$tmpd/src" "$tmpd/blocker/bin" "$want" >/dev/null 2>&1 ||
 if [ "$fetch_rc" -ne 0 ] && [ ! -e "$tmpd/blocker/bin" ]; then
   say "  PASS  uncreatable destination -> fetch_verified exit $fetch_rc, no artifact installed"
 else
-  say "  FAIL  uncreatable destination was reported as a verified install (exit $fetch_rc)"; fails=$((fails+1))
+  say "  FAIL  uncreatable destination was reported as a verified install (exit $fetch_rc)"; selftest_fail
 fi
 # The caller arm proves the failure is SURFACED, not silent: it mirrors the install-go.sh branch
 # (`fetch_verified ... || bad "go:download" ...`) and asserts the ROW, not the substring FAIL — a
@@ -273,7 +328,7 @@ caller_rows=$(printf '%s\n' "$caller_out" | grep -Ec '^  FAIL  go:download' || t
 if [ "$caller_rc" -ne 0 ] && [ "$caller_rows" = 1 ]; then
   say "  PASS  caller surfaced the failed install: 1 '^  FAIL  go:download' row, fixture exit $caller_rc"
 else
-  say "  FAIL  caller did not surface the failed install (exit $caller_rc, $caller_rows go:download row(s))"; fails=$((fails+1))
+  say "  FAIL  caller did not surface the failed install (exit $caller_rc, $caller_rows go:download row(s))"; selftest_fail
 fi
 
 # BEGIN cf281-have-absence
@@ -296,14 +351,14 @@ have_absence_arm() {  # $1 = lib.sh path -> 0 when THAT library reports absence 
 if have_out=$(have_absence_arm "$HERE/scripts/lib.sh"); then
   say "  PASS  $have_out"
 else
-  say "  FAIL  $have_out"; fails=$((fails+1))
+  say "  FAIL  $have_out"; selftest_fail
 fi
 # The repaired caller, end to end: node-create.sh with the client off PATH prints ONE named FAIL row
 # and no shell diagnostic. The fixture PATH is asserted to resolve no client — a host that had one
 # in /usr/bin would make this arm vacuous.
 nc_path="/usr/bin:/bin"
 if PATH="$nc_path" command -v bunker >/dev/null 2>&1; then
-  say "  FAIL  have() reports absence — caller: fixture PATH $nc_path still resolves bunker; the arm would prove nothing"; fails=$((fails+1))
+  say "  FAIL  have() reports absence — caller: fixture PATH $nc_path still resolves bunker; the arm would prove nothing"; selftest_fail
 else
   nc_out=$(env -i PATH="$nc_path" HOME="$tmpd/nc-home" CRIER_URL=http://crier.example:8767 BUNKER_SERVER=srv.example \
     /bin/bash "$HERE/scripts/node-create.sh" --project demo --repo git@git.example:demo/repo.git --harness hermes 2>&1); nc_rc=$?
@@ -313,7 +368,7 @@ else
     && ! printf '%s\n' "$nc_out" | grep -Fq '  FAIL  spawn'; then
     say "  PASS  have() reports absence — caller: node-create.sh with the client off PATH -> 1 'FAIL bunker_cli' row, exit $nc_rc, no shell diagnostic"
   else
-    say "  FAIL  have() reports absence — caller: node-create.sh with the client off PATH -> $nc_rows bunker_cli row(s), exit $nc_rc"; fails=$((fails+1))
+    say "  FAIL  have() reports absence — caller: node-create.sh with the client off PATH -> $nc_rows bunker_cli row(s), exit $nc_rc"; selftest_fail
     printf '%s\n' "$nc_out" | sed 's/^/    | /'
   fi
 fi
@@ -324,7 +379,7 @@ if git -C "$HERE" show 06adfa6:scripts/lib.sh > "$tmpd/pre-fix-lib.sh" 2>/dev/nu
   if [ "$pre_rc" -ne 0 ] && printf '%s\n' "$pre_out" | grep -Fq 'absent: rc=0 stdout=0B'; then
     say "  PASS  have() reports absence — pre-fix control: 06adfa6:scripts/lib.sh answers rc=0 for an absent tool; the arm is falsifiable"
   else
-    say "  FAIL  have() reports absence — pre-fix control did not reproduce the defect (exit $pre_rc): $pre_out"; fails=$((fails+1))
+    say "  FAIL  have() reports absence — pre-fix control did not reproduce the defect (exit $pre_rc): $pre_out"; selftest_fail
   fi
   cp -a "$HERE/scripts" "$tmpd/pre-fix-scripts"
   cp "$tmpd/pre-fix-lib.sh" "$tmpd/pre-fix-scripts/lib.sh"
@@ -335,18 +390,18 @@ if git -C "$HERE" show 06adfa6:scripts/lib.sh > "$tmpd/pre-fix-lib.sh" 2>/dev/nu
     && ! printf '%s\n' "$cf_out" | grep -Fq '  FAIL  bunker_cli'; then
     say "  PASS  have() reports absence — caller control: the pre-fix library reports the absent client as 'FAIL spawn — …: command not found', exit $cf_rc"
   else
-    say "  FAIL  have() reports absence — caller control did not reproduce the pre-fix misreport (exit $cf_rc)"; fails=$((fails+1))
+    say "  FAIL  have() reports absence — caller control did not reproduce the pre-fix misreport (exit $cf_rc)"; selftest_fail
     printf '%s\n' "$cf_out" | sed 's/^/    | /'
   fi
 else
-  say "  FAIL  have() reports absence — pre-fix source unavailable (git show 06adfa6:scripts/lib.sh)"; fails=$((fails+1))
+  say "  FAIL  have() reports absence — pre-fix source unavailable (git show 06adfa6:scripts/lib.sh)"; selftest_fail
 fi
 # END cf281-have-absence
 rm -rf "$tmpd"
 
 say "6. no literal credential assignments"
 if grep -rnE '^[A-Z_]*(API_KEY|TOKEN|SECRET)=[^$"[:space:]]' "$HERE"/scripts "$HERE"/specs "$HERE"/docs 2>/dev/null | grep -v 'example' | head -3 | grep -q .; then
-  say "  FAIL  a literal credential assignment is in the tree"; fails=$((fails+1))
+  say "  FAIL  a literal credential assignment is in the tree"; selftest_fail
 else
   say "  PASS  none found"
 fi
@@ -393,7 +448,7 @@ tailnet_verdict() {
   return 1
 }
 say "  section 6 tailnet-address (CF-378): no tracked file outside the board publishes a tailnet address"
-tailnet_verdict "$HERE" 'tailnet-address' && : || fails=$((fails+1))
+tailnet_verdict "$HERE" 'tailnet-address' && : || selftest_fail
 # Red proof: a seeded repository, so the gate grades the fixture the way it grades the tree (a
 # fixture directory that is not a git index would grade 0 files and prove nothing). The literal is
 # assembled from octet variables because this file is itself graded — writing the address here would
@@ -413,7 +468,7 @@ expected="  FAIL  tailnet-address — 1 tracked file(s) publish a tailnet addres
 if [ "$rc" -ne 0 ] && [ "$(printf '%s\n' "$out" | grep -Fxc -- "$expected")" = 1 ]; then
   say "  PASS  seeded fixture -> FAIL names docs/seeded.md:3; the out-of-range subnet stays green"
 else
-  say "  FAIL  seeded tailnet literal escaped the gate (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  seeded tailnet literal escaped the gate (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 rm -rf "$tmpd"
@@ -462,7 +517,7 @@ if [ "$gar_rc" -ne 0 ] && [ "$gar_mode_rows" = 1 ] && [ "$gar_refresh_rows" = 0 
   && cmp -s "$gar/git-credentials.pre" "$gar/git-credentials"; then
   say "  PASS  insecure mint (mode 644) -> exit $gar_rc, one '^  FAIL  mode' row, no '^  PASS  refresh' row, credential store byte-identical"
 else
-  say "  FAIL  insecure mint still rewrote the credential store (exit $gar_rc, $gar_mode_rows mode row(s), $gar_refresh_rows refresh row(s))"; fails=$((fails+1))
+  say "  FAIL  insecure mint still rewrote the credential store (exit $gar_rc, $gar_mode_rows mode row(s), $gar_refresh_rows refresh row(s))"; selftest_fail
 fi
 rm -rf "$gar"
 # (b) The clock-behind case: a token two hours old must be re-minted, and the re-mint must be
@@ -484,7 +539,7 @@ if [ "$gar_rc" -eq 0 ] && [ "$gar_post_mtime" -gt "$gar_pre_mtime" ] \
   && [ "$gar_post_digest" != "$gar_pre_digest" ] && [ "$gar_refresh_rows" = 1 ]; then
   say "  PASS  token mtime 2h old -> re-minted: mtime $gar_pre_mtime -> $gar_post_mtime, digest changed, one '^  PASS  refresh' row"
 else
-  say "  FAIL  a 2h-old token was not re-minted from a re-read (exit $gar_rc, mtime $gar_pre_mtime -> $gar_post_mtime, digest changed: $([ "$gar_post_digest" != "$gar_pre_digest" ] && echo yes || echo no))"; fails=$((fails+1))
+  say "  FAIL  a 2h-old token was not re-minted from a re-read (exit $gar_rc, mtime $gar_pre_mtime -> $gar_post_mtime, digest changed: $([ "$gar_post_digest" != "$gar_pre_digest" ] && echo yes || echo no))"; selftest_fail
 fi
 rm -rf "$gar"
 # (c) A fresh token whose minter reports a skip is a no-op: exit 0, neither file rewritten, and
@@ -504,7 +559,7 @@ if [ "$gar_rc" -eq 0 ] && cmp -s "$gar/github.token.pre" "$gar/github.token" \
   && cmp -s "$gar/git-credentials.pre" "$gar/git-credentials" && [ "$gar_says_noop" = yes ]; then
   say "  PASS  fresh token + minter skip -> exit 0, token and credential store byte-identical, the row says 'no-op'"
 else
-  say "  FAIL  a fresh token was not reported as a no-op (exit $gar_rc, no-op row: $gar_says_noop)"; fails=$((fails+1))
+  say "  FAIL  a fresh token was not reported as a no-op (exit $gar_rc, no-op row: $gar_says_noop)"; selftest_fail
 fi
 rm -rf "$gar"
 # END github-app-refresh-gate
@@ -610,7 +665,7 @@ board_fixture_verdict() {  # $1=out $2=rc $3=expected -> prints its decision AND
 
 say "7. the board is valid JSONL"
 b="$HERE/.coding-hermes/board/tasks.jsonl"
-board_arm "$b" || fails=$((fails+1))
+board_arm "$b" || selftest_fail
 
 say "7b. board gate rejects invalid records with line-numbered FAIL rows (CF-088)"
 tmpd=$(mktemp -d)
@@ -634,7 +689,7 @@ for arm in null array string number missing-id duplicate-id bad-status missing-s
     say "  PASS  $arm fixture rejected: $verdict"
     printf '%s\n' "$out"
   else
-    say "  FAIL  $arm fixture escaped the board gate: $verdict"; fails=$((fails+1))
+    say "  FAIL  $arm fixture escaped the board gate: $verdict"; selftest_fail
     printf '%s\n' "$out"
   fi
 done
@@ -649,7 +704,7 @@ for iter in 1 2 3 4 5; do
   if verdict=$(board_fixture_verdict "$out" "$rc" "board duplicate id 'CF-001': lines 1 and 2"); then
     say "  PASS  CF-482 iteration $iter -> $verdict"
   else
-    say "  FAIL  CF-482 iteration $iter -> $verdict"; fails=$((fails+1))
+    say "  FAIL  CF-482 iteration $iter -> $verdict"; selftest_fail
   fi
   printf '%s\n' "$out" | sed 's/^/          | /'
 done
@@ -659,13 +714,13 @@ out=$(board_arm "$tmpd/multiple.jsonl" 2>&1); rc=$?
 if [ "$rc" -eq 1 ] && [ "$(printf '%s\n' "$out" | grep -c '^  FAIL  board line [1-4]: expected JSON object,')" = 4 ]; then
   say "  PASS  all four offending line numbers reported in one board run"
 else
-  say "  FAIL  board gate skipped offending records (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  board gate skipped offending records (exit $rc)"; selftest_fail
 fi
 out=$(PATH=/nonexistent board_arm "$b" 2>&1); rc=$?
 if [ "$rc" -eq 1 ] && [ "$out" = '  FAIL  board parser: python3 missing' ]; then
   say "  PASS  missing python3 -> named FAIL, exit $rc"
 else
-  say "  FAIL  missing python3 escaped the board gate (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  missing python3 escaped the board gate (exit $rc)"; selftest_fail
 fi
 # board-arm-unterminated-tail: the same valid records must pass intact and fail without
 # the last newline. The empty board intentionally remains PASS 0/0.
@@ -679,34 +734,34 @@ for arm in intact tail empty; do
       if [ "$out" = '  PASS  2/2 rows parse' ]; then
         say "  PASS  board-arm-unterminated-tail intact: $out"
       else
-        say "  FAIL  board-arm-unterminated-tail intact: $out"; fails=$((fails+1))
+        say "  FAIL  board-arm-unterminated-tail intact: $out"; selftest_fail
       fi ;;
     tail:1)
       if printf '%s\n' "$out" | grep -Fxq '  FAIL  board: 1 unterminated row (line 2)' \
         && printf '%s\n' "$out" | grep -Fxq '  note  pre-fix parser control would accept 1 of 2 rows'; then
         say "  PASS  board-arm-unterminated-tail tail: $out"
       else
-        say "  FAIL  board-arm-unterminated-tail tail (exit $rc): $out"; fails=$((fails+1))
+        say "  FAIL  board-arm-unterminated-tail tail (exit $rc): $out"; selftest_fail
       fi ;;
     empty:0)
       if [ "$out" = '  PASS  0/0 rows parse' ]; then
         say "  PASS  board-arm-unterminated-tail empty: $out"
       else
-        say "  FAIL  board-arm-unterminated-tail empty: $out"; fails=$((fails+1))
+        say "  FAIL  board-arm-unterminated-tail empty: $out"; selftest_fail
       fi ;;
-    *) say "  FAIL  board-arm-unterminated-tail $arm (exit $rc): $out"; fails=$((fails+1)) ;;
+    *) say "  FAIL  board-arm-unterminated-tail $arm (exit $rc): $out"; selftest_fail ;;
   esac
 done
 rm -rf "$tmpd"
 
 say "8. project board entrypoint is real and fails closed without dependency"
-bash -n "$HERE/scripts/boardctl" && say "  PASS  bash -n scripts/boardctl" || { say "  FAIL  bash syntax"; fails=$((fails+1)); }
-"$HERE/scripts/boardctl" --help >/dev/null 2>&1 && say "  PASS  local help" || { say "  FAIL  help"; fails=$((fails+1)); }
+bash -n "$HERE/scripts/boardctl" && say "  PASS  bash -n scripts/boardctl" || { say "  FAIL  bash syntax"; selftest_fail; }
+"$HERE/scripts/boardctl" --help >/dev/null 2>&1 && say "  PASS  local help" || { say "  FAIL  help"; selftest_fail; }
 missing=$(env -i PATH=/usr/bin:/bin HOME="$HOME" /bin/bash "$HERE/scripts/boardctl" list 2>&1); rc=$?
 if [ "$rc" -eq 127 ] && printf '%s' "$missing" | grep -q 'FAIL boardctl'; then
   say "  PASS  missing boardctl -> explicit FAIL, exit 127"
 else
-  say "  FAIL  missing dependency was not surfaced"; fails=$((fails+1))
+  say "  FAIL  missing dependency was not surfaced"; selftest_fail
 fi
 
 say "9. every prompt file the README relies on exists"
@@ -723,13 +778,13 @@ if prompt_refs_missing "$HERE/README.md" "$HERE" >/dev/null; then
   say "  PASS  every prompts/*.md named by README.md exists"
 else
   say "  FAIL  README names a prompt file that is not shipped: $(prompt_refs_missing "$HERE/README.md" "$HERE" | tr '\n' ' ')"
-  fails=$((fails+1))
+  selftest_fail
 fi
 # negative fixture: a README that names a prompt nobody ships must be refused
 tmpd=$(mktemp -d)
 sed 's#prompts/qa\.md#prompts/ghost-lane.md#' "$HERE/README.md" > "$tmpd/README.md"
 if prompt_refs_missing "$tmpd/README.md" "$HERE" >/dev/null; then
-  say "  FAIL  a README naming an absent prompt was accepted"; fails=$((fails+1))
+  say "  FAIL  a README naming an absent prompt was accepted"; selftest_fail
 else
   say "  PASS  absent prompt refused ($(prompt_refs_missing "$tmpd/README.md" "$HERE" | head -1))"
 fi
@@ -754,7 +809,7 @@ if [ "$rc" -ne 0 ] \
   && ! printf '%s\n' "$out" | grep -Fq 'pip failed'; then
   say "  PASS  Python 3.14 refusal names the supported range without pip"
 else
-  say "  FAIL  unsupported Python refusal was missing or reached pip"; fails=$((fails+1))
+  say "  FAIL  unsupported Python refusal was missing or reached pip"; selftest_fail
 fi
 rm -rf "$tmpd"
 
@@ -914,13 +969,13 @@ then
     for arm in commented empty-value real-value block-absent wrong-key empty-username empty-password \
       missing-password missing-username wrong-indent invalid-yaml invalid-scalar duplicate-key bad-indent tab-indent \
       non-string trailing-comments quoted-hash plain-value; do
-      auth_fixture_check "$arm" || fails=$((fails+1))
+      auth_fixture_check "$arm" || selftest_fail
     done
     for mutation in grep-bypass always-refuse; do
       arm=commented
       [ "$mutation" != always-refuse ] || arm=real-value
       if auth_fixture_check "$arm" "$tmpd/$mutation/scripts/harness/install-hermes.sh" >/dev/null; then
-        say "  FAIL  CF-071 $auth_mode accepted $mutation mutation"; fails=$((fails+1))
+        say "  FAIL  CF-071 $auth_mode accepted $mutation mutation"; selftest_fail
       else
         say "  PASS  CF-071 $auth_mode rejected $mutation mutation"
       fi
@@ -934,11 +989,11 @@ then
     say "  PASS  CF-071 real-value red control: exit $rc, launch reached, HTTP 503"
     printf '%s\n' "$expected"
   else
-    say "  FAIL  CF-071 real-value red control did not fail on HTTP 503 (exit $rc)"; fails=$((fails+1))
+    say "  FAIL  CF-071 real-value red control did not fail on HTTP 503 (exit $rc)"; selftest_fail
   fi
   unset -f auth_fixture_run auth_fixture_check
 else
-  say "  FAIL  CF-071 public-bind-auth fixture setup (stdlib Python required)"; fails=$((fails+1))
+  say "  FAIL  CF-071 public-bind-auth fixture setup (stdlib Python required)"; selftest_fail
 fi
 rm -rf "$tmpd"
 # END public-bind-auth
@@ -947,13 +1002,13 @@ say "11. lane workdir targets: local paths AND remote user@host/scheme targets"
 if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_lane_target.py" >/dev/null 2>&1; then
   say "  PASS  lane target parse/validate, home-repo rejection, remote structural-only"
 else
-  say "  FAIL  lane target contract"; fails=$((fails+1))
+  say "  FAIL  lane target contract"; selftest_fail
 fi
 say "12. node disk floor resolves from CLI/env/config with fail-closed values"
 if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_disk_floor.py" >/dev/null 2>&1; then
   say "  PASS  floor precedence, role defaults, malformed values refused"
 else
-  say "  FAIL  disk floor contract"; fails=$((fails+1))
+  say "  FAIL  disk floor contract"; selftest_fail
 fi
 # CF-082: a decimal floor is preserved, never truncated down (5.9G used to resolve to
 # 5, so admission enforced a lower number than the operator wrote). Two layers are
@@ -983,7 +1038,7 @@ done
 if [ -z "$cf082_bad" ]; then
   say "  PASS  CF-082 decimals preserved: 5.9G -> 5.9, 5.5G -> 5.5, 5.1G -> 5.1, 1.5G -> 1.5; integral 5G -> 5 in JSON and bare print"
 else
-  say "  FAIL  CF-082 a decimal floor did not survive resolution:$cf082_bad"; fails=$((fails+1))
+  say "  FAIL  CF-082 a decimal floor did not survive resolution:$cf082_bad"; selftest_fail
 fi
 # One admission arm per pole: 5.1 PASSes and 5.9 FAILs, both against a host whose only
 # free space is 5.5 GB. The literal rows are asserted, not a substring: the printed floor
@@ -997,7 +1052,7 @@ if [ "$cf082_pass_rc" -eq 0 ] && [ "$cf082_pass" = "$cf082_pass_want" ] \
   say "  PASS  CF-082 admission on 5.5 GB free: floor 5.1 GB admitted, floor 5.9 GB refused, both rows name the written floor"
   printf '%s\n' "$cf082_pass" "$cf082_fail"
 else
-  say "  FAIL  CF-082 admission did not split 5.1G from 5.9G (pass rc $cf082_pass_rc: $cf082_pass / fail rc $cf082_fail_rc: $cf082_fail)"; fails=$((fails+1))
+  say "  FAIL  CF-082 admission did not split 5.1G from 5.9G (pass rc $cf082_pass_rc: $cf082_pass / fail rc $cf082_fail_rc: $cf082_fail)"; selftest_fail
 fi
 # The control: the resolver as shipped at deafbc3 truncates the same value. Without this
 # row a green here could be a resolver that never had the defect, or an arm that never ran.
@@ -1007,10 +1062,10 @@ if git -C "$HERE" show deafbc3:scripts/disk_floor.py > "$cf082/pre-fix.py" 2>/de
   if [ "$pre_rc" -eq 0 ] && [ "$pre_out" = "$pre_want" ]; then
     say "  PASS  CF-082 pre-fix control: the deafbc3 resolver truncates 5.9G to $pre_want"
   else
-    say "  FAIL  CF-082 pre-fix control did not reproduce the truncation (exit $pre_rc): $pre_out"; fails=$((fails+1))
+    say "  FAIL  CF-082 pre-fix control did not reproduce the truncation (exit $pre_rc): $pre_out"; selftest_fail
   fi
 else
-  say "  FAIL  CF-082 pre-fix control: deafbc3:scripts/disk_floor.py is unavailable"; fails=$((fails+1))
+  say "  FAIL  CF-082 pre-fix control: deafbc3:scripts/disk_floor.py is unavailable"; selftest_fail
 fi
 rm -rf "$cf082"
 # CF-357: a lane may not be cloned onto itself. `--from X --to X` used to rewrite the source
@@ -1021,7 +1076,7 @@ rm -rf "$cf082"
 if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_clone_lane.py" >/dev/null 2>&1; then
   say "  PASS  CF-357 clone_lane same-lane clone refused before the DB open, source row intact, genuine clone still lands"
 else
-  say "  FAIL  CF-357 clone_lane same-lane refusal contract"; fails=$((fails+1))
+  say "  FAIL  CF-357 clone_lane same-lane refusal contract"; selftest_fail
 fi
 # CF-230: harness selection resolves in one place (specs/HARNESS-MATRIX.md §4). Part of
 # section 12: no new numbered section and no census change (arms_tree stays 55). The test
@@ -1030,7 +1085,7 @@ fi
 if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_harness_resolve.py" >/dev/null 2>&1; then
   say "  PASS  CF-230 harness resolution: directive > lane > matrix > hermes, every reason recorded"
 else
-  say "  FAIL  CF-230 harness resolution contract (refusals, order, spec sync)"; fails=$((fails+1))
+  say "  FAIL  CF-230 harness resolution contract (refusals, order, spec sync)"; selftest_fail
 fi
 
 # BEGIN ownership-staged
@@ -1062,7 +1117,7 @@ if [ "$ownership_staged_stage_ok" -eq 1 ] \
   && printf '%s\n' "$ownership_staged_clean_json" | grep -Fq '"state": "clean"'; then
   say "  PASS  CF-406 ownership status distinguishes staged tracked changes and clean state"
 else
-  say "  FAIL  CF-406 ownership status staged/clean distinction (staged rc=$ownership_staged_rc, clean rc=$ownership_staged_clean_rc)"; fails=$((fails+1))
+  say "  FAIL  CF-406 ownership status staged/clean distinction (staged rc=$ownership_staged_rc, clean rc=$ownership_staged_clean_rc)"; selftest_fail
 fi
 rm -rf "$ownership_staged_tmp"
 # END ownership-staged
@@ -1070,7 +1125,7 @@ rm -rf "$ownership_staged_tmp"
 if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_ownership_residue.py"; then
   say "  PASS  CF-412 ownership residue leaf classification"
 else
-  say "  FAIL  CF-412 ownership residue leaf classification"; fails=$((fails+1))
+  say "  FAIL  CF-412 ownership residue leaf classification"; selftest_fail
 fi
 
 say "13. node provisioning names its resolved floor and refuses below it"
@@ -1079,7 +1134,7 @@ out=$(env HOME="$tmpd/fakeroot" NODE_DISK_FLOOR=999999 /bin/bash "$HERE/scripts/
 if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -Fq 'FAIL disk-floor'; then
   say "  PASS  malformed floor refused before any install"
 else
-  say "  FAIL  malformed floor was accepted or not named"; fails=$((fails+1))
+  say "  FAIL  malformed floor was accepted or not named"; selftest_fail
 fi
 rm -rf "$tmpd"
 
@@ -1124,7 +1179,7 @@ if [ "$rc" -ne 0 ] && [ -n "$summary" ] && [ "$summary" = "$fail_rows" ] && [ "$
   && printf '%s\n' "$out" | grep -Fq '  FAIL  harness:fixture/a — simulated adapter failure one'; then
   say "  PASS  AC2 no double counting: $fail_rows printed FAIL rows -> NODE: FAIL ($summary)"
 else
-  say "  FAIL  AC2 summary said $summary but the run printed $fail_rows FAIL rows"; fails=$((fails+1))
+  say "  FAIL  AC2 summary said $summary but the run printed $fail_rows FAIL rows"; selftest_fail
 fi
 # A silent nonzero adapter must create one parent-side FAIL row and no manifest. This is the
 # CF-066 control for an adapter crash, missing binary or set -e abort without its own row.
@@ -1143,7 +1198,7 @@ if [ "$rc" -ne 0 ] && [ "$silent_summary" = 1 ] && [ "$silent_manifest" -eq 0 ] 
   && printf '%s\n' "$out" | grep -Fq '  FAIL  harness:fixture — installer exited 1'; then
   say "  PASS  AC1 silent adapter fails closed: parent row names exit 1, NODE: FAIL (1), no manifest"
 else
-  say "  FAIL  AC1 silent adapter did not fail closed (rc $rc, summary $silent_summary, manifest $silent_manifest)"; fails=$((fails+1))
+  say "  FAIL  AC1 silent adapter did not fail closed (rc $rc, summary $silent_summary, manifest $silent_manifest)"; selftest_fail
 fi
 # the same fixture goes green: a passing adapter must keep NODE: PASS and exit 0
 cat > "$tmpd/scripts/harness/install-fixture.sh" <<'EOF'
@@ -1162,7 +1217,7 @@ if [ "$rc" -eq 0 ] && [ "$(printf '%s\n' "$out" | grep -c '^  FAIL')" = 0 ] \
   && printf '%s\n' "$out" | grep -Fq 'NODE: PASS'; then
   say "  PASS  AC3 passing adapter with no FAIL rows keeps NODE: PASS and exit 0"
 else
-  say "  FAIL  AC3 passing adapter produced FAIL rows or a nonzero exit"; fails=$((fails+1))
+  say "  FAIL  AC3 passing adapter produced FAIL rows or a nonzero exit"; selftest_fail
 fi
 rm -rf "$tmpd"
 
@@ -1177,7 +1232,7 @@ if [ -n "$doc_cmd" ] && printf '%s' "$doc_cmd" | grep -Fq 'CRIER_URL=' \
   && ! printf '%s' "$doc_cmd" | grep -Fq 'rev-parse'; then
   say "  PASS  documented line carries CRIER_URL= and no trailing read-back"
 else
-  say "  FAIL  documented line still relies on an export it does not carry, or ends in a read-back"; fails=$((fails+1))
+  say "  FAIL  documented line still relies on an export it does not carry, or ends in a read-back"; selftest_fail
 fi
 tmpd=$(mktemp -d)
 mkdir -p "$tmpd/scripts/harness" "$tmpd/bin"
@@ -1217,21 +1272,21 @@ if [ "$rc" = 0 ] && printf '%s' "$old_summary" | grep -Fq 'NODE: FAIL' \
   && git -C "$h/repo" rev-parse HEAD >/dev/null 2>&1; then
   say "  PASS  old shape exits 0 on a failed check ($old_summary) — the defect is real"
 else
-  say "  FAIL  old shape no longer masks a failed check; re-measure CF-054"; fails=$((fails+1))
+  say "  FAIL  old shape no longer masks a failed check; re-measure CF-054"; selftest_fail
 fi
 h=$(mktemp -d); rc=$(cf054_run "$node_call" "$h" red)
 red_summary=$(grep -E '^NODE: ' "$h/out.log" | tail -1)
 if [ "$rc" = 1 ] && printf '%s' "$red_summary" | grep -Fq 'NODE: FAIL'; then
   say "  PASS  documented shape exits $rc on a failed check ($red_summary)"
 else
-  say "  FAIL  documented shape exited $rc on a failed check"; fails=$((fails+1))
+  say "  FAIL  documented shape exited $rc on a failed check"; selftest_fail
 fi
 h=$(mktemp -d); rc=$(cf054_run "$node_call" "$h" green)
 green_summary=$(grep -E '^NODE: ' "$h/out.log" | tail -1)
 if [ "$rc" = 0 ] && printf '%s' "$green_summary" | grep -Fq 'NODE: PASS'; then
   say "  PASS  documented shape exits 0 on a passing fixture ($green_summary)"
 else
-  say "  FAIL  documented shape exited $rc on a passing fixture ($green_summary)"; fails=$((fails+1))
+  say "  FAIL  documented shape exited $rc on a passing fixture ($green_summary)"; selftest_fail
 fi
 rm -rf "$tmpd"
 
@@ -1245,7 +1300,7 @@ if [ "$rc" -eq 0 ] && printf '%s\n' "$staged" | grep -Fxq 'node-bus-worker.py' \
   && [ "$(printf '%s\n' "$staged" | grep -Fc 'node-bus-worker.py')" = 1 ]; then
   while IFS= read -r file; do
     mkdir -p "$tmpd/scripts/$(dirname "$file")"
-    cp "$HERE/scripts/$file" "$tmpd/scripts/$file" || fails=$((fails+1))
+    cp "$HERE/scripts/$file" "$tmpd/scripts/$file" || selftest_fail
   done <<< "$staged"
   mkdir -p "$tmpd/fakeroot/harness"
   cp "$tmpd/scripts/node-bus-worker.py" "$tmpd/fakeroot/node-bus-worker.py"
@@ -1254,10 +1309,10 @@ if [ "$rc" -eq 0 ] && printf '%s\n' "$staged" | grep -Fxq 'node-bus-worker.py' \
   if [ -x "$tmpd/fakeroot/node-bus-worker.py" ] && python3 -B "$tmpd/fakeroot/node-bus-worker.py" --help >/dev/null 2>&1; then
     say "  PASS  staged node-bus-worker.py is executable at $HOME/node-bus-worker.py and accepts --help"
   else
-    say "  FAIL  staged node-bus-worker.py is not usable at the crier probe path"; fails=$((fails+1))
+    say "  FAIL  staged node-bus-worker.py is not usable at the crier probe path"; selftest_fail
   fi
 else
-  say "  FAIL  staged node-bus-worker.py missing or duplicated (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  staged node-bus-worker.py missing or duplicated (exit $rc)"; selftest_fail
 fi
 cp "$HERE/scripts/node-create.sh" "$tmpd/scripts/node-create.sh"
 sed -i 's/ deploy_key.py node-bus-worker.py/ deploy_key.py/' "$tmpd/scripts/node-create.sh"
@@ -1266,7 +1321,7 @@ if [ "$negative_rc" -ne 0 ] && printf '%s\n' "$negative" | grep -Fq 'staged_set'
   && printf '%s\n' "$negative" | grep -Fq 'node-bus-worker.py'; then
   say "  PASS  omitted node-bus-worker.py is rejected by the staged-set validator"
 else
-  say "  FAIL  staged-set negative control accepted an omitted node-bus-worker.py (exit $negative_rc)"; fails=$((fails+1))
+  say "  FAIL  staged-set negative control accepted an omitted node-bus-worker.py (exit $negative_rc)"; selftest_fail
 fi
 rm -rf "$tmpd"
 # ch:trace row=CF-276 spec=docs/handbook/chapters/M1-provisioning.md#M1-S2 test=bash tests/selftest.sh evidence=tests/selftest.sh:15b verdict=pending
@@ -1278,10 +1333,10 @@ mkdir -p "$tmpd/scripts/harness" "$tmpd/bin"
 staged=$(bash "$HERE/scripts/node-create.sh" --staged-files); rc=$?
 if [ "$rc" -eq 0 ]; then
   while IFS= read -r file; do
-    cp "$HERE/scripts/$file" "$tmpd/scripts/$file" || fails=$((fails+1))
+    cp "$HERE/scripts/$file" "$tmpd/scripts/$file" || selftest_fail
   done <<< "$staged"
 else
-  say "  FAIL  staging manifest validation exited $rc"; fails=$((fails+1))
+  say "  FAIL  staging manifest validation exited $rc"; selftest_fail
 fi
 # Layer 00 resolves the real floor, but an impossible admission floor prevents installs.
 # Both runs use fresh HOME and a deterministic df, regardless of host free space.
@@ -1297,7 +1352,7 @@ if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -Fq '  PASS  disk_floor — 40
   && ! printf '%s\n' "$out" | grep -Fq "can't open file"; then
   say "  PASS  staged disk floor resolves: 4096 GiB from env; admission refuses before installs"
 else
-  say "  FAIL  staged disk floor missing or not named (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  staged disk floor missing or not named (exit $rc)"; selftest_fail
 fi
 rm "$tmpd/scripts/disk_floor.py"
 out=$(env -i HOME="$tmpd/missing-home" PATH="$tmpd/bin:$PATH" \
@@ -1308,7 +1363,7 @@ if [ "$rc" -eq 1 ] && [ "$(printf '%s\n' "$out" | grep -c '^  FAIL  disk_floor �
   say "  PASS  missing disk floor -> one countable FAIL row, NODE: FAIL (1), exit $rc"
   printf '%s\n' "$out"
 else
-  say "  FAIL  missing disk floor crashed or escaped counting (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  missing disk floor crashed or escaped counting (exit $rc)"; selftest_fail
 fi
 # Mutation: keep the dependency on disk, remove it ONLY from a scratch manifest.
 cp "$HERE/scripts/disk_floor.py" "$tmpd/scripts/"
@@ -1317,7 +1372,7 @@ out=$(bash "$tmpd/scripts/node-create.sh" --staged-files 2>&1); rc=$?
 if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -Fq 'references unstaged disk_floor.py'; then
   say "  PASS  disk floor omitted from scratch manifest -> validation exit $rc"
 else
-  say "  FAIL  incomplete staging manifest accepted (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  incomplete staging manifest accepted (exit $rc)"; selftest_fail
 fi
 # Stub only the bunker transport and control-host verifier. Provisioning fails, while
 # staging succeeds (or cp fails explicitly); cleanup must identify only owned agents.
@@ -1374,14 +1429,14 @@ for arm in owned reused copy-failure; do
     if [ "$rc" -eq 1 ] && ! printf '%s\n' "$out" | grep -Fq 'bunker destroy'; then
       say "  PASS  reused agent failure does not request destruction"
     else
-      say "  FAIL  reused agent cleanup ownership (exit $rc)"; fails=$((fails+1))
+      say "  FAIL  reused agent cleanup ownership (exit $rc)"; selftest_fail
     fi
   elif [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -Fxq "cleanup required: bunker destroy $(cat "$tmpd/agent") --server fixture-server" \
     && { [ "$arm" != copy-failure ] || { printf '%s\n' "$out" | grep -Fq '  FAIL  staged — copy failed:' \
       && ! printf '%s\n' "$out" | grep -Fq '  PASS  provision'; }; }; then
     say "  PASS  $arm failure names spawned agent and explicit-server destroy command"
   else
-    say "  FAIL  $arm failure lost cleanup command or staging error (exit $rc)"; fails=$((fails+1))
+    say "  FAIL  $arm failure lost cleanup command or staging error (exit $rc)"; selftest_fail
   fi
 done
 
@@ -1402,7 +1457,7 @@ if [ "$spawn_rc" -eq 1 ] \
   && ! printf '%s\n' "$spawn_out" | grep -Fq '  PASS  provision'; then
   say "  PASS  CF-056 spawn/staging failure names unique log $spawn_log and emits no provision PASS"
 else
-  say "  FAIL  CF-056 spawn/staging failure lost unique log, diagnostic, or PASS suppression (exit $spawn_rc)"; fails=$((fails+1))
+  say "  FAIL  CF-056 spawn/staging failure lost unique log, diagnostic, or PASS suppression (exit $spawn_rc)"; selftest_fail
   printf '%s\n' "$spawn_out" | sed 's/^/    | /'
 fi
 
@@ -1444,7 +1499,7 @@ if [ "$cf490_rc" -eq 1 ] \
 else
   say "  FAIL  CF-490 host spawn refusal not classified (exit $cf490_rc, host rows ${cf490_host_rows:-?}, spawn rows ${cf490_spawn_rows:-?}, remedy lines ${cf490_remedy_rows:-?})"
   printf '%s\n' "$cf490_out" | sed 's/^/    | /'
-  fails=$((fails+1))
+  selftest_fail
 fi
 # RED CONTROL: the pre-fix script at this row's base commit, paired with the project-node.sh of the
 # SAME revision so the staged-set validator cannot fail the control for the wrong reason.
@@ -1472,11 +1527,11 @@ if [ "$cf490_srcs_ok" -eq 1 ] \
   else
     say "  FAIL  CF-490 red control did not reproduce the unclassified refusal (exit $cf490_before_rc, host rows ${cf490_before_host:-?}, spawn rows ${cf490_before_spawn:-?}, remedy lines ${cf490_before_remedy:-?})"
     printf '%s\n' "$cf490_before_out" | sed 's/^/    | /'
-    fails=$((fails+1))
+    selftest_fail
   fi
 else
   say "  FAIL  CF-490 pre-fix source unavailable or already classified (git show 70d02621:scripts/node-create.sh)"
-  fails=$((fails+1))
+  selftest_fail
 fi
 
 # ch:trace row=CF-490 spec=docs/handbook/chapters/M1-provisioning.md#III.M1.S2 wave=none:serial test=tests/selftest.sh::cf490-host-spawn-class doc=docs/OPERATIONS.md evidence=tests/selftest.sh::cf490-host-spawn-class witness=none:local-fixture verdict=none:foreman-judges-at-accepted-tip commit=none:worker-commit memory=none:foreman-writes
@@ -1514,7 +1569,7 @@ done
 if [ "$handoff_ok" -eq 1 ]; then
   say "  PASS  crier_url handoff preserves exported URL and shell metacharacters"
 else
-  say "  FAIL  crier_url handoff missing assignment or named node PASS"; fails=$((fails+1))
+  say "  FAIL  crier_url handoff missing assignment or named node PASS"; selftest_fail
 fi
 
 # CF-126 ARM B: neither an unset nor an empty bus may cost a bunker invocation.
@@ -1538,7 +1593,7 @@ done
 if [ "$refusal_ok" -eq 1 ]; then
   say "  PASS  crier_url refusal rejects unset and empty bus before bunker invocation"
 else
-  say "  FAIL  crier_url refusal missing named FAIL or invoked bunker"; fails=$((fails+1))
+  say "  FAIL  crier_url refusal missing named FAIL or invoked bunker"; selftest_fail
 fi
 # CF-087: the staged-set validator reads every spelling of a HERE reference in every staged
 # member, and the set it prints is the closure it derived — not a second list nobody checks.
@@ -1556,12 +1611,12 @@ for staged_arm in spellings members derive; do
         staged_rows=$((staged_rows+1)) ;;
       *)
         say "  FAIL  staged_set:$staged_arm — probe row did not name its staged_set evidence: $staged_row"
-        fails=$((fails+1)) ;;
+        selftest_fail ;;
     esac
   done <<< "$staged_out"
   if [ "$staged_rc" -ne 0 ] || [ "$staged_rows" -eq 0 ]; then
     say "  FAIL  staged_set:$staged_arm — probe exited $staged_rc with $staged_rows asserted rows"
-    fails=$((fails+1))
+    selftest_fail
   fi
 done
 rm -rf "$tmpd"
@@ -1623,10 +1678,10 @@ if git -C "$HERE" show bbb0719:scripts/verify-node.sh > "$tmpd/before/verify-nod
     && printf '%s\n' "$out" | grep -Eq '^  WARN  unauth_refused — /api/system/stats -> 404$'; then
     say "  PASS  pre-fix 404 incorrectly passes: fixture detects CF-077"
   else
-    say "  FAIL  pre-fix 404 detector control (exit $rc)"; fails=$((fails+1))
+    say "  FAIL  pre-fix 404 detector control (exit $rc)"; selftest_fail
   fi
 else
-  say "  FAIL  pre-fix source unavailable"; fails=$((fails+1))
+  say "  FAIL  pre-fix source unavailable"; selftest_fail
 fi
 # 000 is its own verdict now: an unreachable port with the gateway answering inside the node is
 # UNVERIFIED (exit 3), not FAIL — a transport gap is not a broken node, and calling it a failure is
@@ -1639,7 +1694,7 @@ if [ "$rc" -eq 3 ] \
   say "  PASS  auth stats 000 -> WARN gateway_reachable, exit $rc (UNVERIFIED, not FAIL)"
 else
   say "  FAIL  auth stats 000 was not reported as UNVERIFIED (exit $rc): $(printf '%s\n' "$out" | grep -E '^  (PASS|FAIL|WARN)|^VERIFY' | head -4 | tr '\n' ' ')"
-  fails=$((fails+1))
+  selftest_fail
 fi
 
 for c in 401 302 403 404 500 200; do
@@ -1650,7 +1705,7 @@ for c in 401 302 403 404 500 200; do
     && printf '%s\n' "$out" | grep -Eq '^  PASS  auth_gate'; then
     say "  PASS  auth stats $c -> $row, exit $rc"
   else
-    say "  FAIL  auth stats $c did not produce named $row (exit $rc)"; fails=$((fails+1))
+    say "  FAIL  auth stats $c did not produce named $row (exit $rc)"; selftest_fail
   fi
 done
 for body in '{"status":"ok"}' '{"auth_required":false}' '{"auth_required":trueish}'; do
@@ -1660,7 +1715,7 @@ for body in '{"status":"ok"}' '{"auth_required":false}' '{"auth_required":trueis
     && printf '%s\n' "$out" | grep -Eq '^  PASS  unauth_refused'; then
     say "  PASS  auth marker $body -> named auth_gate FAIL, exit $rc"
   else
-    say "  FAIL  auth marker $body was not refused (exit $rc)"; fails=$((fails+1))
+    say "  FAIL  auth marker $body was not refused (exit $rc)"; selftest_fail
   fi
 done
 say "18. node creation requires both auth legs, not just successful provisioning"
@@ -1677,7 +1732,7 @@ for arm in refused missing-marker closed; do
       && ! printf '%s\n' "$out" | grep -q '^NODE CREATED:'; }; }; then
     say "  PASS  node-create $arm -> $summary, exit $rc"
   else
-    say "  FAIL  node-create $arm admitted an unverified node or rejected control (exit $rc)"; fails=$((fails+1))
+    say "  FAIL  node-create $arm admitted an unverified node or rejected control (exit $rc)"; selftest_fail
   fi
 done
 rm -rf "$tmpd"
@@ -1698,7 +1753,7 @@ if [ "$accepted_rc" -eq 0 ] && [ "$rejected_rc" -eq 4 ] \
   say "  PASS  repo_url guard rejects a phantom local: root (1 rejected, 1 accepted)"
 else
   say "  FAIL  repo_url guard fixture (accepted exit $accepted_rc, rejected exit $rejected_rc)"
-  fails=$((fails+1))
+  selftest_fail
 fi
 # CF-097: `repo-url` and `verify` probe the same kind of root, so a path whose git
 # top level IS $HOME must be refused by repo-url with the reason verify already gives
@@ -1721,7 +1776,7 @@ if [ "$home_verify_rc" -eq 4 ] && [ "$home_refused_rc" -eq 4 ] \
   say "  PASS  repo-url refuses the home-rooted repo verify refuses (exit 4, not_home_repo)"
 else
   say "  FAIL  repo-url accepted a home-rooted repo — missing not_home_repo check (verify exit $home_verify_rc, repo-url exit $home_refused_rc)"
-  fails=$((fails+1))
+  selftest_fail
 fi
 # ARM (red control): the same fixture against the revision this row was raised on
 # (a32f234), which carries no home check on the repo-url arm. It must report the home
@@ -1735,10 +1790,10 @@ if git -C "$HERE" show a32f234:scripts/lane_target.py > "$tmpd/lane_target_prefi
     say "  PASS  pre-fix a32f234 accepts the home-rooted repo — the repo-url arm is falsifiable"
   else
     say "  FAIL  the pre-fix control did not reproduce the missing not_home_repo check (exit $prefix_rc)"
-    fails=$((fails+1))
+    selftest_fail
   fi
 else
-  say "  FAIL  pre-fix source unavailable (git show a32f234:scripts/lane_target.py)"; fails=$((fails+1))
+  say "  FAIL  pre-fix source unavailable (git show a32f234:scripts/lane_target.py)"; selftest_fail
 fi
 rm -rf "$tmpd"
 
@@ -1768,7 +1823,7 @@ if [ "$rc" -ne 0 ] && [ -n "$reap_line" ] && [ -n "$fail_line" ] \
   && printf '%s\n' "$out" | grep -Fxq 'NODE: FAIL (disk admission)'; then
   say "  PASS  pip cache reaped before one final disk FAIL; admission still refuses"
 else
-  say "  FAIL  reclaim-before-refusal ordering or deletion (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  reclaim-before-refusal ordering or deletion (exit $rc)"; selftest_fail
   printf '%s\n' "$out"
 fi
 mkdir -p "$tmpd/fakeroot/.cache/pip"
@@ -1783,7 +1838,7 @@ if [ "$rc" -ne 0 ] && [ -f "$tmpd/fakeroot/.cache/pip/payload" ] \
   && printf '%s\n' "$out" | grep -Fq '  PASS  reach:https://pypi.org/simple/'; then
   say "  PASS  check preserves pip bytes, counts one disk failure and continues preflight"
 else
-  say "  FAIL  check mutated the cache or stopped measuring (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  check mutated the cache or stopped measuring (exit $rc)"; selftest_fail
 fi
 # Positive control: df becomes green only after the real reclaimer removes pip.
 # CF-290: age the cache the check arm just wrote — a fresh cache is now kept, so a
@@ -1804,7 +1859,7 @@ if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fq '2.0 GB free after reclaim
   && ! printf '%s\n' "$out" | grep -q '^  FAIL'; then
   say "  PASS  re-measure admits a recovered node without a stale FAIL row"
 else
-  say "  FAIL  recovered node was not admitted (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  recovered node was not admitted (exit $rc)"; selftest_fail
 fi
 rm "$tmpd/scripts/reclaim_disk.py"
 out=$(env -i PATH="$tmpd/bin:$PATH" HOME="$tmpd/fakeroot" NODE_DISK_FLOOR=4096 \
@@ -1813,7 +1868,7 @@ if [ "$rc" -eq 1 ] && [ "$(printf '%s\n' "$out" | grep -c '^  FAIL  disk_floor �
   && printf '%s\n' "$out" | grep -Fxq 'NODE: FAIL (1)'; then
   say "  PASS  missing reclaimer fails closed with one counted row"
 else
-  say "  FAIL  missing reclaimer escaped counting (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  missing reclaimer escaped counting (exit $rc)"; selftest_fail
 fi
 rm -rf "$tmpd"
 # CF-290: two behaviours this reclaimer did not have — a build cache is age-gated by the
@@ -1833,7 +1888,7 @@ if [ "$cf290_rc" -eq 0 ] \
   && printf '%s\n' "$cf290_out" | grep -Fq 'reap  .cache/uv — '; then
   say "  PASS  fresh build cache kept by the newest-subtree-mtime age gate, aged sibling reaped"
 else
-  say "  FAIL  build-cache age gate (exit $cf290_rc)"; fails=$((fails+1)); printf '%s\n' "$cf290_out"
+  say "  FAIL  build-cache age gate (exit $cf290_rc)"; selftest_fail; printf '%s\n' "$cf290_out"
 fi
 cat > "$cf290/probe.py" <<'EOF'
 import importlib.util as util
@@ -1853,7 +1908,7 @@ if git -C "$HERE" show c32b53c:scripts/reclaim_disk.py > "$cf290/prefix.py" 2>/d
     say "  PASS  pre-fix c32b53c reaps a fresh build cache — the age-gate arm is falsifiable"
   else
     say "  FAIL  the pre-fix control kept a fresh cache; the age-gate arm cannot discriminate"
-    fails=$((fails+1))
+    selftest_fail
   fi
   timeout 5s python3 -B "$cf290/probe.py" "$cf290/prefix.py" "$cf290/home" "$cf290/outside" >/dev/null 2>&1
   prefix_rc=$?
@@ -1861,23 +1916,23 @@ if git -C "$HERE" show c32b53c:scripts/reclaim_disk.py > "$cf290/prefix.py" 2>/d
     say "  PASS  pre-fix c32b53c never returns on an outside-root path (timeout 5s -> exit 124)"
   else
     say "  FAIL  the pre-fix control returned on an outside-root path (exit $prefix_rc); the arm cannot discriminate"
-    fails=$((fails+1))
+    selftest_fail
   fi
 else
   say "  FAIL  pre-fix source unavailable (git show c32b53c:scripts/reclaim_disk.py)"
-  fails=$((fails+1))
+  selftest_fail
 fi
 probe_out=$(timeout 20s python3 -B "$cf290/probe.py" "$HERE/scripts/reclaim_disk.py" "$cf290/home" "$cf290/outside" 2>&1); probe_rc=$?
 if [ "$probe_rc" -eq 0 ] && [ "$probe_out" = "skipped:outside-root" ]; then
   say "  PASS  outside-root path returns skipped:outside-root under a bounded containment walk"
 else
-  say "  FAIL  outside-root containment (exit $probe_rc, output '$probe_out')"; fails=$((fails+1))
+  say "  FAIL  outside-root containment (exit $probe_rc, output '$probe_out')"; selftest_fail
 fi
 rm -rf "$cf290"
 if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_reclaim.py" >/dev/null 2>&1; then
   say "  PASS  reclaim targets, cache+job TTL, symlink safety, protected files, dry-run and idempotence"
 else
-  say "  FAIL  reclaim contract"; fails=$((fails+1))
+  say "  FAIL  reclaim contract"; selftest_fail
 fi
 # CF-307: the scan-scope gate must never print a green it did not measure. Its
 # surface resolution is exercised arm-by-arm (unreadable dir, dangling symlink,
@@ -1886,7 +1941,7 @@ fi
 if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_scan_scope.py" >/dev/null 2>&1; then
   say "  PASS  scan scope names every surface outcome (unreadable != empty)"
 else
-  say "  FAIL  scan-scope surface resolution (CF-307)"; fails=$((fails+1))
+  say "  FAIL  scan-scope surface resolution (CF-307)"; selftest_fail
 fi
 # CF-091 intra-family repo_url agreement: satellites of one family must carry the
 # primary's repo_url, not just any valid git root (two different-but-valid roots
@@ -1914,7 +1969,7 @@ if [ "$diverged_rc" -ne 0 ] \
   say "  PASS  repo_url family agreement: diverged fixture rejected naming both lanes, aligned accepted"
 else
   say "  FAIL  repo_url family agreement (diverged exit $diverged_rc, aligned exit $aligned_rc)"
-  fails=$((fails+1))
+  selftest_fail
 fi
 rm -rf "$tmpd"
 
@@ -1959,7 +2014,7 @@ if [ "$rc" -eq 1 ] && [ -z "$census_stdout" ] \
   && printf '%s\n' "$out" | grep -Fxq 'census: fetch failed at offset=500'; then
   say "  PASS  census fetch failure -> offset=500, exit $rc, no census printed"
 else
-  say "  FAIL  census fetch guard (exit $rc): $out"; fails=$((fails+1))
+  say "  FAIL  census fetch guard (exit $rc): $out"; selftest_fail
 fi
 
 say "23. census refuses a non-2xx page"
@@ -1968,7 +2023,7 @@ if [ "$rc" -eq 1 ] && [ -z "$census_stdout" ] \
   && [ "$out" = 'census: HTTP 502 at offset=500; refusing to count' ]; then
   say "  PASS  census HTTP 502 -> offset=500, exit $rc, no census printed"
 else
-  say "  FAIL  census HTTP guard (exit $rc): $out"; fails=$((fails+1))
+  say "  FAIL  census HTTP guard (exit $rc): $out"; selftest_fail
 fi
 
 say "24. census requires a projects array even on HTTP 200"
@@ -1978,7 +2033,7 @@ for mode in missing-projects wrong-projects nonjson; do
     && [ "$out" = 'census: missing or invalid .projects array at offset=500' ]; then
     say "  PASS  census $mode -> named .projects refusal, exit $rc, no census printed"
   else
-    say "  FAIL  census .projects guard ($mode, exit $rc): $out"; fails=$((fails+1))
+    say "  FAIL  census .projects guard ($mode, exit $rc): $out"; selftest_fail
   fi
 done
 
@@ -1988,7 +2043,7 @@ if [ "$rc" -eq 1 ] && [ -z "$census_stdout" ] \
   && [ "$out" = 'census: rows received=865 != total reported=866; refusing to count' ]; then
   say "  PASS  census short page -> rows received=865, total reported=866, exit $rc, no census printed"
 else
-  say "  FAIL  census row-total guard (exit $rc): $out"; fails=$((fails+1))
+  say "  FAIL  census row-total guard (exit $rc): $out"; selftest_fail
 fi
 
 say "26. healthy census counts matching rows on both sides of the page boundary"
@@ -1998,7 +2053,7 @@ expected=$(printf '%s\n' 2 'code-factory enabled=true admission=cooldown parent=
 if [ "$rc" -eq 0 ] && [ -z "$out" ] && [ "$census_stdout" = "$expected" ]; then
   say "  PASS  census healthy -> 2 matching rows, exact row format, exit $rc"
 else
-  say "  FAIL  census healthy path (exit $rc): $out / $census_stdout"; fails=$((fails+1))
+  say "  FAIL  census healthy path (exit $rc): $out / $census_stdout"; selftest_fail
 fi
 
 say "27. census still refuses a missing total"
@@ -2007,7 +2062,7 @@ if [ "$rc" -eq 1 ] && [ -z "$census_stdout" ] \
   && [ "$out" = 'census: the scheduler answered without a total; refusing to count' ]; then
   say "  PASS  census missing total -> named refusal, exit $rc, no census printed"
 else
-  say "  FAIL  census missing-total guard (exit $rc): $out"; fails=$((fails+1))
+  say "  FAIL  census missing-total guard (exit $rc): $out"; selftest_fail
 fi
 
 say "28. README census and executable mirror agree except for BASE"
@@ -2029,7 +2084,7 @@ PY
 then
   say "  PASS  census README/mirror byte parity (BASE parameterisation only)"
 else
-  say "  FAIL  census README/mirror drift"; fails=$((fails+1))
+  say "  FAIL  census README/mirror drift"; selftest_fail
 fi
 # END census-fail-closed
 
@@ -2105,18 +2160,18 @@ then
           || ! printf '%s\n' "$out" | grep -Fxq "FAIL  board missing ids — $deleted" \
           || ! printf '%s\n' "$out" | grep -E "^FAIL  board rows —" | grep -Fq "$flipped" \
           || ! printf '%s\n' "$out" | grep -E "^FAIL  board rows —" | grep -Fq "$deleted"; }; then
-        say "  FAIL  publish-drift red fixture omitted a divergent id"; fails=$((fails+1))
+        say "  FAIL  publish-drift red fixture omitted a divergent id"; selftest_fail
         printf '%s\n' "$out"
       else
         say "  PASS  publish-drift $arm fixture, exit $rc"
       fi
     else
-      say "  FAIL  publish-drift $arm fixture (exit $rc)"; fails=$((fails+1))
+      say "  FAIL  publish-drift $arm fixture (exit $rc)"; selftest_fail
       printf '%s\n' "$out"
     fi
   done
 else
-  say "  FAIL  publish-drift fixture setup (fixture root '${tmpd}' — empty means mktemp -d could not build a throwaway directory, so the arms would land in the checkout)"; fails=$((fails+1))
+  say "  FAIL  publish-drift fixture setup (fixture root '${tmpd}' — empty means mktemp -d could not build a throwaway directory, so the arms would land in the checkout)"; selftest_fail
 fi
 # ch:trace row=CF-128 spec=AGENTS.md#rules wave=none:serial test=tests/selftest.sh::drift-head-ancestry doc=none:board-row prompt=none:foreman-brief evidence=tests/selftest.sh::drift-head-ancestry witness=none:local-fixture verdict=none:foreman-judges commit=none:self-referential-hash memory=none:foreman-writes
 # CF-128: every arm above passes --published-dir, and that flag suppresses the HEAD-ancestry leg
@@ -2156,7 +2211,7 @@ if [ -n "$drift_base" ] && [ -n "$drift_tip" ]; then
     && ! printf '%s\n' "$drift_out" | grep -Fq 'Traceback (most recent call last)'; then
     say "  PASS  git-form ancestry present (HEAD=$drift_base ancestor of main=$drift_tip) -> RESULT: OK"
   else
-    say "  FAIL  git-form ancestry present (exit $drift_rc)"; fails=$((fails+1))
+    say "  FAIL  git-form ancestry present (exit $drift_rc)"; selftest_fail
     printf '%s\n' "$drift_out"
   fi
   # Red direction: a sibling commit off the same base is NOT an ancestor of --ref -> FAIL + DRIFT.
@@ -2172,11 +2227,11 @@ if [ -n "$drift_base" ] && [ -n "$drift_tip" ]; then
     && ! printf '%s\n' "$drift_out" | grep -Fq 'Traceback (most recent call last)'; then
     say "  PASS  git-form ancestry absent (HEAD=$drift_sibling not an ancestor of main=$drift_tip) -> RESULT: DRIFT"
   else
-    say "  FAIL  git-form ancestry absent (exit $drift_rc)"; fails=$((fails+1))
+    say "  FAIL  git-form ancestry absent (exit $drift_rc)"; selftest_fail
     printf '%s\n' "$drift_out"
   fi
 else
-  say "  FAIL  git-form ancestry fixture setup"; fails=$((fails+1))
+  say "  FAIL  git-form ancestry fixture setup"; selftest_fail
 fi
 rm -rf "$tmpd"
 
@@ -2203,13 +2258,13 @@ if status_rows_missing_qualifier "$HERE/README.md" "$HERE" >/dev/null; then
   say "  PASS  README Status rows 1 and 3 cite the interpreter-qualified --check"
 else
   say "  FAIL  README Status row lost its interpreter-qualified --check: $(status_rows_missing_qualifier "$HERE/README.md" "$HERE" | tr '\n' ' ')"
-  fails=$((fails+1))
+  selftest_fail
 fi
 # negative fixture: a README whose Status rows lost the qualified command must be refused
 tmpd=$(mktemp -d)
 sed 's/HERMES_PYTHON_BIN=python3\.12 //g' "$HERE/README.md" > "$tmpd/README.md"
 if status_rows_missing_qualifier "$tmpd/README.md" "$HERE" >/dev/null; then
-  say "  FAIL  a README whose Status rows lost the qualified command was accepted"; fails=$((fails+1))
+  say "  FAIL  a README whose Status rows lost the qualified command was accepted"; selftest_fail
 else
   say "  PASS  unqualified Status rows refused ($(status_rows_missing_qualifier "$tmpd/README.md" "$HERE" | tr '\n' ' '))"
 fi
@@ -2297,7 +2352,7 @@ then
     && [ "$(printf '%s\n' "$old_out" | grep -Fxc '  FAIL  install — pip failed — /tmp/hermes-install.log')" = 1 ]; then
     say "  PASS  pip-log old shape: permission denied, exact misleading row, pip not invoked"
   else
-    say "  FAIL  pip-log old shape did not reproduce the red fixture"; fails=$((fails+1))
+    say "  FAIL  pip-log old shape did not reproduce the red fixture"; selftest_fail
   fi
   before_check=$(pip_fixture_run "$HERE/scripts/harness/install-hermes.sh" --check 2>&1); rc=$?
   shopt -s nullglob
@@ -2308,7 +2363,7 @@ then
     && [ "$(printf '%s\n' "$before_check" | grep -Fxc 'HERMES: FAIL (3)')" = 1 ]; then
     say "  PASS  pip-log --check: unchanged absent-binary rows, no log or pip invocation"
   else
-    say "  FAIL  pip-log --check wrote a log or changed check behaviour"; fails=$((fails+1))
+    say "  FAIL  pip-log --check wrote a log or changed check behaviour"; selftest_fail
   fi
   for run in 1 2; do
     out=$(pip_fixture_run "$HERE/scripts/harness/install-hermes.sh" --apply 2>&1); rc=$?
@@ -2324,7 +2379,7 @@ then
       && [ "$(stat -c %a "$tmpd/hermes-install.log")" = 444 ]; then
       say "  PASS  pip-log new shape run $run: pip rc 23, distinct HOME log mode 600, fixed file untouched"
     else
-      say "  FAIL  pip-log new shape run $run did not distinguish pip's failure"; fails=$((fails+1))
+      say "  FAIL  pip-log new shape run $run did not distinguish pip's failure"; selftest_fail
     fi
   done
   pip_fixture_deny=1
@@ -2335,7 +2390,7 @@ then
     && [ "$(grep -Fxc 'pip invoked' "$tmpd/pip.calls")" = 2 ]; then
     say "  PASS  pip-log creation failure: exact filesystem row, pip not invoked"
   else
-    say "  FAIL  pip-log creation failure was misreported"; fails=$((fails+1))
+    say "  FAIL  pip-log creation failure was misreported"; selftest_fail
   fi
   pip_fixture_deny=0
   pip_fixture_rc=0
@@ -2346,7 +2401,7 @@ then
     && [ "${#logs[@]}" -eq 3 ] && [ "$(grep -Fxc 'pip invoked' "$tmpd/pip.calls")" = 3 ]; then
     say "  PASS  pip-log successful install proceeds despite the unwritable fixed file"
   else
-    say "  FAIL  pip-log successful install did not proceed"; fails=$((fails+1))
+    say "  FAIL  pip-log successful install did not proceed"; selftest_fail
   fi
   after_check=$(pip_fixture_run "$HERE/scripts/harness/install-hermes.sh" --check 2>&1); rc=$?
   logs=("$tmpd/fakeroot"/.hermes-install-*.log)
@@ -2357,13 +2412,13 @@ then
     && [ "$(printf '%s\n' "$after_check" | grep -Fxc 'HERMES: FAIL (2)')" = 1 ]; then
     say "  PASS  pip-log installed --check: unchanged binary rows, no new log or pip invocation"
   else
-    say "  FAIL  pip-log installed --check changed behaviour"; fails=$((fails+1))
+    say "  FAIL  pip-log installed --check changed behaviour"; selftest_fail
   fi
   shopt -u nullglob
   unset -f pip_fixture_run
   unset pip_fixture_rc pip_fixture_deny
 else
-  say "  FAIL  pip-log fixture setup (fixture root '${tmpd}' — empty means mktemp -d could not build a throwaway directory)"; fails=$((fails+1))
+  say "  FAIL  pip-log fixture setup (fixture root '${tmpd}' — empty means mktemp -d could not build a throwaway directory)"; selftest_fail
 fi
 rm -rf "$tmpd"
 # END pip-log-path
@@ -2431,7 +2486,7 @@ for arm in host-mismatch host-pin venv-mismatch venv-pin host-banner venv-banner
     fi; }; then
     say "  PASS  cf183 $arm --check: ownership and measured version vs pin"
   else
-    say "  FAIL  cf183 $arm --check (exit $rc): $out"; fails=$((fails+1))
+    say "  FAIL  cf183 $arm --check (exit $rc): $out"; selftest_fail
   fi
   out=$(cf183_run --apply 2>&1); rc=$?
   if [ "$rc" -eq 1 ] && [ -x "$cf183_home/hermes-venv/bin/hermes" ] \
@@ -2446,7 +2501,7 @@ for arm in host-mismatch host-pin venv-mismatch venv-pin host-banner venv-banner
     fi; }; then
     say "  PASS  cf183 $arm --apply: pinned venv installed or matching venv retained"
   else
-    say "  FAIL  cf183 $arm --apply (exit $rc): $out"; fails=$((fails+1))
+    say "  FAIL  cf183 $arm --apply (exit $rc): $out"; selftest_fail
   fi
   out=$(cf183_run --check 2>&1); rc=$?
   if [ "$rc" -eq 1 ] \
@@ -2455,7 +2510,7 @@ for arm in host-mismatch host-pin venv-mismatch venv-pin host-banner venv-banner
     && printf '%s\n' "$out" | grep -Fxq 'HERMES: FAIL (2)'; then
     say "  PASS  cf183 $arm installed --check: owned pin passes, missing port/key still fail"
   else
-    say "  FAIL  cf183 $arm installed --check (exit $rc): $out"; fails=$((fails+1))
+    say "  FAIL  cf183 $arm installed --check (exit $rc): $out"; selftest_fail
   fi
 done
 unset -f cf183_run
@@ -2489,7 +2544,7 @@ for arm in bunker-server-install node-create; do
     && ! printf '%s\n' "$out" | grep -Fq 'unbound variable'; then
     say "  PASS  $arm without BUNKER_SERVER -> named FAIL row, exit $rc"
   else
-    say "  FAIL  $arm aborted or did not name BUNKER_SERVER (exit $rc)"; fails=$((fails+1))
+    say "  FAIL  $arm aborted or did not name BUNKER_SERVER (exit $rc)"; selftest_fail
     printf '%s\n' "$out"
   fi
 done
@@ -2514,7 +2569,7 @@ if [ "$rc" -eq 0 ] \
   && [ "$(stat -c %s "$tmpd/board/.lock")" = "$size_before" ]; then
   say "  PASS  unheld 0-byte lock -> RESIDUE, file untouched ($out)"
 else
-  say "  FAIL  unheld 0-byte lock not classified RESIDUE (rc=$rc): $out"; fails=$((fails+1))
+  say "  FAIL  unheld 0-byte lock not classified RESIDUE (rc=$rc): $out"; selftest_fail
 fi
 # HELD arm: a live process takes an exclusive flock and stays alive until reaped; the
 # adjudicator must prove the holder (fd scan or EWOULDBLOCK), not the file's presence.
@@ -2548,7 +2603,7 @@ if [ "$holder_ready" = yes ] \
   say "  PASS  flock-held lock -> HELD ($out)"
 else
   say "  FAIL  flock-held lock not classified HELD (holder_ready=$holder_ready rc=$rc): $out"
-  fails=$((fails+1))
+  selftest_fail
 fi
 # CF-259: a lock the process cannot open is an UNKNOWN observation, not a clean negative.
 # Before the fix `adjudicate` mapped every non-held probe result to RESIDUE, so an
@@ -2569,7 +2624,7 @@ else
     say "  PASS  unreadable lock -> not RESIDUE, exit $rc ($out)"
   else
     say "  FAIL  an unreadable lock was folded into a clean negative (rc=$rc): $out"
-    fails=$((fails+1))
+    selftest_fail
   fi
 fi
 chmod 600 "$noread"
@@ -2585,7 +2640,7 @@ out=$(python3 -B "$HERE/scripts/check_scan_scope.py" "$HERE" 2>&1); rc=$?
 if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'RESULT: OK'; then
   say "  PASS  posture docs name their scan scope"
 else
-  say "  FAIL  posture docs scan-scope checker not green (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  posture docs scan-scope checker not green (exit $rc)"; selftest_fail
   printf '%s\n' "$out"
 fi
 tmpd=$(mktemp -d)
@@ -2597,7 +2652,7 @@ if [ "$rc" -eq 1 ] \
   && printf '%s\n' "$out" | grep -Eq '^  FAIL  audit-scope: .*:1 gitleaks claim names no --log-opts'; then
   say "  PASS  unscoped claim -> FAIL audit-scope"
 else
-  say "  FAIL  unscoped claim escaped the scan-scope gate (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  unscoped claim escaped the scan-scope gate (exit $rc)"; selftest_fail
   printf '%s\n' "$out"
 fi
 sed 's/--redact`/ --log-opts="--all"`/' "$tmpd/docs/audits/code-factory-releng-fixture.md" \
@@ -2608,7 +2663,7 @@ out=$(python3 -B "$HERE/scripts/check_scan_scope.py" "$tmpd" 2>&1); rc=$?
 if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'RESULT: OK'; then
   say "  PASS  scoped claim -> OK"
 else
-  say "  FAIL  scoped claim not accepted (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  scoped claim not accepted (exit $rc)"; selftest_fail
   printf '%s\n' "$out"
 fi
 rm -rf "$tmpd"
@@ -2654,7 +2709,7 @@ else
     say "  PASS  bytecode-allowlist — a PEM in tests/__pycache__/*.pyc yields no finding ($graded bytes graded)"
   else
     say "  FAIL  bytecode-allowlist — a PEM in tests/__pycache__/*.pyc was graded as a secret (exit $rc, ${graded:-0} bytes graded)"
-    fails=$((fails+1))
+    selftest_fail
     printf '%s\n' "$out" | sed 's/^/    | /'
   fi
 
@@ -2669,7 +2724,7 @@ else
     say "  PASS  bytecode-allowlist-control — the same PEM outside __pycache__ is still reported"
   else
     say "  FAIL  bytecode-allowlist-control — a PEM outside __pycache__ escaped the scan, so the exclusion is a mute (exit $rc)"
-    fails=$((fails+1))
+    selftest_fail
     printf '%s\n' "$out" | sed 's/^/    | /'
   fi
 
@@ -2683,7 +2738,7 @@ else
      || grep -qF "'''\\.pyc" "$cf383/tree/.gitleaks.toml" \
      || ! grep -qF "'''docs/'''" "$cf383/tree/.gitleaks.toml"; then
     say "  FAIL  bytecode-allowlist-loadbearing — could not derive a config without the bytecode entry; the arm proves nothing"
-    fails=$((fails+1))
+    selftest_fail
   else
     out=$(cd "$cf383/tree" && gitleaks detect --no-git --no-banner --redact \
       --report-format json --report-path "$cf383/loadbearing.json" 2>&1); rc=$?
@@ -2692,7 +2747,7 @@ else
       say "  PASS  bytecode-allowlist-loadbearing — entry removed, the same .pyc is reported"
     else
       say "  FAIL  bytecode-allowlist-loadbearing — the .pyc stayed clean without the entry, so the arm cannot go red (exit $rc)"
-      fails=$((fails+1))
+      selftest_fail
       printf '%s\n' "$out" | sed 's/^/    | /'
     fi
   fi
@@ -2714,14 +2769,14 @@ if [ "$no_rc" -eq 0 ] && [ "$ref_rc" -eq 0 ] && [ "$with_ref" = "$no_ref" ] \
   && ! printf '%s\n' "$with_ref" | grep -Fq 'unknown arg:'; then
   say "  PASS  --staged-files --ref master -> exit 0, same fourteen-file staged set"
 else
-  say "  FAIL  --ref rejected or changed the staged set (exit $no_rc/$ref_rc)"; fails=$((fails+1))
+  say "  FAIL  --ref rejected or changed the staged set (exit $no_rc/$ref_rc)"; selftest_fail
 fi
 # Stub transport only: the same node-create.sh the operator runs, a bunker that records argv
 # and keeps the payload it was handed. No network, no agent, no installation.
 while IFS= read -r file; do
-  cp "$HERE/scripts/$file" "$tmpd/scripts/$file" || fails=$((fails+1))
+  cp "$HERE/scripts/$file" "$tmpd/scripts/$file" || selftest_fail
 done <<< "$no_ref"
-cp "$HERE/scripts/node-create.sh" "$tmpd/scripts/" || fails=$((fails+1))
+cp "$HERE/scripts/node-create.sh" "$tmpd/scripts/" || selftest_fail
 printf '#!/usr/bin/env bash\nexit 0\n' > "$tmpd/scripts/verify-node.sh"
 chmod +x "$tmpd/scripts/verify-node.sh"
 cat > "$tmpd/bin/bunker" <<'EOF'
@@ -2754,7 +2809,7 @@ for ref_value in master "re'lease"; do
     && grep -aFq -- "--repo 'https://github.com/git/git' $want_ref" "$tmpd/payload"; then
     say "  PASS  ref '$ref_value' crosses the transport as $want_ref"
   else
-    say "  FAIL  ref '$ref_value' was dropped or unquoted in the payload (exit $rc)"; fails=$((fails+1))
+    say "  FAIL  ref '$ref_value' was dropped or unquoted in the payload (exit $rc)"; selftest_fail
     printf '%s\n' "$out"
   fi
 done
@@ -2907,7 +2962,7 @@ PY
 then
   say "  PASS  cf159-escaping all remote-command sites"
 else
-  say "  FAIL  cf159-escaping remote-command fixture"; fails=$((fails+1))
+  say "  FAIL  cf159-escaping remote-command fixture"; selftest_fail
 fi
 # END cf159-escaping
 
@@ -2944,7 +2999,7 @@ if cf151_row_scope "$HERE/README.md" >/dev/null; then
   say "  PASS  node credential row labels control-host evidence and names the node measurement"
 else
   say "  FAIL  node credential row mis-scoped: $(cf151_row_scope "$HERE/README.md" | tr '\n' ' ')"
-  fails=$((fails+1))
+  selftest_fail
 fi
 # negative fixture: the pre-fix row bytes, verbatim, must be refused
 tmpd=$(mktemp -d)
@@ -2952,7 +3007,7 @@ cat > "$tmpd/prefix-row" <<'EOF'
 | Node inference credential | **missing** — a turn dies at `No inference provider configured`; the node needs its own key, never an operator key | `scripts/harness/install-hermes.sh --check` -> `FAIL inference_key`. That row prints only on an interpreter inside the pin's range; the default `python3` here is 3.14 and stops at `FAIL python` first, so name one explicitly: `HERMES_PYTHON_BIN=python3.12 scripts/harness/install-hermes.sh --check` -> `FAIL inference_key`. Both arms are transcripted in `docs/audits/code-factory-CF-064.probe.txt` (CF-064). |
 EOF
 if cf151_row_scope "$tmpd/prefix-row" >/dev/null; then
-  say "  FAIL  the pre-fix node credential row was accepted"; fails=$((fails+1))
+  say "  FAIL  the pre-fix node credential row was accepted"; selftest_fail
 else
   say "  PASS  pre-fix node credential row refused ($(cf151_row_scope "$tmpd/prefix-row" | tr '\n' ' '))"
 fi
@@ -2972,7 +3027,7 @@ if [ "$rc" -eq 0 ] && [ -n "$summary" ]; then
   say "  PASS  prd-blocker — $summary, exit $rc"
 else
   say "  FAIL  prd-blocker — exit $rc: $(printf '%s\n' "$out" | tail -3 | tr '\n' ' ')"
-  fails=$((fails+1))
+  selftest_fail
 fi
 tmpd=$(mktemp -d)
 # (b) an id in neither namespace, cited inside its own marker pair on a copy of the real PRD
@@ -2984,13 +3039,13 @@ if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '^FAIL prd-blocker: CF-999 
   say "  PASS  prd-blocker-red — CF-999 unresolved, exit $rc"
 else
   say "  FAIL  prd-blocker-red — CF-999 accepted or not named (exit $rc): $(printf '%s\n' "$out" | tail -2 | tr '\n' ' ')"
-  fails=$((fails+1))
+  selftest_fail
 fi
 # (c) a region that cites a row the board already closed — a stale citation, not a blocker
 closed=$(jq -r 'select(.status=="complete")|.id' "$HERE/.coding-hermes/board/tasks.jsonl" 2>/dev/null | head -1)
 if [ -z "$closed" ]; then
   say "  FAIL  prd-blocker-closed — the board carries no complete row to cite"
-  fails=$((fails+1))
+  selftest_fail
 else
   awk -v id="$closed" '
     /^<!-- milestone-blockers:begin -->$/ { print; print "`" id "`"; inb=1; next }
@@ -3003,7 +3058,7 @@ else
     say "  PASS  prd-blocker-closed — $closed complete, exit $rc"
   else
     say "  FAIL  prd-blocker-closed — $closed accepted as a blocker (exit $rc): $(printf '%s\n' "$out" | tail -2 | tr '\n' ' ')"
-    fails=$((fails+1))
+    selftest_fail
   fi
 fi
 rm -rf "$tmpd"
@@ -3022,7 +3077,7 @@ if [ "$rc" -eq 0 ] && [ -n "$counts" ] && [ "${ap:-0}" -gt 0 ] && [ "$ap" = "$at
   say "  PASS  section-mapping-real — green verdict, arms_plan=$ap arms_tree=$at"
 else
   say "  FAIL  section-mapping-real — expected RESULT: OK with arms_plan == arms_tree (exit $rc): $(printf '%s\n' "$out" | tail -3 | tr '\n' ' ')"
-  fails=$((fails+1))
+  selftest_fail
 fi
 tmpd=$(mktemp -d)
 awk '!/^\| §38 /' "$HERE/docs/ACCEPTANCE-PLAN.md" > "$tmpd/plan-missing-row"
@@ -3032,19 +3087,19 @@ if [ "$rc" -ne 0 ] && ! printf '%s\n' "$out" | grep -qi 'unbound variable' \
   say "  PASS  section-mapping-red — missing §38 names plan side, exit $rc"
 else
   say "  FAIL  section-mapping-red — missing §38 was not named as plan-side drift (exit $rc): $(printf '%s\n' "$out" | tail -3 | tr '\n' ' ')"
-  fails=$((fails+1))
+  selftest_fail
 fi
 rm -rf "$tmpd"
 
 say "40. the bunker provisioner fails closed, and its config file is data not code (CF-214)"
-bash -n "$HERE/scripts/bunker-provision.sh" && say "  PASS  bash -n scripts/bunker-provision.sh" || { say "  FAIL  provision syntax"; fails=$((fails+1)); }
-bash -n "$HERE/scripts/bunker-crier-connect.sh" && say "  PASS  bash -n scripts/bunker-crier-connect.sh" || { say "  FAIL  crier-connect syntax"; fails=$((fails+1)); }
+bash -n "$HERE/scripts/bunker-provision.sh" && say "  PASS  bash -n scripts/bunker-provision.sh" || { say "  FAIL  provision syntax"; selftest_fail; }
+bash -n "$HERE/scripts/bunker-crier-connect.sh" && say "  PASS  bash -n scripts/bunker-crier-connect.sh" || { say "  FAIL  crier-connect syntax"; selftest_fail; }
 
 out=$(/bin/bash "$HERE/scripts/bunker-provision.sh" --config /nonexistent.conf --check 2>&1); rc=$?
 if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q 'FAIL  config — cannot read'; then
   say "  PASS  absent config -> named FAIL, exit $rc"
 else
-  say "  FAIL  absent config was not refused (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  absent config was not refused (exit $rc)"; selftest_fail
 fi
 
 tmpd=$(mktemp -d)
@@ -3053,15 +3108,15 @@ out=$(/bin/bash "$HERE/scripts/bunker-provision.sh" --config "$tmpd/shell.conf" 
 if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q 'is not KEY=VALUE'; then
   say "  PASS  a shell line in the config is refused, never executed, exit $rc"
 else
-  say "  FAIL  config parser accepted a shell line (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  config parser accepted a shell line (exit $rc)"; selftest_fail
 fi
-[ -e /tmp/should-never-run ] && { say "  FAIL  the config file was EXECUTED"; fails=$((fails+1)); rm -rf /tmp/should-never-run; }
+[ -e /tmp/should-never-run ] && { say "  FAIL  the config file was EXECUTED"; selftest_fail; rm -rf /tmp/should-never-run; }
 
 out=$(env -i PATH=/usr/bin:/bin HOME="$HOME" /bin/bash "$HERE/scripts/bunker-provision.sh" --check --project demo 2>&1); rc=$?
 if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q 'FAIL  bunker_cli'; then
   say "  PASS  no bunker client -> named FAIL, exit $rc (a vacuous PASS would be the bug)"
 else
-  say "  FAIL  missing bunker client did not surface (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  missing bunker client did not surface (exit $rc)"; selftest_fail
 fi
 
 # BEGIN cf057-apply-refusal
@@ -3081,7 +3136,7 @@ if [ "$cf057_header_flags" = "--apply --check --json --reap-orphans " ] \
   say "  PASS  CF-057 usage lists exactly parser flags: ${cf057_header_flags% }"
 else
   say "  FAIL  CF-057 usage/parser flag mismatch (usage='$cf057_header_flags' parser='$cf057_parser_flags')"
-  fails=$((fails+1))
+  selftest_fail
 fi
 cf057_tmp=$(mktemp -d)
 mkdir -p "$cf057_tmp/bin" "$cf057_tmp/home"
@@ -3101,7 +3156,7 @@ if [ "$rc" -eq 2 ] \
   && [ -z "$(find "$cf057_tmp/home" -mindepth 1 -print -quit)" ]; then
   say "  PASS  CF-057 --apply -> named unsupported refusal, exit $rc, no fixture command or HOME mutation"
 else
-  say "  FAIL  CF-057 --apply was not fail-closed (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  CF-057 --apply was not fail-closed (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
@@ -3117,7 +3172,7 @@ if [ "$rc" -eq 0 ] \
   && [ -e "$cf057_tmp/bunker-called" ]; then
   say "  PASS  CF-057 --check remains a measured check path, exit $rc"
 else
-  say "  FAIL  CF-057 --check no longer reaches the check path (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  CF-057 --check no longer reaches the check path (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
@@ -3130,7 +3185,7 @@ if [ "$rc" -eq 2 ] \
   && ! printf '%s\n' "$out" | grep -Fq 'RESULT: PASS'; then
   say "  PASS  CF-057 --reap-orphans rejects an extra argument, exit $rc"
 else
-  say "  FAIL  CF-057 --reap-orphans accepted an extra argument (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  CF-057 --reap-orphans accepted an extra argument (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 rm -rf "$cf057_tmp"
@@ -3183,7 +3238,7 @@ if [ "$cf483_zero_rc" -eq 0 ] \
 else
   say "  FAIL  CF-483/CF-495 residue count fixtures (zero exit $cf483_zero_rc, leaky exit $cf483_leaky_rc last line '${cf483_leaky_last}', unparseable exit $cf483_bad_rc)"
   printf '%s\n' "$cf483_zero_out" "$cf483_leaky_out" "$cf483_bad_out" | sed 's/^/    | /'
-  fails=$((fails+1))
+  selftest_fail
 fi
 # CF-495 red control: the PRE-FIX script classified the same leaking fixture as a warning and
 # exited 0. The pre-fix revision is resolved by CONTENT, never by position: once this fix is
@@ -3218,11 +3273,11 @@ if [ -n "$cf483_prefix_rev" ] \
   else
     say "  FAIL  CF-495 red control: pre-fix ${cf483_prefix_rev:0:8} did not reproduce the old pass (exit $cf483_prefix_rc, last line '$(printf '%s\n' "$cf483_prefix_out" | tail -1)') against the script under test's exit $cf483_leaky_rc"
     printf '%s\n' "$cf483_prefix_out" | sed 's/^/    | /'
-    fails=$((fails+1))
+    selftest_fail
   fi
 else
   say "  FAIL  CF-495 red control: no pre-fix revision of scripts/bunker-server-install.sh found in this checkout — the control cannot prove the arm can fail"
-  fails=$((fails+1))
+  selftest_fail
 fi
 # Before the fix, grep -qi orphan classified this exact clean status block as residue.
 if printf '%s\n' "$cf483_zero" | grep -qi 'orphan' \
@@ -3230,7 +3285,7 @@ if printf '%s\n' "$cf483_zero" | grep -qi 'orphan' \
   say "  PASS  CF-483 red control: pre-fix orphan-label predicate warns on the clean fixture; measured-count check does not"
 else
   say "  FAIL  CF-483 red control did not distinguish the pre-fix clean-host false warning"
-  fails=$((fails+1))
+  selftest_fail
 fi
 rm -rf "$cf483_tmp"
 
@@ -3247,7 +3302,7 @@ if [ -z "$direct" ]; then
   say "  PASS  every flag handler assigns only CLI_* (so the command line survives load_config)"
 else
   say "  FAIL  a flag assigns a variable the config will overwrite: $(printf '%s' "$direct" | tr '\n' ' ')"
-  fails=$((fails+1))
+  selftest_fail
 fi
 
 # the preflight must validate the credential FILES it will read, before it touches a host, and its
@@ -3255,7 +3310,7 @@ fi
 if grep -q 'ok "inputs" "readable: ' "$HERE/scripts/bunker-provision.sh"; then
   say "  PASS  the preflight names every credential file it read"
 else
-  say "  FAIL  the preflight reports readability without naming a file"; fails=$((fails+1))
+  say "  FAIL  the preflight reports readability without naming a file"; selftest_fail
 fi
 
 # every documented config key must parse: a key that exists in the variables but not in the
@@ -3293,17 +3348,17 @@ if printf '%s\n' "$out" | grep -q '  PASS  config' && ! printf '%s\n' "$out" | g
   say "  PASS  every documented config key parses ($(grep -c '=' "$tmpd/all.conf") keys, no unknown-key row)"
 else
   say "  FAIL  a documented config key is not accepted: $(printf '%s\n' "$out" | grep 'unknown key' | head -2 | tr '\n' ' ')"
-  fails=$((fails+1))
+  selftest_fail
 fi
 rm -rf "$tmpd"
 
 # the node-side gate refuses to install without an identity to commit under
-bash -n "$HERE/scripts/install-gitreins.sh" || { say "  FAIL  install-gitreins syntax"; fails=$((fails+1)); }
+bash -n "$HERE/scripts/install-gitreins.sh" || { say "  FAIL  install-gitreins syntax"; selftest_fail; }
 out=$(/bin/bash "$HERE/scripts/install-gitreins.sh" --apply --repo "$HERE" --author-name "" --author-email "" 2>&1); rc=$?
 if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q "identity — --author-name and --author-email are required"; then
   say "  PASS  gitreins installer refuses an anonymous node, exit $rc"
 else
-  say "  FAIL  gitreins installer accepted an empty identity (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  gitreins installer accepted an empty identity (exit $rc)"; selftest_fail
 fi
 
 # CF-266: `--check` used to certify a hook it could never run. installed() fell back to whatever
@@ -3364,7 +3419,7 @@ if [ "$rc" -ne 0 ] \
   say "  PASS  CF-266: --check names the hook interpreter that is absent and never says GITREINS: PASS"
 else
   say "  FAIL  CF-266: --check certified a hook whose interpreter is absent (exit $rc): $(printf '%s\n' "$out" | grep -Ei 'hook|GITREINS' | head -3 | tr '\n' ' ')"
-  fails=$((fails+1))
+  selftest_fail
 fi
 
 cf266_seed "$cf266_tmp/repo-apply" no
@@ -3376,7 +3431,7 @@ elif [ "$rc" -ne 0 ] && [ ! -e "$cf266_tmp/repo-apply/.git/hooks/pre-commit" ] \
   && printf '%s\n' "$out" | grep -Eq '  FAIL  (venv|install|hook) — '; then
   say "  PASS  CF-266: --apply refused with a named row instead of writing a hook it cannot run (exit $rc)"
 else
-  say "  FAIL  CF-266: --apply reported exit $rc and left hook=${cf266_bin:-none} behind"; fails=$((fails+1))
+  say "  FAIL  CF-266: --apply reported exit $rc and left hook=${cf266_bin:-none} behind"; selftest_fail
 fi
 
 mkdir -p "$cf266_tmp/venv/bin"
@@ -3394,7 +3449,7 @@ if [ "$rc" -eq 0 ] && [ "$crc" -eq 0 ] && [ -n "$cf266_bin" ] && [ -x "$cf266_bi
   say "  PASS  CF-266: the hook apply wrote executes on a real commit ($cf266_bin guard ran)"
 else
   say "  FAIL  CF-266: hook did not run on commit (apply=$rc commit=$crc hook=${cf266_bin:-none} marker=$([ -f "$cf266_tmp/guard-ran" ] && echo yes || echo no))"
-  fails=$((fails+1))
+  selftest_fail
 fi
 rm -rf "$cf266_tmp"
 
@@ -3403,7 +3458,7 @@ out=$(/bin/bash "$HERE/scripts/bunker-provision.sh" --check --project demo --age
 if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q "FAIL  namespaces — .* not a namespace slug"; then
   say "  PASS  a bad namespace slug is refused before the host is touched, exit $rc"
 else
-  say "  FAIL  a bad namespace slug was accepted (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  a bad namespace slug was accepted (exit $rc)"; selftest_fail
 fi
 
 # several namespaces are probed separately, and the merge writes them as a list
@@ -3415,13 +3470,13 @@ out2=$(python3 "$HERE/scripts/node_identity.py" "$tmpd/node.json" 'duckbrain.nam
 if [ "$rc" -eq 0 ] && [ "$listed" = "demo,coder" ] && [ "$rc2" -eq 0 ] && printf '%s\n' "$out2" | grep -q "already carries every value"; then
   say "  PASS  node identity carries several namespaces as a list, idempotently ($listed)"
 else
-  say "  FAIL  multi-namespace identity merge ($listed, rc=$rc/$rc2)"; fails=$((fails+1))
+  say "  FAIL  multi-namespace identity merge ($listed, rc=$rc/$rc2)"; selftest_fail
 fi
 out=$(python3 "$HERE/scripts/node_identity.py" "$tmpd/node.json" 'duckbrain.namespaces[]=' 2>&1); rc=$?
 if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q "declared empty"; then
   say "  PASS  an empty namespace list is refused, exit $rc"
 else
-  say "  FAIL  an empty namespace list was accepted (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  an empty namespace list was accepted (exit $rc)"; selftest_fail
 fi
 rm -rf "$tmpd"
 
@@ -3430,7 +3485,7 @@ if [ "$rc" -eq 2 ] && printf '%s\n' "$out" | grep -q 'refusing to destroy withou
    && printf '%s\n' "$out" | grep -q 'would remove agent a on s'; then
   say "  PASS  destroy without --yes is refused, exit $rc, naming the exact agent and server it would remove"
 else
-  say "  FAIL  destroy ran without confirmation, or did not name agent a on s (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  destroy ran without confirmation, or did not name agent a on s (exit $rc)"; selftest_fail
 fi
 rm -rf "$tmpd"
 
@@ -3497,7 +3552,7 @@ if printf '%s\n' "$out" | grep -q 'PASS  agent — demo-node exists' \
   say "  PASS  CF-214: --check probed the node, left no file behind, and an unmeasured node is a FAIL (exit $rc)"
 else
   say "  FAIL  CF-214: --check left $cf214_left file(s) on the node or never probed (exit $rc)"
-  fails=$((fails+1))
+  selftest_fail
 fi
 
 # (b) --apply reuses an existing agent, and the credential leg is files-only: one mode-600 bundle
@@ -3523,7 +3578,7 @@ if [ "$cf214_mode" = 600 ] && [ "$cf214_val" = "$cf214_tok" ] && [ "$cf214_out_l
   say "  PASS  CF-214: one 600 bundle in, installed at 600, gone from both sides, no secret in stdout or argv, existing agent reused (no second agent)"
 else
   say "  FAIL  CF-214 credential leg: mode=$cf214_mode value=$([ "$cf214_val" = "$cf214_tok" ] && echo match || echo mismatch) stdout-leak=$cf214_out_leak argv-leak=$cf214_arg_leak bundle-cp-mode=${cf214_bundle_mode:-none} bundle=$cf214_bundle local-tmp=$cf214_tmpfiles git-credentials=$cf214_cred spawn=$([ -e "$cf214/argv.log.spawn" ] && echo yes || echo no)"
-  fails=$((fails+1))
+  selftest_fail
 fi
 
 # (c) the credential rows are MEASURED, not asserted. Two reds, both of which passed silently
@@ -3548,7 +3603,7 @@ if printf '%s\n' "$out" | grep -q 'FAIL  auth — installed but not mode 600: gi
   say "  PASS  CF-214: the auth row follows the mode the node reported (644 -> FAIL), it does not assert 'mode 600'"
 else
   say "  FAIL  CF-214: the auth row certified mode 600 while the node reported 644"
-  fails=$((fails+1))
+  selftest_fail
 fi
 # (c2) a bundle the node cannot remove is a credential leak: it must be a named row, not `|| true`
 BUNKER_FAKE_FAIL=cf-auth.bundle
@@ -3560,7 +3615,7 @@ if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q 'FAIL  auth_bundle — coul
   say "  PASS  CF-214: an install that fails and a bundle the node cannot delete are both named FAIL rows (exit $rc)"
 else
   say "  FAIL  CF-214: a failed install or an undeletable bundle was not named (exit $rc)"
-  fails=$((fails+1))
+  selftest_fail
 fi
 
 # (d) the command line wins over the file for every key the requirement names: agent, server, repo,
@@ -3601,7 +3656,7 @@ if [ "$cf214_win" = yes ]; then
   say "  PASS  CF-214: the command line won over the config for agent/server/repo/ref/harness/namespace/crier/duckbrain/token-file"
 else
   say "  FAIL  CF-214: config precedence — $cf214_win"
-  fails=$((fails+1))
+  selftest_fail
 fi
 
 # (e) crier connect: CONNECTED is a claim about a 200, and 401/403/404/000 are named distinctly.
@@ -3641,7 +3696,7 @@ if [ "$cf214_codes" = yes ]; then
   say "  PASS  CF-214: crier connect names 401/403/404/000 distinctly and reports CONNECTED only when the inbox route returns 200"
 else
   say "  FAIL  CF-214: crier code naming — $cf214_codes: $(printf '%s\n' "$cf214_cout" | grep -E 'FAIL|WARN|CRIER' | head -4 | tr '\n' ' ')"
-  fails=$((fails+1))
+  selftest_fail
 fi
 # (f) the provisioner must describe the measurement that made crier CONNECTED. With no node-side
 # signed probe, the host's unsigned 200 is a WARN; a real signed_read row is quoted as such.
@@ -3691,7 +3746,7 @@ if [ "$cf214_provisioner_row" = yes ]; then
   say "  PASS  CF-214: provisioner crier row distinguishes unsigned 200 from signed_read and the old PASS inbox certification reds"
 else
   say "  FAIL  CF-214: provisioner crier evidence row — $cf214_provisioner_row"
-  fails=$((fails+1))
+  selftest_fail
 fi
 # (g) the skill ships with the scripts it documents. A skill that names a script nobody ships — or a
 # mode the script refuses — is drift the operator only discovers at the command line.
@@ -3703,7 +3758,7 @@ done
 if [ -z "$cf214_missing" ]; then
   say "  PASS  CF-214: skills/code-factory-bunker/SKILL.md ships in the repo and names both scripts and check/apply/destroy(--yes)"
 else
-  say "  FAIL  CF-214: the repo skill does not name:$cf214_missing"; fails=$((fails+1))
+  say "  FAIL  CF-214: the repo skill does not name:$cf214_missing"; selftest_fail
 fi
 # The fleet copy lives outside this repo and does not exist on a clean box: absent is a NOTE, while a
 # present copy that disagrees on the scripts is a FAIL (its owning lane reconciles it, not this test).
@@ -3716,7 +3771,7 @@ if [ -r "$cf214_fleet" ]; then
   if [ -z "$cf214_split" ]; then
     say "  PASS  CF-214: the fleet skill copy names the same two scripts as the repo copy"
   else
-    say "  FAIL  CF-214: the fleet skill copy does not name:$cf214_split"; fails=$((fails+1))
+    say "  FAIL  CF-214: the fleet skill copy does not name:$cf214_split"; selftest_fail
   fi
 else
   say "  NOTE  CF-214: no fleet skill copy at $cf214_fleet — repo copy only (not a failure on a clean host)"
@@ -3733,7 +3788,7 @@ FRESH="$HERE/scripts/repo_freshness.py"
 if python3 -B -c 'import ast,sys; ast.parse(open(sys.argv[1],encoding="utf-8").read())' "$FRESH"; then
   say "  PASS  scripts/repo_freshness.py parses (python3 -B, stdlib only)"
 else
-  say "  FAIL  scripts/repo_freshness.py does not parse"; fails=$((fails+1))
+  say "  FAIL  scripts/repo_freshness.py does not parse"; selftest_fail
 fi
 tmpd=$(mktemp -d)
 # CF-501: `mktemp` honours TMPDIR, so when a lane isolates scratch inside its own
@@ -3788,12 +3843,12 @@ if [ "$rc" -eq 1 ] && [ "$fail_rows" = 1 ] \
   && [ "$(printf '%s\n' "$out" | grep -Fc '  FAIL  cf-stale — lag 2 > bound 0 (trunk vs origin/trunk)')" = 1 ]; then
   say "  PASS  workdir behind 2 commits -> one FAIL naming lag 2, --gate exit $rc"
 else
-  say "  FAIL  stale workdir was not refused with a lag row (exit $rc, $fail_rows FAIL rows)"; fails=$((fails+1))
+  say "  FAIL  stale workdir was not refused with a lag row (exit $rc, $fail_rows FAIL rows)"; selftest_fail
 fi
 if printf '%s\n' "$out" | grep -Fq '  PASS  cf-fresh — lag 0, ahead 0, trunk vs origin/trunk'; then
   say "  PASS  a non-main default branch (trunk) is measured against origin/trunk"
 else
-  say "  FAIL  non-main default branch was not measured"; fails=$((fails+1))
+  say "  FAIL  non-main default branch was not measured"; selftest_fail
 fi
 warn_n=$(printf '%s\n' "$out" | grep -c '^  WARN  ')
 warn_missing=0
@@ -3804,26 +3859,26 @@ if [ "$warn_n" = 6 ] && [ "$warn_missing" = 0 ] \
   && printf '%s\n' "$out" | grep -Fq '  WARN  cf-bare — bare repository at'; then
   say "  PASS  detached HEAD, no remote, non-git, bare, missing and non-directory workdirs -> 6 named WARN rows, no crash"
 else
-  say "  FAIL  tolerated-defect rows were missing or duplicated ($warn_n WARN rows, $warn_missing unnamed)"; fails=$((fails+1))
+  say "  FAIL  tolerated-defect rows were missing or duplicated ($warn_n WARN rows, $warn_missing unnamed)"; selftest_fail
 fi
 if printf '%s\n' "$out" | grep -Fq ', 9 enabled projects, 8 unique workdirs,' \
   && printf '%s\n' "$out" | grep -Fq '[2 lanes: cf-fresh, cf-fresh-qa]' \
   && ! printf '%s\n' "$out" | grep -Fq 'cf-disabled'; then
   say "  PASS  workdirs enumerated from the DB: 9 enabled projects, 8 unique workdirs, disabled project skipped"
 else
-  say "  FAIL  DB enumeration/dedupe/enabled filter is wrong"; fails=$((fails+1))
+  say "  FAIL  DB enumeration/dedupe/enabled filter is wrong"; selftest_fail
 fi
 out=$(python3 -B "$FRESH" --db "$tmpd/sched.db" --no-fetch --gate --bound 5 2>&1); rc=$?
 if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fq '  PASS  cf-stale — lag 2, ahead 0'; then
   say "  PASS  the same workdir clears --bound 5 (bound is policy, not a constant), exit $rc"
 else
-  say "  FAIL  --bound 5 still refused the workdir (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  --bound 5 still refused the workdir (exit $rc)"; selftest_fail
 fi
 out=$(python3 -B "$FRESH" --workdir "$tmpd/stale" --no-fetch --gate 2>&1); rc=$?
 if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -Fq '  FAIL  stale — lag 2 > bound 0'; then
   say "  PASS  one workdir probes on its own (--workdir) and refuses, exit $rc"
 else
-  say "  FAIL  --workdir mode did not measure $tmpd/stale (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  --workdir mode did not measure $tmpd/stale (exit $rc)"; selftest_fail
 fi
 # --no-fetch must not touch the remote: move it away and the lag must still be counted.
 mv "$tmpd/origin.git" "$tmpd/origin.away"
@@ -3832,13 +3887,13 @@ if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fq '  FAIL  cf-stale — lag 
   && ! printf '%s\n' "$out" | grep -Fq 'fetch failed:'; then
   say "  PASS  --no-fetch measured lag 2 with the remote absent: no network call, exit $rc without --gate"
 else
-  say "  FAIL  --no-fetch reached for the absent remote (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  --no-fetch reached for the absent remote (exit $rc)"; selftest_fail
 fi
 out=$(python3 -B "$FRESH" --workdir "$tmpd/stale" --jobs 1 2>&1); rc=$?
 if printf '%s\n' "$out" | grep -Fq 'fetch failed:'; then
   say "  PASS  with the remote absent a fetch names the failure instead of inventing freshness"
 else
-  say "  FAIL  a failed fetch did not surface a named reason (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  a failed fetch did not surface a named reason (exit $rc)"; selftest_fail
 fi
 mv "$tmpd/origin.away" "$tmpd/origin.git"
 out=$(python3 -B "$FRESH" --db "$tmpd/sched.db" --no-fetch --gate --strict --jobs 2 2>&1); rc=$?
@@ -3846,7 +3901,7 @@ fail_rows=$(printf '%s\n' "$out" | grep -c '^  FAIL  ')
 if [ "$rc" -eq 1 ] && [ "$fail_rows" = 7 ]; then
   say "  PASS  --strict escalates the 6 unmeasurable rows: $fail_rows FAIL, exit $rc"
 else
-  say "  FAIL  --strict did not refuse the unmeasurable workdirs ($fail_rows FAIL, exit $rc)"; fails=$((fails+1))
+  say "  FAIL  --strict did not refuse the unmeasurable workdirs ($fail_rows FAIL, exit $rc)"; selftest_fail
 fi
 if [ "$(python3 -B - "$tmpd" "$FRESH" <<'PY'
 import json, subprocess, sys
@@ -3863,13 +3918,13 @@ PY
 )" = ok ]; then
   say "  PASS  --json is parseable, lists 8 workdirs, and two runs agree (idempotent)"
 else
-  say "  FAIL  --json output is unparseable, incomplete or not idempotent"; fails=$((fails+1))
+  say "  FAIL  --json output is unparseable, incomplete or not idempotent"; selftest_fail
 fi
 out=$(python3 -B "$FRESH" --db "$tmpd/absent.db" 2>&1); rc=$?
 if [ "$rc" -eq 2 ] && printf '%s\n' "$out" | grep -Fq '  FAIL  scheduler-db — scheduler database not found'; then
   say "  PASS  an absent scheduler DB is a named FAIL, exit $rc"
 else
-  say "  FAIL  absent scheduler DB did not fail closed (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  absent scheduler DB did not fail closed (exit $rc)"; selftest_fail
 fi
 rm -rf "$tmpd"
 if [ -n "${_fresh_ceiling_saved}" ]; then
@@ -3886,7 +3941,7 @@ say "42. a node branch lands on main with real gates, or refuses naming the reas
 # push, not the merge, is what the PASS row reports.
 bash -n "$HERE/scripts/land-node-branch.sh" \
   && say "  PASS  bash -n scripts/land-node-branch.sh" \
-  || { say "  FAIL  land-node-branch syntax"; fails=$((fails+1)); }
+  || { say "  FAIL  land-node-branch syntax"; selftest_fail; }
 tmpd=$(mktemp -d)
 export GIT_AUTHOR_NAME=fixture GIT_AUTHOR_EMAIL=fixture@example.invalid
 export GIT_COMMITTER_NAME=fixture GIT_COMMITTER_EMAIL=fixture@example.invalid
@@ -3902,7 +3957,7 @@ cf213() {  # cf213 <label> <expect-rc> <needle> [args...]
     say "  PASS  $label -> exit $rc"
     printf '%s\n' "$out" | grep -F -- "$needle"
   else
-    say "  FAIL  $label -> exit $rc, expected '$needle'"; fails=$((fails+1))
+    say "  FAIL  $label -> exit $rc, expected '$needle'"; selftest_fail
     printf '%s\n' "$out" | sed 's/^/    | /'
   fi
 }
@@ -3972,7 +4027,7 @@ if [ "$(git -C "$tmpd/wd" rev-parse HEAD)" = "$base" ] \
   && [ "$(git -C "$tmpd/origin.git" rev-parse refs/heads/main)" = "$sibling" ]; then
   say "  PASS  red gate moved no ref — main ${base:0:12}, origin/main ${sibling:0:12}"
 else
-  say "  FAIL  red gate moved a ref"; fails=$((fails+1))
+  say "  FAIL  red gate moved a ref"; selftest_fail
 fi
 
 # g. --dry-run predicts the exact commands and changes nothing
@@ -3986,7 +4041,7 @@ if printf '%s\n' "$out" | grep -Fq "  git -C $tmpd/wd merge --ff-only $node2" \
   && [ "$(git -C "$tmpd/wd" worktree list | wc -l)" = "$wt_before" ]; then
   say "  PASS  dry run named the merge and the push; no ref or worktree moved"
 else
-  say "  FAIL  dry run mutated the tree or did not name its commands"; fails=$((fails+1))
+  say "  FAIL  dry run mutated the tree or did not name its commands"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
@@ -3999,7 +4054,7 @@ if printf '%s\n' "$out" | grep -Fq "  PASS  gate — 'test -f node.txt" \
   && printf '%s\n' "$out" | grep -Fq "  PASS  push — origin refs/heads/main accepted $node2 (this run's merge tip)"; then
   say "  PASS  the gate row and the LANDED line name the node commit, and the push row names the sha it pushed"
 else
-  say "  FAIL  the landing did not report its gate row or its LANDED line"; fails=$((fails+1))
+  say "  FAIL  the landing did not report its gate row or its LANDED line"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 git clone -q "$tmpd/origin.git" "$tmpd/verify" 2>/dev/null
@@ -4007,7 +4062,7 @@ if git -C "$tmpd/verify" merge-base --is-ancestor "$node2" HEAD 2>/dev/null \
   && [ -f "$tmpd/verify/node.txt" ] && [ -f "$tmpd/verify/sibling.txt" ]; then
   say "  PASS  a fresh clone of the remote contains $node2 and the node's file"
 else
-  say "  FAIL  the remote does not contain the landed commit"; fails=$((fails+1))
+  say "  FAIL  the remote does not contain the landed commit"; selftest_fail
 fi
 
 # i. the same command twice changes nothing — and the gate still runs on the already-landed
@@ -4022,7 +4077,7 @@ if ! printf '%s\n' "$out" | grep -Fq "LANDED (already)" \
   && [ "$(git -C "$tmpd/wd" rev-parse HEAD)" = "$head_before" ]; then
   say "  PASS  a red gate on an already-landed commit refused and moved no ref (main ${head_before:0:12})"
 else
-  say "  FAIL  a red gate on an already-landed commit printed LANDED or moved a ref"; fails=$((fails+1))
+  say "  FAIL  a red gate on an already-landed commit printed LANDED or moved a ref"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 cf213 "idempotent re-run" 0 "  PASS  gate — 'test -f node.txt' exited 0 at ${node2:0:12} (detached worktree)" \
@@ -4033,7 +4088,7 @@ if printf '%s\n' "$out" | grep -Fq "LANDED (already)" \
   && [ "$(git -C "$tmpd/origin.git" rev-parse refs/heads/main)" = "$origin_before" ]; then
   say "  PASS  second run exited $rc, ran the gate, and moved no ref — main ${head_before:0:12}, origin/main ${origin_before:0:12}"
 else
-  say "  FAIL  second run changed the tree or did not run the gate"; fails=$((fails+1))
+  say "  FAIL  second run changed the tree or did not run the gate"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
@@ -4053,7 +4108,7 @@ if printf '%s\n' "$out" | grep -Fq "merged locally, NOT landed" \
   && ! printf '%s\n' "$out" | grep -q '^LANDED'; then
   say "  PASS  refused push printed no landed row and no LANDED line"
 else
-  say "  FAIL  a failed push printed a success row"; fails=$((fails+1))
+  say "  FAIL  a failed push printed a success row"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 rm -f "$tmpd/origin.git/hooks/pre-receive"
@@ -4088,11 +4143,11 @@ if [ "$(git -C "$n_origin" rev-parse refs/heads/main)" = "$n_base" ] \
   && [ ! -e "$n_wd/.git/MERGE_HEAD" ]; then
   say "  PASS  no_ff_local merged nothing and moved no ref — origin/main ${n_base:0:12}, local main ${stray:0:12}"
 else
-  say "  FAIL  no_ff_local merged or pushed before refusing"; fails=$((fails+1))
+  say "  FAIL  no_ff_local merged or pushed before refusing"; selftest_fail
 fi
 git clone -q "$n_origin" "$tmpd/noff-stray-clone"
 if git -C "$tmpd/noff-stray-clone" cat-file -e "$stray^{commit}" 2>/dev/null; then
-  say "  FAIL  a fresh clone of the remote contains the stray commit ${stray:0:12}"; fails=$((fails+1))
+  say "  FAIL  a fresh clone of the remote contains the stray commit ${stray:0:12}"; selftest_fail
 else
   say "  PASS  a fresh clone of the remote does not contain the stray commit ${stray:0:12}"
 fi
@@ -4108,7 +4163,7 @@ if printf '%s\n' "$out" | grep -Fq "  merge_sha=\$(git -C $n_wd rev-parse --veri
   && [ "$(git -C "$n_origin" rev-parse refs/heads/main)" = "$n_base" ]; then
   say "  PASS  the --no-ff dry run named the capture and the explicit-sha push; no ref moved"
 else
-  say "  FAIL  the --no-ff dry run did not name the explicit-sha push or moved a ref"; fails=$((fails+1))
+  say "  FAIL  the --no-ff dry run did not name the explicit-sha push or moved a ref"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 cf213 "no-ff landing" 0 "  PASS  landed — $n_node is an ancestor of origin/main" \
@@ -4120,7 +4175,7 @@ if printf '%s\n' "$out" | grep -Fq "  PASS  push — origin refs/heads/main acce
   && [ "$(git -C "$n_origin" rev-parse refs/heads/main)" = "$n_merge" ]; then
   say "  PASS  the push row and the LANDED line named ${n_merge:0:12}, and that is the remote's tip"
 else
-  say "  FAIL  the --no-ff landing did not name the sha it pushed, or pushed another object"; fails=$((fails+1))
+  say "  FAIL  the --no-ff landing did not name the sha it pushed, or pushed another object"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 git clone -q "$n_origin" "$tmpd/noff-verify"
@@ -4129,7 +4184,7 @@ if git -C "$tmpd/noff-verify" cat-file -e "$n_merge^{commit}" 2>/dev/null \
   && [ -f "$tmpd/noff-verify/noff.txt" ]; then
   say "  PASS  a fresh clone of the remote contains the merge commit ${n_merge:0:12} and the node's file"
 else
-  say "  FAIL  the remote does not contain the --no-ff merge commit"; fails=$((fails+1))
+  say "  FAIL  the remote does not contain the --no-ff merge commit"; selftest_fail
 fi
 
 # m. the negative direction: the stray commit is in no remote ref at all. Remove the guard and this
@@ -4140,9 +4195,9 @@ n_all=$(git -C "$n_origin" rev-list --all)
 stray_on_remote=0
 case "$n_all" in *"$stray"*) stray_on_remote=1 ;; esac
 if [ "$stray_on_remote" -eq 1 ]; then
-  say "  FAIL  the stray commit ${stray:0:12} is in the remote's history — the guard did not hold"; fails=$((fails+1))
+  say "  FAIL  the stray commit ${stray:0:12} is in the remote's history — the guard did not hold"; selftest_fail
 elif git -C "$tmpd/noff-verify" merge-base --is-ancestor "$stray" HEAD 2>/dev/null; then
-  say "  FAIL  the stray commit ${stray:0:12} is an ancestor of the landed tip"; fails=$((fails+1))
+  say "  FAIL  the stray commit ${stray:0:12} is an ancestor of the landed tip"; selftest_fail
 else
   say "  PASS  no ref in the remote ($(printf '%s\n' "$n_all" | wc -l | tr -d ' ') commits reachable from --all) carries ${stray:0:12}"
 fi
@@ -4154,7 +4209,7 @@ fi
 # leg, so "not advanced" is measured against the base, not against an already-landed tip.
 bash -n "$HERE/scripts/node-commit.sh" \
   && say "  PASS  bash -n scripts/node-commit.sh" \
-  || { say "  FAIL  node-commit syntax"; fails=$((fails+1)); }
+  || { say "  FAIL  node-commit syntax"; selftest_fail; }
 c_src="$tmpd/run-src"; c_origin="$tmpd/run-origin.git"; c_wd="$tmpd/run-wd"
 git init -q -b main "$c_src"
 printf 'base\n' > "$c_src/README"
@@ -4176,7 +4231,7 @@ if [ "$c_rc" -eq 0 ] \
   && [ "$c_grep" = "$c_node" ]; then
   say "  PASS  node-commit.sh wrote 'Run-Id: run-fixture-1' on ${c_node:0:12} and git log --grep returned exactly that sha"
 else
-  say "  FAIL  node-commit.sh did not produce a grep-findable Run-Id trailer (exit $c_rc, trailer '${c_trailer:-none}', grep '${c_grep:-none}')"; fails=$((fails+1))
+  say "  FAIL  node-commit.sh did not produce a grep-findable Run-Id trailer (exit $c_rc, trailer '${c_trailer:-none}', grep '${c_grep:-none}')"; selftest_fail
   printf '%s\n' "$c_out" | sed 's/^/    | /'
 fi
 
@@ -4187,7 +4242,7 @@ if [ "$c_rc" -ne 0 ] \
   && [ "$(git -C "$c_wd" rev-parse HEAD)" = "$c_node" ]; then
   say "  PASS  an absent run id was refused with the run_id row and HEAD stayed at ${c_node:0:12}"
 else
-  say "  FAIL  an absent run id did not refuse, or the refusal moved HEAD (exit $c_rc)"; fails=$((fails+1))
+  say "  FAIL  an absent run id did not refuse, or the refusal moved HEAD (exit $c_rc)"; selftest_fail
   printf '%s\n' "$c_out" | sed 's/^/    | /'
 fi
 
@@ -4211,7 +4266,7 @@ if [ "$(git -C "$c_origin" rev-parse refs/heads/main)" = "$c_base" ] \
   && [ "$(git -C "$c_wd" rev-parse HEAD)" = "$c_base" ]; then
   say "  PASS  both attribution refusals left origin/main and local main at ${c_base:0:12}"
 else
-  say "  FAIL  an attribution refusal merged or pushed: origin/main $(git -C "$c_origin" rev-parse --short refs/heads/main), local $(git -C "$c_wd" rev-parse --short HEAD)"; fails=$((fails+1))
+  say "  FAIL  an attribution refusal merged or pushed: origin/main $(git -C "$c_origin" rev-parse --short refs/heads/main), local $(git -C "$c_wd" rev-parse --short HEAD)"; selftest_fail
 fi
 
 # n5. the same commit lands once the asserted id matches the trailer on it
@@ -4221,7 +4276,7 @@ if printf '%s\n' "$out" | grep -Fq "  PASS  run_trailer — ${c_node:0:12} carri
   && [ "$(git -C "$c_origin" rev-parse refs/heads/main)" = "$c_node" ]; then
   say "  PASS  the attributed landing asserted the trailer and advanced origin/main to ${c_node:0:12}"
 else
-  say "  FAIL  the attributed landing did not assert the trailer, or did not advance origin/main"; fails=$((fails+1))
+  say "  FAIL  the attributed landing did not assert the trailer, or did not advance origin/main"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
@@ -4232,7 +4287,7 @@ cf213 "no run id supplied" 0 "  ..    run_trailer not asserted — no run id sup
 if [ "$(git -C "$c_origin" rev-parse refs/heads/main)" = "$c_untraced" ]; then
   say "  PASS  an unasserted landing still landed and reached origin/main at ${c_untraced:0:12}"
 else
-  say "  FAIL  an unasserted landing did not reach origin/main"; fails=$((fails+1))
+  say "  FAIL  an unasserted landing did not reach origin/main"; selftest_fail
 fi
 
 # n7. a body that already carries the SAME trailer is not given a second one
@@ -4248,7 +4303,7 @@ if [ "$c_rc" -eq 0 ] \
   && [ "$c_dup_count" = "1" ]; then
   say "  PASS  an identical trailer in the body was not duplicated (1 'Run-Id:' line on ${c_dup:0:12})"
 else
-  say "  FAIL  an identical trailer was duplicated or the commit failed (exit $c_rc, count '$c_dup_count')"; fails=$((fails+1))
+  say "  FAIL  an identical trailer was duplicated or the commit failed (exit $c_rc, count '$c_dup_count')"; selftest_fail
   printf '%s\n' "$c_out" | sed 's/^/    | /'
 fi
 
@@ -4260,9 +4315,9 @@ rm -rf "$tmpd"
 # A node's environment is declared data — the applier must refuse what cannot be
 # declared, diff what drifted, write nothing on --check, and be a no-op on the second run.
 say "43. the node environment profile applies idempotently and refuses what cannot be declared"
-bash -n "$HERE/scripts/bunker-provision.sh" && say "  PASS  bash -n scripts/bunker-provision.sh" || { say "  FAIL  provision syntax"; fails=$((fails+1)); }
+bash -n "$HERE/scripts/bunker-provision.sh" && say "  PASS  bash -n scripts/bunker-provision.sh" || { say "  FAIL  provision syntax"; selftest_fail; }
 python3 -c 'import sys; compile(open(sys.argv[1], encoding="utf-8").read(), sys.argv[1], "exec")' "$HERE/scripts/node_env.py" \
-  && say "  PASS  scripts/node_env.py compiles" || { say "  FAIL  node_env.py does not compile"; fails=$((fails+1)); }
+  && say "  PASS  scripts/node_env.py compiles" || { say "  FAIL  node_env.py does not compile"; selftest_fail; }
 
 envtmp=$(mktemp -d)
 mkdir -p "$envtmp/node"
@@ -4274,7 +4329,7 @@ out=$(envrun --env-file "$envtmp/absent.env" --check 2>&1); rc=$?
 if [ "$rc" -eq 2 ] && printf '%s\n' "$out" | grep -q 'FAIL  env — cannot read the profile'; then
   say "  PASS  absent profile -> named FAIL, exit $rc"
 else
-  say "  FAIL  absent profile was not refused by name (exit $rc): $(printf '%s' "$out" | tail -1)"; fails=$((fails+1))
+  say "  FAIL  absent profile was not refused by name (exit $rc): $(printf '%s' "$out" | tail -1)"; selftest_fail
 fi
 
 printf 'ENV_CF_PROXY_API_KEY=cf-selftest-inline-0001\n' > "$envtmp/inline.env"
@@ -4284,7 +4339,7 @@ if [ "$rc" -eq 2 ] && printf '%s\n' "$out" | grep -q 'looks secret and carries a
   && ! printf '%s\n' "$out" | grep -q 'cf-selftest-inline-0001'; then
   say "  PASS  a secret declared inline is refused by name, and the value is never echoed, exit $rc"
 else
-  say "  FAIL  an inline secret was accepted or echoed (exit $rc): $(printf '%s' "$out" | tail -1)"; fails=$((fails+1))
+  say "  FAIL  an inline secret was accepted or echoed (exit $rc): $(printf '%s' "$out" | tail -1)"; selftest_fail
 fi
 
 mkdir -p "$envtmp/node/.hermes"
@@ -4296,7 +4351,7 @@ if [ "$rc" -eq 2 ] && printf '%s\n' "$out" | grep -q 'FAIL  config — gateway: 
   && ! printf '%s\n' "$out" | grep -q 'Traceback'; then
   say "  PASS  an inline config section is refused by named row and line, exit $rc"
 else
-  say "  FAIL  an inline config section escaped its named refusal (exit $rc): $(printf '%s' "$out" | tail -1)"; fails=$((fails+1))
+  say "  FAIL  an inline config section escaped its named refusal (exit $rc): $(printf '%s' "$out" | tail -1)"; selftest_fail
 fi
 
 cat > "$envtmp/node/.hermes/config.yaml" <<'YAML'
@@ -4310,7 +4365,7 @@ if [ "$rc" -eq 2 ] && printf '%s\n' "$out" | grep -q 'FAIL  config — gateway: 
   && ! printf '%s\n' "$out" | grep -q 'Traceback'; then
   say "  PASS  a duplicated config section is refused by named row and lines, exit $rc"
 else
-  say "  FAIL  a duplicated config section escaped its named refusal (exit $rc): $(printf '%s' "$out" | tail -1)"; fails=$((fails+1))
+  say "  FAIL  a duplicated config section escaped its named refusal (exit $rc): $(printf '%s' "$out" | tail -1)"; selftest_fail
 fi
 rm -rf "$envtmp/node/.hermes"
 
@@ -4319,7 +4374,7 @@ if [ "$rc" -eq 2 ] && printf '%s\n' "$out" | grep -q "unknown config path 'loggi
   && printf '%s\n' "$out" | grep -q 'model.provider'; then
   say "  PASS  an unknown CONFIG_SET path is refused and the allowed set is named, exit $rc"
 else
-  say "  FAIL  an unknown config path was invented or accepted (exit $rc): $(printf '%s' "$out" | tail -1)"; fails=$((fails+1))
+  say "  FAIL  an unknown config path was invented or accepted (exit $rc): $(printf '%s' "$out" | tail -1)"; selftest_fail
 fi
 
 # --check: drift measured, nothing written, and the secret only ever appears as ***
@@ -4331,7 +4386,7 @@ if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -q 'DIFF  env:CF_PROXY_API_KEY
   && [ ! -e "$envtmp/node/.hermes/.env" ] && [ ! -e "$envtmp/node/.hermes/config.yaml" ] && [ ! -d "$envtmp/node/.hermes" ]; then
   say "  PASS  --check prints the diff (secret masked as ***), exits 1, and writes nothing"
 else
-  say "  FAIL  --check was not read-only or not diagnostic (exit $rc): $(printf '%s' "$out" | tail -1)"; fails=$((fails+1))
+  say "  FAIL  --check was not read-only or not diagnostic (exit $rc): $(printf '%s' "$out" | tail -1)"; selftest_fail
 fi
 
 # a pre-existing config the profile only partly owns: the unrelated keys must survive
@@ -4360,7 +4415,7 @@ if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -q 'ENV: APPLIED' \
   && [ "$(stat -c %a "$envtmp/node/.hermes/config.yaml")" = 600 ]; then
   say "  PASS  --apply writes both files at mode 600 and keeps every line it does not own"
 else
-  say "  FAIL  --apply rewrote or lost state it does not own (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  --apply rewrote or lost state it does not own (exit $rc)"; selftest_fail
 fi
 
 # the second run must change nothing, exit 0, and still report the unmanaged var as a WARN
@@ -4371,14 +4426,14 @@ if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -q 'ENV: PASS — already matc
   && printf '%s\n' "$out" | grep -q 'WARN  unmanaged:LEFTOVER_VAR'; then
   say "  PASS  a second --apply changes nothing (sha256 unchanged), exits 0, and names the unmanaged var"
 else
-  say "  FAIL  the second --apply was not a no-op or dropped the unmanaged report (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  the second --apply was not a no-op or dropped the unmanaged report (exit $rc)"; selftest_fail
 fi
 
 out=$(envrun --env-file "$envtmp/node.env" --config-set model.provider=cf-proxy --config-set gateway.port=10800 --config-set gateway.bind=0.0.0.0 --check 2>&1); rc=$?
 if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -q 'ENV: PASS — declared environment matches'; then
   say "  PASS  --check is green after --apply, and unmanaged vars alone are not drift (exit $rc)"
 else
-  say "  FAIL  --check after --apply was not green (exit $rc): $(printf '%s' "$out" | tail -1)"; fails=$((fails+1))
+  say "  FAIL  --check after --apply was not green (exit $rc): $(printf '%s' "$out" | tail -1)"; selftest_fail
 fi
 
 # the provisioner must reach the same refusal locally, before it touches a host
@@ -4406,13 +4461,13 @@ if printf '%s\n' "$out" | grep -q 'FAIL  env_profile — ' \
   && printf '%s\n' "$out" | grep -q 'looks secret and carries a literal value'; then
   say "  PASS  NODE_ENV_FILE with an inline secret -> named env_profile FAIL from --check"
 else
-  say "  FAIL  the provisioner did not refuse an inline secret in NODE_ENV_FILE"; fails=$((fails+1))
+  say "  FAIL  the provisioner did not refuse an inline secret in NODE_ENV_FILE"; selftest_fail
 fi
 rm -rf "$envtmp"
 
 say "44. the node bus worker names the refusal it cannot proceed past (CF-215)"
 python3 -c 'import sys; compile(open(sys.argv[1], encoding="utf-8").read(), sys.argv[1], "exec")' "$HERE/scripts/node-bus-worker.py" \
-  && say "  PASS  scripts/node-bus-worker.py compiles" || { say "  FAIL  node-bus-worker.py does not compile"; fails=$((fails+1)); }
+  && say "  PASS  scripts/node-bus-worker.py compiles" || { say "  FAIL  node-bus-worker.py does not compile"; selftest_fail; }
 
 # CF-229 AC4: the RECEIVING side of the §5 contract. The installers are held to it by the
 # conformance battery; the bus worker is held to it here — the directive's set reaches the harness
@@ -4422,7 +4477,7 @@ python3 -c 'import sys; compile(open(sys.argv[1], encoding="utf-8").read(), sys.
 if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_section5_receipt.py" >/dev/null 2>&1; then
   say "  PASS  §5 set accepted from the directive, receipt records name/set/len only, ambient CF_* scrubbed"
 else
-  say "  FAIL  the §5 contract on the receiving side (tests/test_section5_receipt.py)"; fails=$((fails+1))
+  say "  FAIL  the §5 contract on the receiving side (tests/test_section5_receipt.py)"; selftest_fail
 fi
 
 buswtmp=$(mktemp -d)
@@ -4457,7 +4512,7 @@ if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '^  FAIL  project — ' \
   && ! printf '%s\n' "$out" | grep -q '^  PASS  bus_health'; then
   say "  PASS  project mismatch -> named FAIL, exit $rc, no bus contact"
 else
-  say "  FAIL  project mismatch was not refused before the network (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  project mismatch was not refused before the network (exit $rc)"; selftest_fail
 fi
 
 # (2) an unreadable identity file
@@ -4467,7 +4522,7 @@ out=$(busrun "$buswtmp/b" --check); rc=$?
 if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '^  FAIL  identity — .*not readable JSON'; then
   say "  PASS  unreadable identity -> named FAIL, exit $rc"
 else
-  say "  FAIL  an unreadable identity was not refused by name (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  an unreadable identity was not refused by name (exit $rc)"; selftest_fail
 fi
 
 # (3) no key material on the node — the failure the bus makes unavoidable
@@ -4478,7 +4533,7 @@ if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '^  FAIL  signing_key — .
   && ! printf '%s\n' "$out" | grep -q 'BEGIN PRIVATE KEY'; then
   say "  PASS  absent key -> named FAIL naming the file, exit $rc, nothing invented, no bus contact"
 else
-  say "  FAIL  an absent key was not refused before the network (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  an absent key was not refused before the network (exit $rc)"; selftest_fail
 fi
 
 # (4) a bus that does not answer from this node
@@ -4488,7 +4543,7 @@ if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '^  FAIL  bus_health — .*
   && ! printf '%s\n' "$out" | grep -q '^  PASS  inbox'; then
   say "  PASS  unreachable bus -> named FAIL with 000, exit $rc, no inbox read attempted"
 else
-  say "  FAIL  an unreachable bus was not refused by name (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  an unreachable bus was not refused by name (exit $rc)"; selftest_fail
 fi
 rm -rf "$buswtmp"
 # ch:trace row=CF-006 spec=specs/HARNESS.md#the-contract-every-adapter test=tests/selftest.sh::harness-conformance-battery doc=docs/HARNESS-CONFORMANCE.md prompt=none:fixture evidence=tests/harness-conformance.sh witness=none:local-fixture verdict=none:self-referential-hash commit=none:self-referential-hash memory=none:unresolved-namespace
@@ -4497,19 +4552,19 @@ say "45. the harness conformance battery can go red (fixture mode)"
 if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_harness_memory.py"; then
   say "  PASS  shared memory fixture and missing/wrong namespace refusals (CF-231)"
 else
-  say "  FAIL  shared memory fixture or namespace refusal (CF-231)"; fails=$((fails+1))
+  say "  FAIL  shared memory fixture or namespace refusal (CF-231)"; selftest_fail
 fi
 # ch:trace row=CF-329 spec=specs/HARNESS-MEMORY.md#32-codex--stamped-through-a-free-form-field test=tests/test_harness_memory_codex_retention.py doc=docs/handbook/appendices/units/16-scripts-harness-install-codex-sh.md evidence=tests/test_harness_memory_codex_retention.py::test_rollout_and_index_survive_while_turn_credentials_are_removed witness=none:local-fixture verdict=none:foreman-will-run-gitreins commit=none:worker-commit memory=none:foreman-close
 if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_harness_memory_codex_retention.py"; then
   say "  PASS  Codex evidence retention fixture preserves rollout/index and removes credentials (CF-329)"
 else
-  say "  FAIL  Codex evidence retention fixture (CF-329)"; fails=$((fails+1))
+  say "  FAIL  Codex evidence retention fixture (CF-329)"; selftest_fail
 fi
 # ch:trace row=CF-446 spec=specs/HARNESS-MEMORY.md#32-codex--stamped-through-a-free-form-field test=tests/test_codex_turn_cache_retention.py doc=docs/handbook/chapters/M5-harness.md evidence=tests/test_codex_turn_cache_retention.py::test_expired_removed_fresh_kept_and_foreign_untouched witness=none:local-fixture verdict=none:foreman-will-run-gitreins commit=none:worker-commit memory=none:foreman-close
 if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_codex_turn_cache_retention.py"; then
   say "  PASS  Codex turn cache retention window prunes expired turns and keeps live/foreign ones (CF-446)"
 else
-  say "  FAIL  Codex turn cache retention fixture (CF-446)"; fails=$((fails+1))
+  say "  FAIL  Codex turn cache retention fixture (CF-446)"; selftest_fail
 fi
 # The battery is a checker; a checker that cannot print FAIL is decoration (AGENTS.md rule 2).
 # Every leg below runs it against a fixture adapter dir and a fixture HOME: no credential, no
@@ -4548,14 +4603,14 @@ if printf '%s\n' "$out" | grep -q '^  PASS  claude-code:check — adapter exit 0
   say "  PASS  absent credential -> SKIP naming it, while the same adapter's check leg goes green"
 else
   say "  FAIL  an absent credential did not produce a named SKIP (or the fixture could not go green): $(printf '%s\n' "$out" | grep 'claude-code:' | tr '\n' ' ')"
-  fails=$((fails+1))
+  selftest_fail
 fi
 # --write-doc must carry the matrix and the SKIP, not a claim of support.
 if [ -f "$tmpd/doc.md" ] && grep -q '^| harness | check | apply | smoke |$' "$tmpd/doc.md" \
   && grep -qF 'ANTHROPIC_API_KEY or ~/.claude/.credentials.json' "$tmpd/doc.md"; then
   say "  PASS  --write-doc wrote a matrix carrying the measured SKIP"
 else
-  say "  FAIL  --write-doc did not write a matrix carrying the SKIP"; fails=$((fails+1))
+  say "  FAIL  --write-doc did not write a matrix carrying the SKIP"; selftest_fail
 fi
 # (b) a harness with no adapter is a FAIL, not a silent skip.
 out=$(runb "$tmpd/adapters" deepseek); rc=$?
@@ -4563,7 +4618,7 @@ if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '^  FAIL  deepseek:check �
   && ! printf '%s\n' "$out" | grep -q '^  SKIP  deepseek:check'; then
   say "  PASS  missing adapter -> FAIL 'no adapter at', exit $rc"
 else
-  say "  FAIL  a missing adapter was not a named FAIL (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  a missing adapter was not a named FAIL (exit $rc)"; selftest_fail
 fi
 # (c) an adapter that prints PASS with an empty value is caught, not quoted.
 cat > "$tmpd/empty/install-hermes.sh" <<'FIX'
@@ -4577,7 +4632,7 @@ out=$(runb "$tmpd/empty" hermes); rc=$?
 if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '^  FAIL  hermes:check — adapter printed PASS with no measured value: version (empty)$'; then
   say "  PASS  empty adapter value -> FAIL from the empty-value guard, exit $rc"
 else
-  say "  FAIL  a PASS with an empty value survived (exit $rc): $(printf '%s\n' "$out" | grep 'hermes:' | tr '\n' ' ')"; fails=$((fails+1))
+  say "  FAIL  a PASS with an empty value survived (exit $rc): $(printf '%s\n' "$out" | grep 'hermes:' | tr '\n' ' ')"; selftest_fail
 fi
 
 # (d) CF-225: a binary the adapter measured OUTSIDE PATH is still smokeable. The claude-code
@@ -4636,7 +4691,7 @@ if [ -n "$smoke_row" ] \
   say "  PASS  a binary measured off PATH is resolved from the adapter's own row and that path runs the turn"
 else
   say "  FAIL  an off-PATH measured binary did not smoke (or the row does not quote the path): $(printf '%s\n' "$out" | grep 'claude-code:smoke' | tr '\n' ' ')"
-  fails=$((fails+1))
+  selftest_fail
 fi
 out=$(runb_nopath "$tmpd/nobin" codex)
 if printf '%s\n' "$out" | grep -qF '  SKIP  codex:smoke' \
@@ -4646,7 +4701,7 @@ if printf '%s\n' "$out" | grep -qF '  SKIP  codex:smoke' \
   say "  PASS  no binary row and no binary anywhere -> SKIP naming the absence"
 else
   say "  FAIL  an absent binary was not a named SKIP: $(printf '%s\n' "$out" | grep 'codex:smoke' | tr '\n' ' ')"
-  fails=$((fails+1))
+  selftest_fail
 fi
 # (f) the arm above can fail. The frozen body below is the leg_smoke that shipped before CF-225
 # (git show 2f4df2f:tests/harness-conformance.sh): it resolves the smoke binary with `command -v`
@@ -4739,10 +4794,10 @@ if bash -n "$tmpd/prefix/tests/harness-conformance.sh" 2>/dev/null && [ "$prefix
     say "  PASS  the pre-CF-225 PATH-only leg prints SKIP 'absent from PATH' on the same fixture -> the new arm can fail"
   else
     say "  FAIL  the pre-CF-225 leg did not print the wrong verdict: $(printf '%s\n' "$out" | grep 'claude-code:smoke' | tr '\n' ' ')"
-    fails=$((fails+1))
+    selftest_fail
   fi
 else
-  say "  FAIL  could not splice the pre-CF-225 leg_smoke into a scratch copy (defs=$prefix_defs)"; fails=$((fails+1))
+  say "  FAIL  could not splice the pre-CF-225 leg_smoke into a scratch copy (defs=$prefix_defs)"; selftest_fail
 fi
 
 # (g) CF-227: the codex smoke turn must pin its provider AND its model on argv. `codex exec`
@@ -4797,7 +4852,7 @@ if grep -qF -- '-c model_provider="openai"' "$tmpd/codexpin/pinned.argv" 2>/dev/
   say "  PASS  codex smoke argv carries -c model_provider=\"openai\" -m fixture-codex-model and the needle; the FAIL names the provider and its base_url"
 else
   say "  FAIL  the codex smoke turn did not pin its binding: $(printf '%s\n' "$out" | grep 'codex:smoke' | tr '\n' ' ')"
-  fails=$((fails+1))
+  selftest_fail
 fi
 # exit 0 is not evidence: the same stub exiting 0 must still FAIL, by that exact name.
 out=$(runb_codex "$HERE/tests/harness-conformance.sh" "$tmpd/codexpin/zero.argv" 0)
@@ -4806,7 +4861,7 @@ if printf '%s\n' "$out" | grep -qxF '  FAIL  codex:smoke — exited 0 without wr
   say "  PASS  codex exiting 0 with no artifact -> FAIL 'exited 0 without writing smoke.txt'"
 else
   say "  FAIL  exit 0 without an artifact was not refused by that name: $(printf '%s\n' "$out" | grep 'codex:smoke' | tr '\n' ' ')"
-  fails=$((fails+1))
+  selftest_fail
 fi
 # the control: the same battery with the pre-CF-227 codex arm (git show 2f4df2f:tests/harness-conformance.sh)
 ln -sfn "$HERE/scripts" "$tmpd/nopin/scripts"
@@ -4829,10 +4884,10 @@ if bash -n "$tmpd/nopin/tests/harness-conformance.sh" 2>/dev/null \
     say "  PASS  the pin-removed control records an argv with no model_provider -> the arm above can fail"
   else
     say "  FAIL  the pin-removed control still recorded a pinned argv: $(tr '\n' ' ' < "$tmpd/codexpin/nopin.argv" 2>/dev/null)"
-    fails=$((fails+1))
+    selftest_fail
   fi
 else
-  say "  FAIL  could not splice the pre-CF-227 codex arm into a scratch copy"; fails=$((fails+1))
+  say "  FAIL  could not splice the pre-CF-227 codex arm into a scratch copy"; selftest_fail
 fi
 
 # One provisioning config per project, derived from the registry. Hand-written
@@ -4846,7 +4901,7 @@ GEN="$HERE/scripts/bunker_config_gen.py"
 if python3 -B -c 'import ast,sys; ast.parse(open(sys.argv[1],encoding="utf-8").read())' "$GEN"; then
   say "  PASS  scripts/bunker_config_gen.py parses (python3 -B, stdlib only)"
 else
-  say "  FAIL  scripts/bunker_config_gen.py does not parse"; fails=$((fails+1))
+  say "  FAIL  scripts/bunker_config_gen.py does not parse"; selftest_fail
 fi
 
 tmpd=$(mktemp -d)
@@ -4906,7 +4961,7 @@ if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -qx 'PROJECT=demo' \
   && printf '%s\n' "$out" | grep -qx "REPO=$tmpd/repo" && [ ! -e "$tmpd/out-dry" ]; then
   say "  PASS  --dry-run prints the config on stdout and creates no directory, exit $rc"
 else
-  say "  FAIL  --dry-run wrote something or printed no config (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  --dry-run wrote something or printed no config (exit $rc)"; selftest_fail
 fi
 
 out=$(gen "$tmpd/ok.db" "$tmpd/out" 2>&1); rc=$?
@@ -4919,7 +4974,7 @@ if [ "$rc" -eq 0 ] && [ -f "$tmpd/out/demo.conf" ] && [ "$keys" = 11 ] \
   && [ "$(grep '^[A-Z_][A-Z0-9_]*=' "$tmpd/out/demo.conf" | LC_ALL=C sort -c 2>&1)" = "" ]; then
   say "  PASS  one family -> demo.conf with 11 sorted keys, AGENT=cf-demo, token keys as paths"
 else
-  say "  FAIL  the generated config was wrong or absent (exit $rc, $keys keys)"; fails=$((fails+1))
+  say "  FAIL  the generated config was wrong or absent (exit $rc, $keys keys)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
@@ -4933,7 +4988,7 @@ if printf '%s\n' "$out" | grep -q '  PASS  config — demo.conf — ' \
   && ! printf '%s\n' "$out" | grep -q 'FAIL  config'; then
   say "  PASS  bunker-provision.sh parses the generated config with no unknown key"
 else
-  say "  FAIL  the provisioner refused the generated config"; fails=$((fails+1))
+  say "  FAIL  the provisioner refused the generated config"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
@@ -4942,7 +4997,7 @@ if [ "$rc" -eq 2 ] && printf '%s\n' "$out" | grep -q '  FAIL  ghost — PHANTOM 
   && [ ! -e "$tmpd/out-phantom" ]; then
   say "  PASS  a PHANTOM repo_url is refused by name, exit $rc, nothing written"
 else
-  say "  FAIL  the phantom lane was not refused or something was written (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  the phantom lane was not refused or something was written (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
@@ -4951,7 +5006,7 @@ if [ "$rc" -eq 2 ] && printf '%s\n' "$out" | grep -q "'cf-demo-alpha' derived by
   && [ ! -e "$tmpd/out-dup" ]; then
   say "  PASS  two projects deriving one AGENT are refused by name, exit $rc, nothing written"
 else
-  say "  FAIL  the AGENT collision was not refused (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  the AGENT collision was not refused (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
@@ -4960,7 +5015,7 @@ if [ "$rc" -eq 2 ] && printf '%s\n' "$out" | grep -q 'AMBIGUOUS — no lane name
   && [ ! -e "$tmpd/out-amb" ]; then
   say "  PASS  a group with no common name prefix is refused as AMBIGUOUS, exit $rc"
 else
-  say "  FAIL  an ambiguous group was guessed instead of refused (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  an ambiguous group was guessed instead of refused (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
@@ -4972,7 +5027,7 @@ if [ "$rc" -eq 0 ] && [ "$before" = "$after" ] \
   && ! printf '%s\n' "$out" | grep -q 'PASS  wrote'; then
   say "  PASS  a second run is byte-identical and reports unchanged, exit $rc"
 else
-  say "  FAIL  the second run rewrote the config or reported a write (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  the second run rewrote the config or reported a write (exit $rc)"; selftest_fail
 fi
 
 sed -i 's/^SERVER=.*/SERVER=other-host/' "$tmpd/out/demo.conf"
@@ -4982,7 +5037,7 @@ if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -q "  FAIL  drift — .*/demo.
   && [ "$(sha256sum "$tmpd/out/demo.conf" | awk '{print $1}')" = "$mutated" ]; then
   say "  PASS  --check names the drifted key, exits $rc and writes nothing"
 else
-  say "  FAIL  --check did not name the drifted SERVER key (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  --check did not name the drifted SERVER key (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
@@ -4991,7 +5046,7 @@ if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -q 'pass --force to rewrite' \
   && grep -qx 'SERVER=other-host' "$tmpd/out/demo.conf"; then
   say "  PASS  a differing config is not rewritten without --force, exit $rc"
 else
-  say "  FAIL  a differing config was rewritten without --force (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  a differing config was rewritten without --force (exit $rc)"; selftest_fail
 fi
 
 out=$(gen "$tmpd/ok.db" "$tmpd/out" --force 2>&1); rc=$?
@@ -5000,7 +5055,7 @@ if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -q '  PASS  rewrote — ' \
   && [ "$rc2" -eq 0 ] && printf '%s\n' "$out2" | grep -q 'BUNKER-CONFIG: PASS — 1 config checked, no drift'; then
   say "  PASS  --force rewrites the file and --check is green afterwards (exit $rc2)"
 else
-  say "  FAIL  --force did not restore the file (rewrite exit $rc, check exit $rc2)"; fails=$((fails+1))
+  say "  FAIL  --force did not restore the file (rewrite exit $rc, check exit $rc2)"; selftest_fail
   printf '%s\n' "$out2" | sed 's/^/    | /'
 fi
 rm -rf "$tmpd"
@@ -5014,7 +5069,7 @@ NF="$HERE/scripts/node_freshness.py"
 if python3 -B -c 'import ast,sys; ast.parse(open(sys.argv[1],encoding="utf-8").read())' "$NF"; then
   say "  PASS  scripts/node_freshness.py parses (python3 -B, stdlib only)"
 else
-  say "  FAIL  scripts/node_freshness.py does not parse"; fails=$((fails+1))
+  say "  FAIL  scripts/node_freshness.py does not parse"; selftest_fail
 fi
 tmpd=$(mktemp -d)
 export GIT_AUTHOR_NAME=fixture GIT_AUTHOR_EMAIL=fixture@example.invalid
@@ -5053,7 +5108,7 @@ if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'RESULT: PASS' \
   && printf '%s\n' "$out" | grep -Fq 'ancestor=true behind=0'; then
   say "  PASS  a clone in sync with its origin -> RESULT: PASS, exit $rc (the fixture can go green)"
 else
-  say "  FAIL  a clean clone did not pass (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  a clean clone did not pass (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
@@ -5064,7 +5119,7 @@ if [ "$rc" -eq 1 ] \
   && printf '%s\n' "$out" | grep -Fq 'differing path(s) — b.txt'; then
   say "  PASS  origin advances -> exit $rc, RESULT names the lag and the differing file b.txt"
 else
-  say "  FAIL  drift was not refused with the lag and the file named (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  drift was not refused with the lag and the file named (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
@@ -5075,7 +5130,7 @@ if [ "$rc" -eq 1 ] \
   && printf '%s\n' "$out" | grep -Fq 'the fix belongs upstream'; then
   say "  PASS  an uncommitted edit -> exit $rc, the path is named and called upstream's problem"
 else
-  say "  FAIL  a local edit was not reported as a finding (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  a local edit was not reported as a finding (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
@@ -5083,14 +5138,14 @@ out=$(python3 -B "$NF" --workdir "$tmpd/det" 2>&1); rc=$?
 if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -Fq 'detached HEAD at'; then
   say "  PASS  a detached HEAD -> exit $rc, the branch state is named"
 else
-  say "  FAIL  a detached HEAD was not named (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  a detached HEAD was not named (exit $rc)"; selftest_fail
 fi
 
 out=$(python3 -B "$NF" --workdir "$tmpd/noorigin" 2>&1); rc=$?
 if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -Fq "no 'origin' remote"; then
   say "  PASS  a checkout with no origin -> exit $rc, the reason is named (no crash)"
 else
-  say "  FAIL  a missing origin crashed or was not refused (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  a missing origin crashed or was not refused (exit $rc)"; selftest_fail
 fi
 
 # Bunker mode: one exec round trip, home resolved from the agent, rows parsed on this host.
@@ -5110,7 +5165,7 @@ if [ "$rc" -eq 0 ] && [ "$execs" = 1 ] && printf '%s\n' "$out" | grep -Fxq 'RESU
   && printf '%s\n' "$out" | grep -Fq "checkout $tmpd/node/pass/repo"; then
   say "  PASS  bunker mode: one exec round trip, home resolved from the agent, RESULT: PASS"
 else
-  say "  FAIL  bunker mode did not measure the agent's checkout ($execs execs, exit $rc)"; fails=$((fails+1))
+  say "  FAIL  bunker mode did not measure the agent's checkout ($execs execs, exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 out=$(env PATH="$tmpd/bin:$PATH" FIXTURE_LOG="$tmpd/bunker.log" HOME="$tmpd/node/pass" \
@@ -5119,7 +5174,7 @@ if [ "$rc" -eq 1 ] && printf '%s\n' "$out" \
   | python3 -B -c 'import json,sys; d=json.load(sys.stdin); sys.exit(0 if d["status"]=="FAIL" and d["behind"]==1 and d["differing_files"]==["b.txt"] and d["branch"]=="main" else 1)'; then
   say "  PASS  bunker mode --json: status FAIL, behind 1, differing_files [b.txt] (provisioning stores this)"
 else
-  say "  FAIL  bunker mode --json did not carry the measurement (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  bunker mode --json did not carry the measurement (exit $rc)"; selftest_fail
 fi
 
 # Provisioning: layer 40 measures the checkout after the clone. DIRTY is a WARN (the node may be
@@ -5150,7 +5205,7 @@ if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fq '  PASS  freshness — bra
   && printf '%s\n' "$out" | grep -Fxq 'NODE: PASS'; then
   say "  PASS  provisioning runs the clone's own probe after the clone -> PASS freshness, NODE: PASS"
 else
-  say "  FAIL  layer 40 did not measure the clone with the probe it carries (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  layer 40 did not measure the clone with the probe it carries (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 # rung 2: a clone of another project carries no probe -> the node-side fallback measures it
@@ -5161,7 +5216,7 @@ if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fq '  WARN  freshness — ' \
   && printf '%s\n' "$out" | grep -Fxq 'NODE: PASS'; then
   say "  PASS  a dirty checkout at provision time -> WARN naming a.txt, no FAIL row, NODE: PASS"
 else
-  say "  FAIL  a dirty checkout was not a named WARN (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  a dirty checkout was not a named WARN (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 # advance origin AFTER the clone, so the node's tree is behind its own remote
@@ -5173,7 +5228,7 @@ if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -Fq '  FAIL  freshness — ' \
   && printf '%s\n' "$out" | grep -Fxq 'NODE: FAIL (1)'; then
   say "  PASS  a drifted checkout at provision time -> FAIL naming behind=1, NODE: FAIL (1), exit $rc"
 else
-  say "  FAIL  drift was not a FAIL row in layer 40 (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  drift was not a FAIL row in layer 40 (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
@@ -5221,7 +5276,7 @@ PY
 then
   say "  PASS  --apply records freshness{status:PASS, ladder:PASS, behind:0} in node.json, exit $rc"
 else
-  say "  FAIL  node.json did not carry the measured freshness (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  node.json did not carry the measured freshness (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 printf 'a local edit\n' >> "$tmpd/mf/repo/a.txt"
@@ -5237,7 +5292,7 @@ PY
 then
   say "  PASS  a dirty checkout is recorded (status FAIL, ladder WARN, dirty_files [a.txt]) and the ladder still passes, exit $rc"
 else
-  say "  FAIL  a dirty checkout was not recorded as a finding (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  a dirty checkout was not recorded as a finding (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 # ch:trace row=CF-289 spec=docs/handbook/OUTLINE.md#M1-PROVISIONING wave=none:serial-worker test=tests/selftest.sh::CF-289-node-json-union doc=docs/handbook/chapters/M1-provisioning.md evidence=tests/selftest.sh witness=none:local-fixture verdict=none:foreman-will-run-gitreins commit=none:worker-commit memory=none:foreman-closeout
@@ -5294,7 +5349,7 @@ PY
 then
   say "  PASS  CF-289-node-json-union — identity-then-apply leaves agent/namespace/duckbrain/provisioned_by AND the ladder's keys (mode 600, exit $rc)"
 else
-  say "  FAIL  CF-289-node-json-union — the union was not preserved after --apply (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  CF-289-node-json-union — the union was not preserved after --apply (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
   [ -r "$tmpd/union/.node/node.json" ] && python3 -B -c 'import json,sys;print("keys:",sorted(json.load(open(sys.argv[1])).keys()))' "$tmpd/union/.node/node.json" | sed 's/^/    | /'
 fi
@@ -5314,11 +5369,11 @@ PY
   then
     say "  PASS  pre-fix 23114f4 exits 0 while deleting agent/namespace/duckbrain/provisioned_by — this arm discriminates"
   else
-    say "  FAIL  pre-fix 23114f4 did not lose the identity keys (exit $rrc) — the union arm proves nothing"; fails=$((fails+1))
+    say "  FAIL  pre-fix 23114f4 did not lose the identity keys (exit $rrc) — the union arm proves nothing"; selftest_fail
     printf '%s\n' "$rout" | sed 's/^/    | /'
   fi
 else
-  say "  FAIL  pre-fix source unavailable (git show 23114f4:scripts/project-node.sh)"; fails=$((fails+1))
+  say "  FAIL  pre-fix source unavailable (git show 23114f4:scripts/project-node.sh)"; selftest_fail
 fi
 rm -rf "$tmpd"
 # END cf244-node-freshness
@@ -5348,7 +5403,7 @@ PY
 then
   say "  PASS  build writes a record with a sha256 per declared file, exit $rc"
 else
-  say "  FAIL  build did not produce a digest record (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  build did not produce a digest record (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
@@ -5358,7 +5413,7 @@ if [ "$rc" -eq 0 ] && [ "$rc2" -eq 0 ] && [ -f "$seed_home/.hermes/prompts/forem
   && [ -f "$seed_home/.hermes/seed-applied.json" ]; then
   say "  PASS  apply installs prompts and skills and a green check follows (exit $rc, $rc2)"
 else
-  say "  FAIL  apply/check did not land a usable seed (exit $rc, $rc2)"; fails=$((fails+1))
+  say "  FAIL  apply/check did not land a usable seed (exit $rc, $rc2)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
@@ -5367,7 +5422,7 @@ out=$(python3 -B "$SEED" check --record "$seed_tmp/seed.tar.json" --home "$seed_
 if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -q 'prompts/foreman.md drifted'; then
   say "  PASS  a tampered file fails the check and is named (exit $rc)"
 else
-  say "  FAIL  a tampered file did not fail the check (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  a tampered file did not fail the check (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
@@ -5385,14 +5440,14 @@ if [ "$rc" -eq 1 ] && [ ! -d "$seed_home2/.hermes/prompts" ]; then
   say "  PASS  a digest mismatch refuses the whole seed and installs nothing (exit $rc)"
 else
   say "  FAIL  a digest mismatch was not refused, or files were installed anyway (exit $rc)"
-  fails=$((fails+1)); printf '%s\n' "$out" | sed 's/^/    | /'
+  selftest_fail; printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
 out=$(python3 -B "$SEED" build --manifest "$SEED_MANIFEST" --repo-root "$(cd "$(dirname "$0")/.." && pwd)" --out "$seed_tmp/small.tar" --budget 100 2>&1); rc=$?
 if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -q 'exceeds the declared ceiling'; then
   say "  PASS  a seed over the size budget is refused (exit $rc)"
 else
-  say "  FAIL  the size budget did not refuse (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  the size budget did not refuse (exit $rc)"; selftest_fail
 fi
 
 printf 'backups/board.tar.gz\n' > "$seed_tmp/bad.manifest"
@@ -5400,7 +5455,7 @@ out=$(python3 -B "$SEED" build --manifest "$seed_tmp/bad.manifest" --out "$seed_
 if [ "$rc" -ne 0 ]; then
   say "  PASS  a backup artefact declared as seedable is refused (exit $rc)"
 else
-  say "  FAIL  a backup artefact was accepted as seed input (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  a backup artefact was accepted as seed input (exit $rc)"; selftest_fail
 fi
 
 rm -rf "$seed_tmp" "$seed_home" "$seed_home2"
@@ -5420,7 +5475,7 @@ out=$(python3 -B "$SEED" build --manifest "$SEED_MANIFEST" --repo-root "$SEED_RE
 if [ "$rc" -eq 0 ] && [ -f "$seed_nt/seed.tar.json" ]; then
   say "  PASS  CF-288 fixture seed built (exit $rc)"
 else
-  say "  FAIL  CF-288 fixture seed did not build (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  CF-288 fixture seed did not build (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
@@ -5429,7 +5484,7 @@ out=$(python3 -B "$SEED" apply --tar "$seed_nt/seed.tar" --record "$seed_nt/seed
 if [ "$rc" -eq 0 ] && [ -f "$seed_home288/.hermes/prompts/foreman.md" ]; then
   say "  PASS  CF-288 fixture fresh apply landed a seed (exit $rc)"
 else
-  say "  FAIL  CF-288 fixture fresh apply did not land a seed (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  CF-288 fixture fresh apply did not land a seed (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
@@ -5447,7 +5502,7 @@ if [ "$rc" -eq 0 ] \
   say "  PASS  re-apply without --force preserves a changed prompt and a local note, naming both (exit $rc)"
 else
   say "  FAIL  re-apply without --force did not preserve local edits or name them (exit $rc)"
-  fails=$((fails+1)); printf '%s\n' "$out" | sed 's/^/    | /'
+  selftest_fail; printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
 # (d): re-apply WITH --force replaces the prompt wholesale and names it.
@@ -5458,7 +5513,7 @@ if [ "$rc" -eq 0 ] \
   say "  PASS  re-apply with --force overwrites the changed prompt and names it (exit $rc)"
 else
   say "  FAIL  re-apply with --force did not overwrite the local edit or name it (exit $rc)"
-  fails=$((fails+1)); printf '%s\n' "$out" | sed 's/^/    | /'
+  selftest_fail; printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
 rm -rf "$seed_nt" "$seed_home288"
@@ -5474,7 +5529,7 @@ NSD="$HERE/scripts/node_seed_drift.py"
 if python3 -B -c 'import ast,sys; ast.parse(open(sys.argv[1],encoding="utf-8").read())' "$NSD"; then
   say "  PASS  scripts/node_seed_drift.py parses (python3 -B, stdlib only)"
 else
-  say "  FAIL  scripts/node_seed_drift.py does not parse"; fails=$((fails+1))
+  say "  FAIL  scripts/node_seed_drift.py does not parse"; selftest_fail
 fi
 tmpd=$(mktemp -d)
 mkdir -p "$tmpd/src/prompts" "$tmpd/src/skills"
@@ -5486,14 +5541,14 @@ out=$(python3 -B "$SEED" build --manifest "$tmpd/fixture.manifest" --repo-root "
 if [ $? -eq 0 ] && [ -f "$tmpd/seed.tar.json" ]; then
   say "  PASS  the fixture seed record built (2 files, sha256 each)"
 else
-  say "  FAIL  the fixture seed record did not build"; fails=$((fails+1))
+  say "  FAIL  the fixture seed record did not build"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 out=$(python3 -B "$SEED" apply --tar "$tmpd/seed.tar" --record "$tmpd/seed.tar.json" --home "$tmpd/node-home" 2>&1)
 if [ $? -eq 0 ] && [ -f "$tmpd/node-home/.hermes/seed-applied.json" ]; then
   say "  PASS  the fixture node home carries the applied record at .hermes/seed-applied.json"
 else
-  say "  FAIL  the seeder did not apply to the fixture node home"; fails=$((fails+1))
+  say "  FAIL  the seeder did not apply to the fixture node home"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
@@ -5504,7 +5559,7 @@ if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'RESULT: PASS' \
   && printf '%s\n' "$out" | grep -Fq '2 seeded files present and matching'; then
   say "  PASS  a seed whose files match its record -> exit $rc, RESULT: PASS, the row names the count"
 else
-  say "  FAIL  a matching seed did not pass with the file count named (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  a matching seed did not pass with the file count named (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
@@ -5517,7 +5572,7 @@ if [ "$rc" -eq 1 ] \
   && printf '%s\n' "$out" | grep -Fxq 'RESULT: FAIL (1 seeded path(s) differ from the record)'; then
   say "  PASS  a tampered file -> exit $rc, the path and both digest prefixes are named"
 else
-  say "  FAIL  a tampered seed did not fail with the path and prefixes named (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  a tampered seed did not fail with the path and prefixes named (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 printf 'the foreman procedure\n' > "$tmpd/node-home/.hermes/prompts/foreman.md"
@@ -5525,7 +5580,7 @@ out=$(python3 -B "$NSD" --home "$tmpd/node-home" 2>&1); rc=$?
 if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'RESULT: PASS'; then
   say "  PASS  the file restored -> exit $rc, RESULT: PASS again (the red arm can go green)"
 else
-  say "  FAIL  the restored file did not pass again (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  the restored file did not pass again (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
@@ -5538,7 +5593,7 @@ if [ "$rc" -eq 3 ] \
   && printf '%s\n' "$out" | grep -Fq "$rec"; then
   say "  PASS  a node with no seed record -> exit $rc, the absent record's path is named"
 else
-  say "  FAIL  an absent record was not a WARN naming its path (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  an absent record was not a WARN naming its path (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 out=$(python3 -B "$NSD" --home "$tmpd/node-home" --strict-seed 2>&1); rs=$?
@@ -5547,7 +5602,7 @@ if [ "$rs" -eq 1 ] \
   && printf '%s\n' "$out" | grep -Fq 'an unknown seed is not a pass'; then
   say "  PASS  the SAME fixture under --strict-seed -> exit $rs, FAIL (unknown is not a pass)"
 else
-  say "  FAIL  --strict-seed did not refuse the absent record (exit $rs)"; fails=$((fails+1))
+  say "  FAIL  --strict-seed did not refuse the absent record (exit $rs)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 mv "$tmpd/record.bak" "$rec"
@@ -5555,7 +5610,7 @@ out=$(python3 -B "$NSD" --home "$tmpd/node-home" 2>&1); rc=$?
 if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'RESULT: PASS'; then
   say "  PASS  the record restored -> exit $rc, RESULT: PASS again (the absent arm can go green)"
 else
-  say "  FAIL  the restored record did not pass again (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  the restored record did not pass again (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
@@ -5578,7 +5633,7 @@ if [ "$rc" -eq 0 ] && [ "$execs" = 1 ] \
   say "  PASS  bunker mode offline: ONE exec round trip stages the seeder, checks the node home, RESULT: PASS"
 else
   say "  FAIL  bunker mode did not measure the seeded home in one round trip ($execs execs, exit $rc)"
-  fails=$((fails+1)); printf '%s\n' "$out" | sed 's/^/    | /'
+  selftest_fail; printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 out=$(env PATH="$tmpd/bin:$PATH" FIXTURE_LOG="$tmpd/bunker.log" HOME="$tmpd/node-home" \
   python3 -B "$NSD" --agent cf-fixture --server fixture --json 2>/dev/null); rc=$?
@@ -5586,7 +5641,7 @@ if [ "$rc" -eq 0 ] && printf '%s\n' "$out" \
   | python3 -B -c 'import json,sys; d=json.load(sys.stdin); sys.exit(0 if d["status"]=="PASS" and d["record_present"] is True and d["file_count"]==2 and d["home"]!="" else 1)'; then
   say "  PASS  bunker mode --json: status PASS, record_present true, file_count 2"
 else
-  say "  FAIL  bunker mode --json did not carry the measurement (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  bunker mode --json did not carry the measurement (exit $rc)"; selftest_fail
 fi
 
 # CF-291: step 6 could not move the verdict. A seed the leg could not measure printed a WARN row
@@ -5656,7 +5711,7 @@ if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'VERIFY: PASS' \
   && printf '%s\n' "$out" | grep -Eq '^  PASS  checkout_freshness'; then
   say "  PASS  a node whose seed matches its record -> VERIFY: PASS, exit $rc (the fixture can go green)"
 else
-  say "  FAIL  the fixture node did not verify (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  the fixture node did not verify (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
@@ -5672,7 +5727,7 @@ if [ "$rc" -eq 3 ] \
   say "  PASS  a 0-byte seed record -> exit $rc, VERIFY: UNVERIFIED naming seed_drift (not a PASS)"
 else
   say "  FAIL  an empty seed record did not end UNVERIFIED (exit $rc): $(printf '%s\n' "$out" | grep -E '^VERIFY|seed_drift' | head -3 | tr '\n' ' ')"
-  fails=$((fails+1)); printf '%s\n' "$out" | sed 's/^/    | /'
+  selftest_fail; printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
 # pre-fix control: the SAME fixture through 436def5 must pass, or these arms prove nothing.
@@ -5682,11 +5737,11 @@ if [ "$prefix_rc" -eq 0 ]; then
     && printf '%s\n' "$out" | grep -Fq '  WARN  seed_drift — '; then
     say "  PASS  pre-fix 436def5 certifies the same unmeasured seed: VERIFY: PASS, exit $rc (the fixture detects CF-291)"
   else
-    say "  FAIL  pre-fix 436def5 control did not pass the unmeasured seed (exit $rc)"; fails=$((fails+1))
+    say "  FAIL  pre-fix 436def5 control did not pass the unmeasured seed (exit $rc)"; selftest_fail
     printf '%s\n' "$out" | sed 's/^/    | /'
   fi
 else
-  say "  FAIL  pre-fix source 436def5:scripts/verify-node.sh unavailable"; fails=$((fails+1))
+  say "  FAIL  pre-fix source 436def5:scripts/verify-node.sh unavailable"; selftest_fail
 fi
 
 # corrupt record: not JSON at all — same verdict, and the reason names the record.
@@ -5700,7 +5755,7 @@ if [ "$rc" -eq 3 ] \
   say "  PASS  an unparseable seed record -> exit $rc, VERIFY: UNVERIFIED naming seed_drift and the path"
 else
   say "  FAIL  a corrupt seed record did not end UNVERIFIED (exit $rc): $(printf '%s\n' "$out" | grep -E '^VERIFY|seed_drift' | head -3 | tr '\n' ' ')"
-  fails=$((fails+1)); printf '%s\n' "$out" | sed 's/^/    | /'
+  selftest_fail; printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
 # CF-379: a record that PARSES but declares no files. node_seed.py check prints `0 files present
@@ -5718,7 +5773,7 @@ if [ "$rc" -eq 1 ] \
   say "  PASS  a seed record that declares no files -> exit $rc, VERIFY: FAIL naming the empty collection (not a PASS)"
 else
   say "  FAIL  an empty seed record was not a named FAIL (exit $rc): $(printf '%s\n' "$out" | grep -E '^VERIFY|seed_drift' | head -3 | tr '\n' ' ')"
-  fails=$((fails+1)); printf '%s\n' "$out" | sed 's/^/    | /'
+  selftest_fail; printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
 # The CF-379 control: the SAME empty record through the checker at 226bae2 — the row's measured
@@ -5731,19 +5786,19 @@ mkdir -p "$vn_pfx"
 cp -r "$vn/tree/scripts/." "$vn_pfx/"
 if git -C "$HERE" show 226bae2:scripts/node_seed_drift.py > "$vn_pfx/node_seed_drift.py" 2>/dev/null; then
   if cmp -s "$vn_pfx/node_seed_drift.py" "$vn/tree/scripts/node_seed_drift.py"; then
-    say "  FAIL  the CF-379 control is not a pre-fix checker — byte-identical to the tree under test"; fails=$((fails+1))
+    say "  FAIL  the CF-379 control is not a pre-fix checker — byte-identical to the tree under test"; selftest_fail
   else
     out=$(vn_run "$vn/prefix-cf379"); rc=$?
     if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'VERIFY: PASS' \
       && printf '%s\n' "$out" | grep -Fq '0 seeded files present and matching'; then
       say "  PASS  pre-fix 226bae2 certifies the same empty record: VERIFY: PASS, exit $rc (the fixture detects CF-379)"
     else
-      say "  FAIL  pre-fix 226bae2 control did not pass the empty record (exit $rc)"; fails=$((fails+1))
+      say "  FAIL  pre-fix 226bae2 control did not pass the empty record (exit $rc)"; selftest_fail
       printf '%s\n' "$out" | sed 's/^/    | /'
     fi
   fi
 else
-  say "  FAIL  pre-fix source 226bae2:scripts/node_seed_drift.py unavailable"; fails=$((fails+1))
+  say "  FAIL  pre-fix source 226bae2:scripts/node_seed_drift.py unavailable"; selftest_fail
 fi
 
 # Green control for the two arms above: the record restored — its two seeded files still match —
@@ -5755,7 +5810,7 @@ if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'VERIFY: PASS' \
   && printf '%s\n' "$out" | grep -Fq '2 seeded files present and matching'; then
   say "  PASS  the record restored with its 2 seeded files -> VERIFY: PASS, exit $rc (a pass names a count above zero)"
 else
-  say "  FAIL  the restored two-file record did not verify (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  the restored two-file record did not verify (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
@@ -5769,7 +5824,7 @@ if [ "$rc" -eq 3 ] \
   say "  PASS  an absent seed record -> exit $rc, VERIFY: UNVERIFIED naming seed_drift and the path"
 else
   say "  FAIL  an absent seed record did not end UNVERIFIED (exit $rc): $(printf '%s\n' "$out" | grep -E '^VERIFY|seed_drift' | head -3 | tr '\n' ' ')"
-  fails=$((fails+1)); printf '%s\n' "$out" | sed 's/^/    | /'
+  selftest_fail; printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
 # the strict path keeps its wording: an unknown seed is a FAIL, never an UNVERIFIED.
@@ -5779,7 +5834,7 @@ if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -Fxq 'VERIFY: FAIL (1)' \
   && printf '%s\n' "$out" | grep -Fq 'an unknown seed is not a pass'; then
   say "  PASS  an absent record under --strict-seed is still a FAIL, exit $rc (wording preserved)"
 else
-  say "  FAIL  --strict-seed no longer refuses the absent record as a FAIL (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  --strict-seed no longer refuses the absent record as a FAIL (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
@@ -5791,7 +5846,7 @@ if [ "$owners" = "node_seed_drift.py" ]; then
   say "  PASS  the strict-seed sentence has one owning source: scripts/$owners"
 else
   say "  FAIL  the strict-seed sentence is not owned by exactly one file (found in: ${owners:-nowhere})"
-  fails=$((fails+1))
+  selftest_fail
 fi
 
 # the OTHER strict branch of the seed leg: an ABSENT record reaches the checker's own exit 1, so the
@@ -5809,7 +5864,7 @@ if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -Fxq 'VERIFY: FAIL (1)' \
   && printf '%s\n' "$out" | grep -Fq 'an unknown seed is not a pass'; then
   say "  PASS  a 0-byte record under --strict-seed -> exit $rc, FAIL via the verifier's exit-3 branch with the checker's sentence"
 else
-  say "  FAIL  the exit-3 strict branch lost the checker's sentence (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  the exit-3 strict branch lost the checker's sentence (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
@@ -5822,7 +5877,7 @@ cp -r "$vn/tree/scripts" "$vn_mut/scripts"
 sed -e 's/an unknown seed is not a pass/an unknown is not a pass/' \
   "$vn/tree/scripts/node_seed_drift.py" > "$vn_mut/scripts/node_seed_drift.py"
 if cmp -s "$vn/tree/scripts/node_seed_drift.py" "$vn_mut/scripts/node_seed_drift.py"; then
-  say "  FAIL  the seeded negative mutated nothing — the arm above would prove nothing"; fails=$((fails+1))
+  say "  FAIL  the seeded negative mutated nothing — the arm above would prove nothing"; selftest_fail
 else
   : > "$vn_rec"
   out=$(vn_run "$vn_mut" --strict-seed); rc=$?
@@ -5831,7 +5886,7 @@ else
     && ! printf '%s\n' "$out" | grep -Fq 'an unknown seed is not a pass'; then
     say "  PASS  a scratch tree whose single source lost the phrase -> the arm above goes red (exit $rc, phrase absent)"
   else
-    say "  FAIL  the phrase arm cannot fail: a mutated source still greened it (exit $rc)"; fails=$((fails+1))
+    say "  FAIL  the phrase arm cannot fail: a mutated source still greened it (exit $rc)"; selftest_fail
     printf '%s\n' "$out" | sed 's/^/    | /'
   fi
 fi
@@ -5847,7 +5902,7 @@ if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -Fxq 'VERIFY: FAIL (1)' \
   && printf '%s\n' "$out" | grep -Fq 'node_seed_drift.py missing'; then
   say "  PASS  a missing seeder -> exit $rc, VERIFY: FAIL naming the unmeasured seed"
 else
-  say "  FAIL  a missing seeder did not fail the gate (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  a missing seeder did not fail the gate (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
@@ -5859,7 +5914,7 @@ if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'VERIFY: PASS' \
   && printf '%s\n' "$out" | grep -Fq '2 seeded files present and matching'; then
   say "  PASS  seeder and record restored -> VERIFY: PASS, exit $rc again (the arms can go green)"
 else
-  say "  FAIL  the restored fixture did not verify (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  the restored fixture did not verify (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 # CF-270 — the port reached the remote shell. `--port` was taken verbatim into PORT and then
@@ -5903,7 +5958,7 @@ if [ "$rc" -eq 2 ] && [ ! -s "$cf270/remote.log" ] && [ ! -e "$canary" ] \
   say "  PASS  CF-270 --port not-a-port -> exit $rc, stderr names --port, 0 recorded remote invocations"
 else
   say "  FAIL  CF-270 a non-numeric --port was not refused before the first remote call (exit $rc, $(grep -ac . "$cf270/remote.log") recorded)"
-  fails=$((fails+1)); printf '%s\n' "$out" | sed 's/^/    | /'
+  selftest_fail; printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
 # AC2 (b): the boundary. 1..65535 is the whole legal range, so 0, 65536, an empty value and a
@@ -5920,7 +5975,7 @@ if [ -z "$cf270_bad" ]; then
   say "  PASS  CF-270 --port 0 / 65536 / empty / ' 10800' -> exit 2 each, 0 recorded remote invocations"
 else
   say "  FAIL  CF-270 out-of-range --port accepted: $cf270_bad"
-  fails=$((fails+1))
+  selftest_fail
 fi
 
 # AC2 (c): the measured exploit. Pre-fix this value closed the single quotes of the remote curl
@@ -5933,7 +5988,7 @@ if [ "$rc" -eq 2 ] && [ ! -s "$cf270/remote.log" ] && [ ! -e "$canary" ] \
   say "  PASS  CF-270 injection --port -> exit $rc, refused before the first remote call, canary never created"
 else
   say "  FAIL  CF-270 the injection --port was not refused (exit $rc, $(grep -ac . "$cf270/remote.log") recorded, canary $([ -e "$canary" ] && echo CREATED || echo absent))"
-  fails=$((fails+1)); printf '%s\n' "$out" | sed 's/^/    | /'
+  selftest_fail; printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
 # Control: a real port still runs the legs, and it reaches the remote shell as POSITIONAL DATA —
@@ -5951,7 +6006,7 @@ if [ "$rc" -eq 3 ] && [ "$inside_recs" -eq 2 ] \
   say "  PASS  CF-270 --port 10800 -> both inside legs run, port and path travel as arguments, no canary in any command"
 else
   say "  FAIL  CF-270 a valid --port no longer runs the legs as positional data (exit $rc, $inside_recs inside call(s))"
-  fails=$((fails+1)); printf '%s\n' "$out" | sed 's/^/    | /'
+  selftest_fail; printf '%s\n' "$out" | sed 's/^/    | /'
   sed 's/^/    rec| /' "$cf270/remote.log"
 fi
 
@@ -5973,7 +6028,7 @@ if [ -s "$cf270/remote.log" ] && [ ! -e "$canary" ] \
   say "  PASS  CF-270 pre-fix inside() interpolates the port: the canary IS in the recorded remote command (the fixture detects the defect)"
 else
   say "  FAIL  CF-270 the pre-fix body did not reproduce the interpolation — these arms would pass vacuously"
-  fails=$((fails+1)); sed 's/^/    | /' "$cf270/remote.log"
+  selftest_fail; sed 's/^/    | /' "$cf270/remote.log"
 fi
 rm -rf "$cf270"
 
@@ -6011,7 +6066,7 @@ path_without() {
 }
 nogo_path=$(path_without go)
 if env PATH="$nogo_path" bash -c 'command -v go' >/dev/null 2>&1; then
-  say "  FAIL  fixture could not build a go-free PATH (go still resolvable)"; fails=$((fails+1))
+  say "  FAIL  fixture could not build a go-free PATH (go still resolvable)"; selftest_fail
 else
   say "  PASS  fixture PATH carries no go"
 fi
@@ -6026,7 +6081,7 @@ if [ "$rc" -ne 0 ] \
   && ! printf '%s\n' "$out" | grep -q '^  WARN  tool:go'; then
   say "  PASS  go.mod workspace without go -> exit $rc and ONE FAIL tool:go row (not a WARN)"
 else
-  say "  FAIL  a go.mod workspace without go did not FAIL the layer by name (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  a go.mod workspace without go did not FAIL the layer by name (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
@@ -6050,7 +6105,7 @@ if [ "$rc" -eq 0 ] \
   && ! printf '%s\n' "$out" | grep -q '^  FAIL  '; then
   say "  PASS  the same tree with a go that resolves the pinned module -> go rows PASS, exit 0"
 else
-  say "  FAIL  the go-present arm did not go green (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  the go-present arm did not go green (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
@@ -6075,7 +6130,7 @@ if [ "$rc" -ne 0 ] \
   && printf '%s\n' "$out" | grep -Fq '  FAIL  go:proxy — rsc.io/quote@v1.5.2 via https://proxy.fixture.invalid,direct: go: rsc.io/quote@v1.5.2: dial tcp: connection refused'; then
   say "  PASS  a proxy that refuses -> FAIL go:proxy naming the proxy and the error"
 else
-  say "  FAIL  an unresolvable module proxy was not a named FAIL (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  an unresolvable module proxy was not a named FAIL (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
@@ -6099,7 +6154,7 @@ if [ "$rc" -eq 0 ] \
   && ! printf '%s\n' "$out" | grep -q 'tool:go'; then
   say "  PASS  --kinds rust,node on a marker-less tree grades cargo and node, not go"
 else
-  say "  FAIL  --kinds did not drive the graded set (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  --kinds did not drive the graded set (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
@@ -6112,7 +6167,7 @@ if [ "$rc" -ne 0 ] \
   && ! printf '%s\n' "$out" | grep -q '^  WARN  tool:node'; then
   say "  PASS  a declared node kind with no node -> FAIL tool:node (the WARN shape is gone)"
 else
-  say "  FAIL  a declared node kind still warned instead of failing (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  a declared node kind still warned instead of failing (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
@@ -6123,7 +6178,7 @@ if printf '%s\n' "$out" | grep -Fq '  WARN  kinds — generic fallback — no --
   && ! printf '%s\n' "$out" | grep -q 'tool:go'; then
   say "  PASS  no evidence -> generic fallback is named on the row, and nothing else is graded"
 else
-  say "  FAIL  the generic fallback was silent (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  the generic fallback was silent (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
@@ -6135,7 +6190,7 @@ if [ "$rc" -ne 0 ] \
   && ! printf '%s\n' "$out" | grep -q '\[10\] base'; then
   say "  PASS  an unknown kind is a named FAIL before any layer runs (never a silent pass)"
 else
-  say "  FAIL  an unknown kind was not refused by name (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  an unknown kind was not refused by name (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
@@ -6156,7 +6211,7 @@ expected="  FAIL  go — missing: pinned $go_pin not found under $negative_home/
 if [ "$rc" -eq 1 ] && [ "$(printf '%s\n' "$out" | grep -Fxc -- "$expected")" = 1 ]; then
   say "  PASS  install-go negative: no Go -> named FAIL, exit $rc"
 else
-  say "  FAIL  install-go negative did not name the absent pin (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  install-go negative did not name the absent pin (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
@@ -6166,7 +6221,7 @@ printf 'cf219 fixture archive bytes\n' > "$tmpd/archive"
 wrong=0000000000000000000000000000000000000000000000000000000000000000
 if fetch_verified "file://$tmpd/archive" "$tmpd/wrong-dest" "$wrong" >/dev/null 2>&1 \
   || [ -e "$tmpd/wrong-dest" ]; then
-  say "  FAIL  install-go digest: wrong sha256 accepted or destination published"; fails=$((fails+1))
+  say "  FAIL  install-go digest: wrong sha256 accepted or destination published"; selftest_fail
 else
   say "  PASS  install-go digest: wrong sha256 refused and destination absent"
 fi
@@ -6175,7 +6230,7 @@ if fetch_verified "file://$tmpd/archive" "$tmpd/right-dest" "$right" >/dev/null 
   && [ "$(sha256sum "$tmpd/right-dest" | cut -d' ' -f1)" = "$right" ]; then
   say "  PASS  install-go digest control: measured sha256 accepted"
 else
-  say "  FAIL  install-go digest control: correct sha256 refused"; fails=$((fails+1))
+  say "  FAIL  install-go digest control: correct sha256 refused"; selftest_fail
 fi
 
 # POSITIVE: this control host carries the same applied pin used by node provisioning.
@@ -6191,7 +6246,7 @@ if [ "$rc" -eq 0 ] \
   && printf '%s\n' "$out" | grep -Eq "^  PASS  go — go version $go_pin [^[:space:]]+/[^[:space:]]+$"; then
   say "  PASS  install-go positive: applied host pin read back ($out)"
 else
-  say "  FAIL  install-go positive: host toolchain did not read back $go_pin (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  install-go positive: host toolchain did not read back $go_pin (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 rm -rf "$tmpd"
@@ -6244,7 +6299,7 @@ for candidate in "${ruff_candidates[@]}"; do
   esac
 done
 if [ -z "$ruff_bin" ]; then
-  say "  FAIL  no checker at the pinned ruff $ruff_pin to grade with, so the lint lane cannot be attributed to a tool; tried:${ruff_tried:- (nothing found)}"; fails=$((fails+1))
+  say "  FAIL  no checker at the pinned ruff $ruff_pin to grade with, so the lint lane cannot be attributed to a tool; tried:${ruff_tried:- (nothing found)}"; selftest_fail
 else
   say "  PASS  pinned checker: $ruff_version at $ruff_bin (pin $ruff_pin, rules $ruff_rules)"
   tmpd=$(mktemp -d)
@@ -6254,7 +6309,7 @@ else
   if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q 'F401'; then
     say "  PASS  one unused import -> exit $rc naming F401 ($ruff_version, rules $ruff_rules)"
   else
-    say "  FAIL  one unused import did not red under $ruff_version at $ruff_bin (exit $rc)"; fails=$((fails+1))
+    say "  FAIL  one unused import did not red under $ruff_version at $ruff_bin (exit $rc)"; selftest_fail
     printf '%s\n' "$out" | sed 's/^/    | /'
   fi
   # GREEN: the same file, same checker, one line removed.
@@ -6262,7 +6317,7 @@ else
   if out=$("$ruff_bin" check --select "$ruff_rules" "$tmpd/one_unused.py" 2>&1); then
     say "  PASS  same file once the import is removed -> exit 0 ($ruff_version, rules $ruff_rules)"
   else
-    say "  FAIL  the clean file still reds under $ruff_version at $ruff_bin, so the arm cannot go green"; fails=$((fails+1))
+    say "  FAIL  the clean file still reds under $ruff_version at $ruff_bin, so the arm cannot go green"; selftest_fail
     printf '%s\n' "$out" | sed 's/^/    | /'
   fi
   # RED CONTROL (CF-487): the isort family is the class the version race actually moved, and
@@ -6275,7 +6330,7 @@ else
   if [ "$rc" -ne 0 ] && [ -n "$quoted" ]; then
     say "  PASS  unsorted import block -> exit $rc; quoted: $quoted ($ruff_version, --select I001)"
   else
-    say "  FAIL  the unsorted-import control did not red under $ruff_version at $ruff_bin (exit $rc)"; fails=$((fails+1))
+    say "  FAIL  the unsorted-import control did not red under $ruff_version at $ruff_bin (exit $rc)"; selftest_fail
     printf '%s\n' "$out" | sed 's/^/    | /'
   fi
   # The tracked surface the lane grades must itself be clean. Concise output so a FAIL can
@@ -6288,7 +6343,7 @@ else
   else
     n_find=$(printf '%s\n' "$out" | grep -cE '^[^ ]+:[0-9]+:[0-9]+: ' || true)
     first=$(printf '%s\n' "$out" | grep -m1 -E '^[^ ]+:[0-9]+:[0-9]+: ' || true)
-    say "  FAIL  tracked python surface is red under $ruff_version at $ruff_bin: $n_find finding(s), first ${first:-unattributed}"; fails=$((fails+1))
+    say "  FAIL  tracked python surface is red under $ruff_version at $ruff_bin: $n_find finding(s), first ${first:-unattributed}"; selftest_fail
     printf '%s\n' "$out" | sed 's/^/    | /'
   fi
   rm -rf "$tmpd"
@@ -6381,7 +6436,7 @@ PY
 then
   say "  PASS  local writer fixtures completed without provider calls"
 else
-  say "  FAIL  runner-owned status writer fixture"; fails=$((fails+1))
+  say "  FAIL  runner-owned status writer fixture"; selftest_fail
 fi
 out=$(CF_MASTER_DIR="$tmpd/master" python3 "$HERE/scripts/master_doc_fill.py" --dry-run 2>&1); rc=$?
 if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -q '^todo=1 ' \
@@ -6392,7 +6447,7 @@ if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -q '^todo=1 ' \
   say "  PASS  RED module selected, index and missing-Path document skipped"
   printf '%s\n' "$out"
 else
-  say "  FAIL  RED/index/Path selection (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  RED/index/Path selection (exit $rc)"; selftest_fail
   printf '%s\n' "$out"
 fi
 # CF-257 regression: a module whose single Status row starts with `**VERIFIED — ` — or with the
@@ -6405,14 +6460,14 @@ done
 if [ -z "$marker_leaks" ]; then
   say "  PASS  VERIFIED and bare VERIFIED Status rows are complete, never candidates"
 else
-  say "  FAIL  a completed module is still selected:$marker_leaks"; fails=$((fails+1))
+  say "  FAIL  a completed module is still selected:$marker_leaks"; selftest_fail
 fi
 cp "$tmpd/filled-first.md" "$tmpd/master/01-first.md"
 # Negative control: the old body-string selector would select BOTH filled modules.
 if [ "$(grep -l 'RED — no verification recorded' "$tmpd/master"/0[12]-*.md | wc -l)" -eq 2 ]; then
   say "  PASS  old selector would wrongly refill both completed modules"
 else
-  say "  FAIL  negative control no longer distinguishes the old selector"; fails=$((fails+1))
+  say "  FAIL  negative control no longer distinguishes the old selector"; selftest_fail
 fi
 before=$(sha256sum "$tmpd/master/"*.md)
 for pass in 1 2; do
@@ -6423,7 +6478,7 @@ for pass in 1 2; do
     say "  PASS  filled run $pass: todo=0 exit=0 sha256sum unchanged"
     printf '%s\n' "$out" | grep '^todo='
   else
-    say "  FAIL  filled run $pass did not converge or changed fixture bytes (exit $rc)"; fails=$((fails+1))
+    say "  FAIL  filled run $pass did not converge or changed fixture bytes (exit $rc)"; selftest_fail
     printf '%s\n' "$out"
   fi
 done
@@ -6438,7 +6493,7 @@ if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -q '^todo=4 ' \
   && ! printf '%s\n' "$out" | grep -Fxq 'candidate 03-not-a-module.md'; then
   say "  PASS  --force selects all four modules, VERIFIED ones included, never the non-modules"
 else
-  say "  FAIL  --force selection (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  --force selection (exit $rc)"; selftest_fail
   printf '%s\n' "$out"
 fi
 rm -rf "$tmpd"
@@ -6463,7 +6518,7 @@ if [ "$rc" -ne 0 ] \
   && ! printf '%s\n' "$out" | grep -q 'MASTER-DOC: PASS'; then
   say "  PASS  absent root -> exit $rc, both candidate roots named, no PASS"
 else
-  say "  FAIL  absent root was not a named refusal (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  absent root was not a named refusal (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 # arm 2: a root that really holds one module still counts it, and can still pass. The module is
@@ -6523,7 +6578,7 @@ if [ "$rc" -eq 0 ] \
   && printf '%s\n' "$out" | grep -q 'MASTER-DOC: PASS'; then
   say "  PASS  one-module root -> exit 0, summary reads 1 module(s)"
 else
-  say "  FAIL  one-module root did not count one module (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  one-module root did not count one module (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 # arm 3: the red-proof for the vacuous case. The root exists, so resolution succeeds, but it holds
@@ -6537,7 +6592,7 @@ if [ "$rc" -ne 0 ] \
   && ! printf '%s\n' "$out" | grep -q 'MASTER-DOC: PASS'; then
   say "  PASS  zero-module root -> exit $rc, FAIL names the root, 0 module(s), no PASS"
 else
-  say "  FAIL  zero-module root still reported itself healthy (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  zero-module root still reported itself healthy (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 rm -rf "$tmpd"
@@ -6557,12 +6612,12 @@ mkdir -p "$tmpd/scripts/harness" "$tmpd/bin"
 staged=$(bash "$HERE/scripts/node-create.sh" --staged-files); staged_rc=$?
 if [ "$staged_rc" -eq 0 ]; then
   while IFS= read -r file; do
-    cp "$HERE/scripts/$file" "$tmpd/scripts/$file" || fails=$((fails+1))
+    cp "$HERE/scripts/$file" "$tmpd/scripts/$file" || selftest_fail
   done <<< "$staged"
 else
-  say "  FAIL  CF-051 fixture cannot stage the tree (manifest exit $staged_rc)"; fails=$((fails+1))
+  say "  FAIL  CF-051 fixture cannot stage the tree (manifest exit $staged_rc)"; selftest_fail
 fi
-cp "$HERE/scripts/node-create.sh" "$tmpd/scripts/" || fails=$((fails+1))
+cp "$HERE/scripts/node-create.sh" "$tmpd/scripts/" || selftest_fail
 printf '#!/usr/bin/env bash\nexit 0\n' > "$tmpd/scripts/verify-node.sh"
 chmod +x "$tmpd/scripts/verify-node.sh"
 cat > "$tmpd/bin/bunker" <<'EOF'
@@ -6597,7 +6652,7 @@ if [ "$rc" -eq 1 ] \
   && ! printf '%s\n' "$out" | grep -Eq 'unbound variable|^unexpected bunker command|line [0-9]+:'; then
   say "  PASS  missing --agent -> named FAIL agent, exit $rc, info probed, zero staging calls"
 else
-  say "  FAIL  missing --agent was not refused before staging (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  missing --agent was not refused before staging (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
   sed 's/^/    log| /' "$tmpd/red.log"
 fi
@@ -6611,7 +6666,7 @@ if [ "$rc" -eq 0 ] \
   && printf '%s\n' "$out" | grep -Fq 'NODE CREATED: ghost-agent'; then
   say "  PASS  existing --agent -> reuse row printed, staging reached, node created (exit $rc)"
 else
-  say "  FAIL  existing --agent was refused or never reached staging (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  existing --agent was refused or never reached staging (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 # ARM 3 (pre-fix control): the same fixture against the revision the row was raised on must still
@@ -6631,12 +6686,12 @@ if git -C "$HERE" show 943ef98:scripts/node-create.sh > "$tmpd/before/node-creat
     && ! printf '%s\n' "$out" | grep -Fq -- "$missing_row"; then
     say "  PASS  pre-fix revision reports the false reuse row and stages anyway (fixture detects CF-051)"
   else
-    say "  FAIL  pre-fix control did not reproduce the false reuse (exit $rc)"; fails=$((fails+1))
+    say "  FAIL  pre-fix control did not reproduce the false reuse (exit $rc)"; selftest_fail
     printf '%s\n' "$out" | sed 's/^/    | /'
   fi
 else
   say "  FAIL  pre-fix source unavailable (git show 943ef98:scripts/node-create.sh)"
-  fails=$((fails+1))
+  selftest_fail
 fi
 rm -rf "$tmpd"
 # END cf051-agent-reuse
@@ -6653,7 +6708,7 @@ if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_bus_dispatch_encoding.
   say "  PASS  text_b64 decoded to the harness bytes, legacy text still runs, corrupt text_b64 / absent instruction / base64 digest each refused"
 else
   say "  FAIL  the dispatch encoding on the receiving side (tests/test_bus_dispatch_encoding.py)"
-  fails=$((fails+1))
+  selftest_fail
   sed 's/^/    | /' "$cf354/out"
 fi
 # ARM (red control): the SAME fixture against the revision this row was raised on. It must refuse
@@ -6666,12 +6721,12 @@ if git -C "$HERE" show 5b11bdc:scripts/node-bus-worker.py > "$cf354/node-bus-wor
     say "  PASS  pre-fix 5b11bdc refuses the text_b64 dispatch with the brief row (fixture detects CF-354)"
   else
     say "  FAIL  pre-fix control did not reproduce the brief refusal on a text_b64 dispatch"
-    fails=$((fails+1))
+    selftest_fail
     sed 's/^/    | /' "$cf354/prefix"
   fi
 else
   say "  FAIL  pre-fix source unavailable (git show 5b11bdc:scripts/node-bus-worker.py)"
-  fails=$((fails+1))
+  selftest_fail
 fi
 rm -rf "$cf354"
 
@@ -6762,7 +6817,7 @@ then
       NODE_PROJECT=fixture "${@:2}"
   }
   cp "$HERE/scripts/project-node.sh" "$HERE/scripts/lib.sh" "$HERE/scripts/disk_floor.py" \
-     "$HERE/scripts/node_gateway_auth.py" "$cf150/tree/scripts/" || fails=$((fails+1))
+     "$HERE/scripts/node_gateway_auth.py" "$cf150/tree/scripts/" || selftest_fail
 
   # ARM staged: the file the entry point runs is actually staged by node-create.sh. The manifest
   # validator derives that from project-node.sh's own $HERE references, so dropping
@@ -6771,7 +6826,7 @@ then
   if [ "$cf150_staged_rc" -eq 0 ] && printf '%s\n' "$cf150_staged" | grep -Fxq 'node_gateway_auth.py'; then
     say "  PASS  staged set carries node_gateway_auth.py ($(printf '%s\n' "$cf150_staged" | grep -c .) files)"
   else
-    say "  FAIL  node_gateway_auth.py is not in the staged set (exit $cf150_staged_rc)"; fails=$((fails+1))
+    say "  FAIL  node_gateway_auth.py is not in the staged set (exit $cf150_staged_rc)"; selftest_fail
     printf '%s\n' "$cf150_staged" | sed 's/^/    | /'
   fi
 
@@ -6783,7 +6838,7 @@ then
     && [ ! -f "$cf150/launch" ]; then
     say "  PASS  no dashboard.basic_auth -> exit $rc, refusal named, serve never launched"
   else
-    say "  FAIL  the adapter did not refuse a config without dashboard.basic_auth (exit $rc)"; fails=$((fails+1))
+    say "  FAIL  the adapter did not refuse a config without dashboard.basic_auth (exit $rc)"; selftest_fail
     printf '%s\n' "$out" | grep -E 'PASS|FAIL' | tail -4 | sed 's/^/    | /'
   fi
 
@@ -6800,7 +6855,7 @@ then
     && ! printf '%s' "$out" | grep -Fq -- "$cf150_secret"; then
     say "  PASS  layer 20 staged a non-empty basic_auth block and a mode $cf150_mode password file, secret never printed"
   else
-    say "  FAIL  layer 20 did not stage the block (exit $rc, mode ${cf150_mode:-missing})"; fails=$((fails+1))
+    say "  FAIL  layer 20 did not stage the block (exit $rc, mode ${cf150_mode:-missing})"; selftest_fail
     printf '%s\n' "$out" | sed 's/^/    | /'
   fi
 
@@ -6813,7 +6868,7 @@ then
     && [ "$(cat "$cf150/launch" 2>/dev/null)" = 'serve launch reached' ]; then
     say "  PASS  staged home: gateway_start PASSes, no refusal row, serve launched (exit $rc is inference_key)"
   else
-    say "  FAIL  the staged home still refuses the public bind (exit $rc)"; fails=$((fails+1))
+    say "  FAIL  the staged home still refuses the public bind (exit $rc)"; selftest_fail
     printf '%s\n' "$out" | grep -E 'PASS|FAIL' | tail -4 | sed 's/^/    | /'
   fi
 
@@ -6827,7 +6882,7 @@ then
     && [ "$(cat "$cf150/conflict-home/.hermes/config.yaml")" = "$(printf 'dashboard:\n  theme: dark')" ]; then
     say "  PASS  a dashboard block without basic_auth -> one counted FAIL row, NODE: FAIL (1), config untouched"
   else
-    say "  FAIL  the unreconcilable dashboard block was not a counted FAIL (exit $rc)"; fails=$((fails+1))
+    say "  FAIL  the unreconcilable dashboard block was not a counted FAIL (exit $rc)"; selftest_fail
     printf '%s\n' "$out" | sed 's/^/    | /'
   fi
   # ARM E (CF-192): an occupied port is NOT evidence that the bind is legal. Measured at the
@@ -6850,7 +6905,7 @@ then
     say "  PASS  occupied :10800 without dashboard.basic_auth -> exit $rc, named FAIL port row, HERMES: FAIL (1), nothing certified"
     printf '%s\n' "$cf192_row"
   else
-    say "  FAIL  an occupied :10800 with no dashboard.basic_auth was certified (exit $rc)"; fails=$((fails+1))
+    say "  FAIL  an occupied :10800 with no dashboard.basic_auth was certified (exit $rc)"; selftest_fail
     printf '%s\n' "$out" | sed 's/^/    | /'
   fi
   # E-green: the SAME listener with the block arm B staged. A gateway a previous --apply started
@@ -6863,7 +6918,7 @@ then
     && [ "$(printf '%s\n' "$out" | grep -Fxc 'HERMES: FAIL (1)')" = 1 ]; then
     say "  PASS  occupied :10800 WITH dashboard.basic_auth keeps PASS port / PASS status_probe (only inference_key fails)"
   else
-    say "  FAIL  the auth-carrying occupied port lost its PASS rows (exit $rc)"; fails=$((fails+1))
+    say "  FAIL  the auth-carrying occupied port lost its PASS rows (exit $rc)"; selftest_fail
     printf '%s\n' "$out" | grep -E 'PASS|FAIL' | tail -4 | sed 's/^/    | /'
   fi
   # ch:trace row=CF-388 spec=specs/NODE.md#layer-20 test=tests/selftest.sh::gateway-fresh-home doc=README.md prompt=none:worker-brief evidence=tests/selftest.sh::gateway-fresh-home witness=none:local-fixture verdict=none:foreman-verifies commit=none:self-referential-hash memory=none:foreman-owns
@@ -6882,7 +6937,7 @@ then
   if [ "$cf388_pre" = absent ]; then
     say "  PASS  fixture starts where a fresh node starts: HOME exists, .hermes does not"
   else
-    say "  FAIL  the CF-388 fixture pre-created .hermes — the arm cannot see the defect"; fails=$((fails+1))
+    say "  FAIL  the CF-388 fixture pre-created .hermes — the arm cannot see the defect"; selftest_fail
   fi
 
   # ARM F: the producer alone, invoked exactly as layer 20 invokes it, against a HOME with no
@@ -6903,7 +6958,7 @@ then
     && ! printf '%s' "$out" | grep -Fq -- "$cf388_secret"; then
     say "  PASS  no ~/.hermes -> exit $rc, block created, password mode $cf388_mode, secret never printed"
   else
-    say "  FAIL  the writer did not stage the block on a HOME with no ~/.hermes (exit $rc, blocks ${cf388_blocks:-0}, mode ${cf388_mode:-missing})"; fails=$((fails+1))
+    say "  FAIL  the writer did not stage the block on a HOME with no ~/.hermes (exit $rc, blocks ${cf388_blocks:-0}, mode ${cf388_mode:-missing})"; selftest_fail
     printf '%s\n' "$out" | sed 's/^/    | /'
   fi
 
@@ -6922,7 +6977,7 @@ then
     && [ -n "$cf388_g_secret" ] && ! printf '%s' "$out" | grep -Fq -- "$cf388_g_secret"; then
     say "  PASS  layer 20 on a fresh HOME -> gateway_auth PASSes, block written, secret never printed (exit $rc)"
   else
-    say "  FAIL  layer 20 could not stage the block on a fresh HOME (exit $rc)"; fails=$((fails+1))
+    say "  FAIL  layer 20 could not stage the block on a fresh HOME (exit $rc)"; selftest_fail
     printf '%s\n' "$out" | sed 's/^/    | /'
   fi
 
@@ -6936,7 +6991,7 @@ then
       && printf '%s\n' "$out" | grep -Fq 'FileNotFoundError'; then
       say "  PASS  pre-fix 2dcef4c on a fresh HOME -> exit $rc, FileNotFoundError, nothing created (fixture detects CF-388)"
     else
-      say "  FAIL  the pre-fix producer did not fail on a HOME with no ~/.hermes (exit $rc)"; fails=$((fails+1))
+      say "  FAIL  the pre-fix producer did not fail on a HOME with no ~/.hermes (exit $rc)"; selftest_fail
       printf '%s\n' "$out" | sed 's/^/    | /'
     fi
     cp -a "$cf150/tree" "$cf388/pretree"
@@ -6949,17 +7004,17 @@ then
       && [ ! -e "$cf388/h2/.hermes/config.yaml" ]; then
       say "  PASS  pre-fix layer 20 on a fresh HOME -> one counted FAIL gateway_auth row, no block, exit $rc"
     else
-      say "  FAIL  the pre-fix layer 20 did not report the staging failure (exit $rc)"; fails=$((fails+1))
+      say "  FAIL  the pre-fix layer 20 did not report the staging failure (exit $rc)"; selftest_fail
       printf '%s\n' "$out" | sed 's/^/    | /'
     fi
   else
     say "  FAIL  pre-fix source unavailable (git show 2dcef4c:scripts/node_gateway_auth.py)"
-    fails=$((fails+1))
+    selftest_fail
   fi
   rm -rf "$cf388"
   unset -f cf150_env
 else
-  say "  FAIL  CF-150 fixture setup (stdlib Python required)"; fails=$((fails+1))
+  say "  FAIL  CF-150 fixture setup (stdlib Python required)"; selftest_fail
 fi
 rm -rf "$cf150"
 # END gateway-basic-auth
@@ -6973,7 +7028,7 @@ say "56. a foreign harness is measured in a node, and verify-node.sh re-measures
 # verify-node.sh, one stub transport); this section drives that battery and proves it can go RED.
 cf006="$HERE/tests/harness-node-e2e.sh"
 if [ ! -x "$cf006" ]; then
-  say "  FAIL  tests/harness-node-e2e.sh is absent — the node slice has no test"; fails=$((fails+1))
+  say "  FAIL  tests/harness-node-e2e.sh is absent — the node slice has no test"; selftest_fail
 else
   out=$(bash "$cf006" 2>&1); rc=$?
   if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'HARNESS-NODE-E2E: PASS' \
@@ -6984,7 +7039,7 @@ else
      && printf '%s\n' "$out" | grep -Fq 'PASS  turn:directive'; then
     say "  PASS  node slice: the manifest records the measured harness, verify re-measures it, 4 red arms + a directive turn"
   else
-    say "  FAIL  the node slice battery did not pass (exit $rc)"; fails=$((fails+1))
+    say "  FAIL  the node slice battery did not pass (exit $rc)"; selftest_fail
     printf '%s\n' "$out" | grep -E '^  FAIL|^HARNESS' | head -8 | sed 's/^/    | /'
   fi
   # A green child proves nothing unless it can go red on the same tree: drop the `binary` row from
@@ -7000,7 +7055,7 @@ else
      && printf '%s\n' "$out" | grep -Fq 'HARNESS-NODE-E2E: FAIL'; then
     say "  PASS  with the adapter's binary row removed the manifest arm goes RED (exit $rc) — the battery is falsifiable"
   else
-    say "  FAIL  the node slice battery stayed green without the binary measurement (exit $rc)"; fails=$((fails+1))
+    say "  FAIL  the node slice battery stayed green without the binary measurement (exit $rc)"; selftest_fail
     printf '%s\n' "$out" | grep -E '^  FAIL|^HARNESS' | head -6 | sed 's/^/    | /'
   fi
   rm -rf "$cf006t"
@@ -7015,7 +7070,7 @@ else
   cf006c="$HERE/tests/harness/adapter-check-classification-test.sh"
   if [ ! -f "$cf006c" ]; then
     say "  FAIL  tests/harness/adapter-check-classification-test.sh is absent — the --check classification has no test"
-    fails=$((fails+1))
+    selftest_fail
   else
     out=$(bash "$cf006c" 2>&1); rc=$?
     if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'RESULT: PASS' \
@@ -7028,7 +7083,7 @@ else
       say "  PASS  adapter --check classification: measured installs reach PASS, the pre-fix adapters do not, and the ambient/credential-only negatives still refuse"
     else
       say "  FAIL  the adapter --check classification test did not pass (exit $rc)"
-      fails=$((fails+1))
+      selftest_fail
       printf '%s\n' "$out" | grep -E '^  FAIL|^RESULT' | head -6 | sed 's/^/    | /'
     fi
   fi
@@ -7047,7 +7102,7 @@ if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_brief_digest_binding.p
   say "  PASS  a bound text+gate+repo/ref digest runs its gate; a tampered gate.cmd, a legacy text-only digest beside a gate, and a gate with no digest are each refused without the gate starting"
 else
   say "  FAIL  the brief digest binding on the receiving side (tests/test_brief_digest_binding.py)"
-  fails=$((fails+1))
+  selftest_fail
   sed 's/^/    | /' "$cf275/out"
 fi
 # ARM (red control): the SAME fixture against the revision this row was raised on. It must RUN the
@@ -7060,12 +7115,12 @@ if git -C "$HERE" show c05880d:scripts/node-bus-worker.py > "$cf275/node-bus-wor
     say "  PASS  pre-fix c05880d runs the gate whose cmd was altered after the digest was minted (fixture detects CF-275)"
   else
     say "  FAIL  pre-fix control did not reproduce the tampered-gate execution"
-    fails=$((fails+1))
+    selftest_fail
     sed 's/^/    | /' "$cf275/prefix"
   fi
 else
   say "  FAIL  pre-fix source unavailable (git show c05880d:scripts/node-bus-worker.py)"
-  fails=$((fails+1))
+  selftest_fail
 fi
 rm -rf "$cf275"
 
@@ -7088,7 +7143,7 @@ if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_node_provisioning.py" 
   fi
 else
   say "  FAIL  the CF-003 unit battery (tests/test_node_provisioning.py)"
-  fails=$((fails+1))
+  selftest_fail
   sed 's/^/    | /' "$cf003/out"
 fi
 
@@ -7103,7 +7158,7 @@ expected="  PASS  tool:node — $cf003/fakeroot/node-toolchain/current/bin/node 
 if [ "$rc" -eq 0 ] && [ "$(printf '%s\n' "$out" | grep -Fxc -- "$expected")" = 1 ]; then
   say "  PASS  layer 10 grades the owned node pin, not a PATH runtime"
 else
-  say "  FAIL  layer 10 did not name the owned node runtime (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  layer 10 did not name the owned node runtime (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | grep -E 'tool:node|NODE:' | sed 's/^/    | /'
 fi
 
@@ -7135,7 +7190,7 @@ if [ "$rc" -eq 0 ] \
    && [ "$(printf '%s\n' "$out" | grep -Fxc -- "$conf_row")" = 1 ]; then
   say "  PASS  layer 40 clones with the declared key and pins core.sshCommand in that repo only"
 else
-  say "  FAIL  layer 40 did not use the declared deploy key (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  layer 40 did not use the declared deploy key (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | grep -E 'repo_key|repo_clone|repo —|NODE:' | sed 's/^/    | /'
 fi
 # CONTROL: the same fixture with the key readable by group/other must refuse the clone
@@ -7151,7 +7206,7 @@ if [ "$rc" -ne 0 ] \
    && [ "$(printf '%s\n' "$out" | grep -Fxc -- "$no_clone")" = 1 ]; then
   say "  PASS  a 0644 deploy key is refused and the clone is not attempted"
 else
-  say "  FAIL  a readable deploy key did not block the clone (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  a readable deploy key did not block the clone (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | grep -E 'repo_key|repo_clone|NODE:' | sed 's/^/    | /'
 fi
 
@@ -7187,7 +7242,7 @@ else
        && ! printf '%s\n' "$out" | grep -q '^  ..    spawning'; then
       say "  PASS  node-create refuses $unusable at the spawn gate, before any agent exists (exit $rc)"
     else
-      say "  FAIL  node-create accepted $unusable as a deploy key (exit $rc)"; fails=$((fails+1))
+      say "  FAIL  node-create accepted $unusable as a deploy key (exit $rc)"; selftest_fail
       printf '%s\n' "$out" | sed 's/^/    | /'
     fi
   done
@@ -7198,7 +7253,7 @@ else
      && ! printf '%s\n' "$out" | grep -q '^  FAIL  server_declared'; then
     say "  PASS  node-create refuses a deploy key on an HTTPS remote at the spawn gate (exit $rc)"
   else
-    say "  FAIL  an HTTPS remote was accepted with a deploy key (exit $rc)"; fails=$((fails+1))
+    say "  FAIL  an HTTPS remote was accepted with a deploy key (exit $rc)"; selftest_fail
     printf '%s\n' "$out" | sed 's/^/    | /'
   fi
   # GREEN control: a real 0600 key on an SSH remote passes both rows and the run proceeds to the
@@ -7212,7 +7267,7 @@ else
      && ! printf '%s\n' "$out" | grep -q '^  FAIL  deploy_key'; then
     say "  PASS  a usable read-only key passes the spawn gate and the run continues past it"
   else
-    say "  FAIL  the spawn gate did not admit a usable deploy key (exit $rc)"; fails=$((fails+1))
+    say "  FAIL  the spawn gate did not admit a usable deploy key (exit $rc)"; selftest_fail
     printf '%s\n' "$out" | sed 's/^/    | /'
   fi
   # RED proof: the same public-key fixture against the revision this row was raised on must NOT be
@@ -7230,11 +7285,11 @@ else
        && printf '%s\n' "$out" | grep -q '^  FAIL  server_declared'; then
       say "  PASS  pre-fix 4f32a50 accepts the public key as a deploy key — the gate arm is falsifiable"
     else
-      say "  FAIL  the pre-fix control did not reproduce the unvalidated spawn gate (exit $rc)"; fails=$((fails+1))
+      say "  FAIL  the pre-fix control did not reproduce the unvalidated spawn gate (exit $rc)"; selftest_fail
       printf '%s\n' "$out" | sed 's/^/    | /'
     fi
   else
-    say "  FAIL  pre-fix source unavailable (git show 4f32a50:scripts/node-create.sh)"; fails=$((fails+1))
+    say "  FAIL  pre-fix source unavailable (git show 4f32a50:scripts/node-create.sh)"; selftest_fail
   fi
   unset -f cf003_create
 fi
@@ -7246,7 +7301,7 @@ if printf '%s\n' "$out" | grep -q '^  PASS  footprint — ' \
    && printf '%s\n' "$out" | grep -q '^  PASS  footprint:floor — '; then
   say "  PASS  layer 00 measures the node footprint and admits it against the floor"
 else
-  say "  FAIL  layer 00 printed no footprint row"; fails=$((fails+1))
+  say "  FAIL  layer 00 printed no footprint row"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 rm -rf "$cf003"
@@ -7292,7 +7347,7 @@ if [ "$rc" -eq 3 ] \
   say "  PASS  a WARN row -> 'STUB: UNVERIFIED', exit 3, never PASS ($(printf '%s\n' "$out" | grep -c '^  WARN  ') WARN rows)"
 else
   say "  FAIL  a WARN row did not end UNVERIFIED (exit $rc): $(printf '%s\n' "$out" | grep -E 'STUB: ' | tr '\n' ' ')"
-  fails=$((fails+1))
+  selftest_fail
 fi
 
 # ARM (b): the same fixture with a FAIL row is FAIL (n) — the count is on the line — and nonzero.
@@ -7304,7 +7359,7 @@ if [ "$rc" -eq 1 ] \
   say "  PASS  a FAIL row -> 'STUB: FAIL (1)', exit 1, never PASS/UNVERIFIED"
 else
   say "  FAIL  a FAIL row did not end FAIL (n) with a nonzero exit (exit $rc): $(printf '%s\n' "$out" | grep -E 'STUB: ' | tr '\n' ' ')"
-  fails=$((fails+1))
+  selftest_fail
 fi
 
 # ARM (c): every row PASS is the ONLY state that may print PASS, and it exits 0. Without this arm
@@ -7317,7 +7372,7 @@ if [ "$rc" -eq 0 ] \
   say "  PASS  all rows PASS -> 'STUB: PASS', exit 0"
 else
   say "  FAIL  an all-PASS fixture did not print PASS with exit 0 (exit $rc): $(printf '%s\n' "$out" | grep -E 'STUB: ' | tr '\n' ' ')"
-  fails=$((fails+1))
+  selftest_fail
 fi
 
 # ARM (d): the row's own probe, against the REAL adapter. A PATH-local stub whose --help
@@ -7339,7 +7394,7 @@ if [ "$rc" -eq 3 ] \
   say "  PASS  install-opencode.sh --check on the row's stub -> 'OPENCODE: UNVERIFIED', exit 3, never PASS"
 else
   say "  FAIL  the real adapter still misreports the verdict (exit $rc): $(printf '%s\n' "$out" | grep -E 'OPENCODE: ' | tr '\n' ' ')"
-  fails=$((fails+1))
+  selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
@@ -7358,11 +7413,11 @@ if git -C "$HERE" show d4f2600:scripts/harness/install-opencode.sh > "$cf141/pre
     say "  PASS  pre-fix d4f2600 prints 'OPENCODE: PASS' with exit 0 beside the same two WARN rows — the arm is falsifiable"
   else
     say "  FAIL  the pre-fix control did not reproduce PASS-beside-WARN (exit $pre_rc): $(printf '%s\n' "$pre_out" | grep -E 'OPENCODE: ' | tr '\n' ' ')"
-    fails=$((fails+1))
+    selftest_fail
   fi
 else
   say "  FAIL  pre-fix source unavailable (git show d4f2600:scripts/harness/install-opencode.sh)"
-  fails=$((fails+1))
+  selftest_fail
 fi
 
 # ARM (e): every shipped adapter reaches a verdict line, and that line is the one ITS OWN row
@@ -7396,7 +7451,7 @@ if [ -z "$cf141_bad" ]; then
   say "  PASS  all six adapters end with the verdict their row counts require (table in the scratch dir)"
 else
   say "  FAIL  adapter verdict(s) disagree with the printed rows:$cf141_bad"
-  fails=$((fails+1))
+  selftest_fail
 fi
 
 # ARM (f): criterion 4's named symptom — an unsupported interpreter. The ladder stops, but the
@@ -7413,7 +7468,7 @@ if [ "$rc" -eq 1 ] \
   say "  PASS  an unsupported interpreter ends 'HERMES: FAIL (1)', exit 1, after the named row"
 else
   say "  FAIL  the interpreter refusal printed no verdict line (exit $rc): $(printf '%s\n' "$out" | tail -1)"
-  fails=$((fails+1))
+  selftest_fail
 fi
 rm -rf "$cf141"
 
@@ -7452,7 +7507,7 @@ for cf006_pair in aider:AIDER goose:GOOSE; do
     say "  PASS  $cf006_id --check — $rows named row(s), one verdict line '$last', exit $rc (the rows require it)"
   else
     say "  FAIL  $cf006_id --check — ${rows:-0} named row(s), ${verdicts:-0} '$cf006_label:' verdict line(s) ('${last:-none}'), exit $rc; the rows require '$cf006_label: $want' and exit $wrc"
-    fails=$((fails+1))
+    selftest_fail
   fi
 
   # ARM (b): --apply refuses BY NAME, ends FAIL (n) over its own rows, exits 1, and installs nothing.
@@ -7476,7 +7531,7 @@ for cf006_pair in aider:AIDER goose:GOOSE; do
   else
     say "  FAIL  $cf006_id --apply — exit $rc (want 1), ${verdicts:-0} '$cf006_label: $want' line(s), ${placed:-?} executable(s) placed, or the refusal is not named"
     printf '%s\n' "$out" | tail -3 | sed 's/^/    | /'
-    fails=$((fails+1))
+    selftest_fail
   fi
 done
 rm -rf "$cf006"
@@ -7555,7 +7610,7 @@ cf050_publish_gate() {
   return 0
 }
 say "61. the published tree does not add absolute host-home paths (CF-050)"
-cf050_publish_gate "$HERE" 0 || fails=$((fails+1))
+cf050_publish_gate "$HERE" 0 || selftest_fail
 # Red proof: a committed fixture exercises the same git-grep path as HEAD. Build the path from
 # pieces so this test does not itself seed the production tree with a host-specific literal.
 cf050=$(mktemp -d)
@@ -7569,7 +7624,7 @@ if [ "$rc" -ne 0 ] \
    && printf '%s\n' "$out" | grep -Eq '^  FAIL  publish paths — baseline 0, current 1; paths: docs/fixture\.md$'; then
   say "  PASS  seeded fixture -> FAIL names docs/fixture.md; gate is falsifiable"
 else
-  say "  FAIL  seeded fixture did not trigger the named publish-path row: $out"; fails=$((fails+1))
+  say "  FAIL  seeded fixture did not trigger the named publish-path row: $out"; selftest_fail
 fi
 # Blind-spot arm (CF-422): the leak is committed and only a clean file is staged. A gate that
 # grades the index instead of the union reports PASS here, so this arm is the falsifier for the
@@ -7580,7 +7635,7 @@ out=$(cf050_publish_gate "$cf050/seed" 0 2>&1); rc=$?
 if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -Fq 'paths: docs/fixture.md'; then
   say "  PASS  staged clean file cannot hide a committed leak; gate grades index + HEAD"
 else
-  say "  FAIL  staged clean file hid the committed leak (exit $rc): $out"; fails=$((fails+1))
+  say "  FAIL  staged clean file hid the committed leak (exit $rc): $out"; selftest_fail
 fi
 git -C "$cf050/seed" reset -q docs/clean.md
 rm -f "$cf050/seed/docs/clean.md"
@@ -7590,7 +7645,7 @@ out=$(cf050_publish_gate "$cf050/seed" 0 2>&1); rc=$?
 if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fq '  PASS  publish paths — baseline 0, current 0'; then
   say "  PASS  removed fixture -> clean control passes"
 else
-  say "  FAIL  removed fixture did not restore PASS: $out"; fails=$((fails+1))
+  say "  FAIL  removed fixture did not restore PASS: $out"; selftest_fail
 fi
 # Repair arm: a committed leak that is removed in the index is safe to publish. The pre-fix union
 # gate refuses this exact staged repair because HEAD still carries the leak.
@@ -7606,7 +7661,7 @@ if [ "$rc" -eq 0 ] \
    && printf '%s\n' "$out" | grep -Fq 'REPAIR: 1 committed path staged for removal: docs/leak.md'; then
   say "  PASS  staged removal -> committed leak is a named repair"
 else
-  say "  FAIL  staged removal did not open the repair path (exit $rc): $out"; fails=$((fails+1))
+  say "  FAIL  staged removal did not open the repair path (exit $rc): $out"; selftest_fail
 fi
 # CF-470 arm (a): a committed private address must FAIL, and the row must name the pattern and the
 # offending file:line. The octets are written as separate printf arguments for the same reason the
@@ -7623,7 +7678,7 @@ if [ "$rc" -ne 0 ] \
    && printf '%s\n' "$out" | grep -Fq 'paths: docs/leak.md:1'; then
   say "  PASS  seeded private address -> FAIL names the anchored pattern and docs/leak.md:1; gate is falsifiable"
 else
-  say "  FAIL  a seeded private address did not trigger the named address row (exit $rc): $out"; fails=$((fails+1))
+  say "  FAIL  a seeded private address did not trigger the named address row (exit $rc): $out"; selftest_fail
 fi
 # CF-470 arm (b): the anchor is load-bearing, so prose list numbering must NOT trip the gate. The row's
 # loose spelling is measured on the same line (it matches) — that is why the anchored octets are the
@@ -7641,7 +7696,7 @@ if [ "$rc" -eq 0 ] \
    && [ "${cf050_loose:-0}" -ge 1 ]; then
   say "  PASS  prose list numbering does not trip the address arm; the loose spelling matches the same line ${cf050_loose}x and cannot pass"
 else
-  say "  FAIL  prose list numbering tripped the address arm or the loose spelling did not match (exit $rc, loose=${cf050_loose:-0}): $out"; fails=$((fails+1))
+  say "  FAIL  prose list numbering tripped the address arm or the loose spelling did not match (exit $rc, loose=${cf050_loose:-0}): $out"; selftest_fail
 fi
 # CF-470 arm (c): the staged-repair path must exist for the address family too, or the commit that
 # redacts an address is refused by the gate it is fixing.
@@ -7651,7 +7706,7 @@ if [ "$rc" -eq 0 ] \
    && printf '%s\n' "$out" | grep -Fq 'private IPv4 — baseline 0, current 0 (REPAIR: 1 committed path staged for removal: docs/leak.md)'; then
   say "  PASS  staged removal of a private address -> named repair (a redaction commit is not self-refused)"
 else
-  say "  FAIL  staged address removal did not open the repair path (exit $rc): $out"; fails=$((fails+1))
+  say "  FAIL  staged address removal did not open the repair path (exit $rc): $out"; selftest_fail
 fi
 # CF-493 arm (a): `.coding-hermes/evidence/**` is exempt from BOTH arms. An evidence transcript
 # records a run — including the host paths and the addresses that run touched — so redacting it
@@ -7672,7 +7727,7 @@ if [ "$rc" -eq 0 ] \
    && printf '%s\n' "$out" | grep -Fq '  PASS  publish paths — private IPv4 — baseline 0, current 0'; then
   say "  PASS  evidence transcript -> host-home PASS and private IPv4 PASS under .coding-hermes/evidence/**"
 else
-  say "  FAIL  evidence transcript was not exempt from both arms (exit $rc): $out"; fails=$((fails+1))
+  say "  FAIL  evidence transcript was not exempt from both arms (exit $rc): $out"; selftest_fail
 fi
 # CF-493 arm (b): the red control. The SAME content one directory OUTSIDE the exempt subtree is
 # still graded, so what was added is a subtree exemption and not a disabled arm. The host-home row
@@ -7689,7 +7744,7 @@ if [ "$rc" -ne 0 ] \
    && printf '%s\n' "$out" | grep -Fq '  FAIL  publish paths — baseline 0, current 1; paths: docs/leak.md'; then
   say "  PASS  same content at docs/leak.md -> still FAIL naming docs/leak.md; the exemption is a subtree, not a disabled arm"
 else
-  say "  FAIL  the evidence exemption leaked outside the subtree (exit $rc): $out"; fails=$((fails+1))
+  say "  FAIL  the evidence exemption leaked outside the subtree (exit $rc): $out"; selftest_fail
 fi
 cf050_ev_red_addr="$cf050/evidence-red-addr"
 git init -q -b trunk "$cf050_ev_red_addr"
@@ -7701,7 +7756,7 @@ out=$(cf050_publish_gate "$cf050_ev_red_addr" 0 2>&1); rc=$?
 if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -Fq 'paths: docs/leak.md:1'; then
   say "  PASS  same content at docs/leak.md (address family) -> still FAIL quoting docs/leak.md:1"
 else
-  say "  FAIL  the address arm stopped quoting its offending file:line (exit $rc): $out"; fails=$((fails+1))
+  say "  FAIL  the address arm stopped quoting its offending file:line (exit $rc): $out"; selftest_fail
 fi
 # CF-493 arm (d): the staged-repair arm above (c) is unchanged and still asserted; this one adds
 # the scope falsifier. The exemption is the evidence subtree alone. A leak under another
@@ -7717,7 +7772,7 @@ out=$(cf050_publish_gate "$cf050_ev_scope" 0 2>&1); rc=$?
 if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -Fq 'paths: .coding-hermes/notes/leak.md'; then
   say "  PASS  .coding-hermes outside evidence is still graded -> FAIL names .coding-hermes/notes/leak.md"
 else
-  say "  FAIL  the evidence exemption widened to the whole .coding-hermes tree (exit $rc): $out"; fails=$((fails+1))
+  say "  FAIL  the evidence exemption widened to the whole .coding-hermes tree (exit $rc): $out"; selftest_fail
 fi
 rm -rf "$cf050"
 
@@ -7813,10 +7868,10 @@ if [ "$cf224_prefix" -eq 1 ]; then
     say "  PASS  pre-fix bf16c05 has no --transport: exit $rc, 'unknown arg: --transport' (CF-224 premise)"
   else
     say "  FAIL  the pre-fix verifier did not refuse --transport (exit $rc): $(printf '%s\n' "$out" | head -2 | tr '\n' ' ')"
-    fails=$((fails+1))
+    selftest_fail
   fi
 else
-  say "  FAIL  pre-fix source bf16c05:scripts/verify-node.sh unavailable"; fails=$((fails+1))
+  say "  FAIL  pre-fix source bf16c05:scripts/verify-node.sh unavailable"; selftest_fail
 fi
 
 # 2. The wrong behaviour, recorded: a node that reports only loopback PASSes the pre-fix verifier
@@ -7830,7 +7885,7 @@ if [ "$cf224_prefix" -eq 1 ]; then
     say "  PASS  pre-fix bf16c05 certifies a loopback-only node: VERIFY: PASS, exit $rc, no transport row (the fixture detects CF-224)"
   else
     say "  FAIL  the pre-fix loopback control did not pass (exit $rc): $(printf '%s\n' "$out" | grep -E '^(  (PASS|FAIL|WARN))|^VERIFY' | head -5 | tr '\n' ' ')"
-    fails=$((fails+1))
+    selftest_fail
   fi
 fi
 
@@ -7845,7 +7900,7 @@ if [ "$rc" -eq 3 ] \
   say "  PASS  a loopback-only node -> exit $rc, named transport refusal, VERIFY: UNVERIFIED (never a PASS row)"
 else
   say "  FAIL  a loopback node was not refused as unverified (exit $rc): $(printf '%s\n' "$out" | grep -E '^(  (PASS|FAIL|WARN))|^VERIFY' | head -5 | tr '\n' ' ')"
-  fails=$((fails+1))
+  selftest_fail
 fi
 
 # 4. The local behaviour is preserved: a node on a reachable address still verifies, and the row now
@@ -7857,7 +7912,7 @@ if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'VERIFY: PASS' \
   say "  PASS  a reachable node-address -> VERIFY: PASS, exit $rc, the row names node-address and the measured 200"
 else
   say "  FAIL  a reachable node-address did not verify (exit $rc): $(printf '%s\n' "$out" | grep -E '^(  (PASS|FAIL|WARN))|^VERIFY' | head -5 | tr '\n' ' ')"
-  fails=$((fails+1))
+  selftest_fail
 fi
 
 # 5. A published port is the bunker transport: the probe runs HERE and the row names it.
@@ -7868,7 +7923,7 @@ if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'VERIFY: PASS' \
   say "  PASS  --transport published-port -> VERIFY: PASS, exit $rc, the gateway row names the transport and the code"
 else
   say "  FAIL  a published port did not verify (exit $rc): $(printf '%s\n' "$out" | grep -E '^(  (PASS|FAIL|WARN))|^VERIFY' | head -5 | tr '\n' ' ')"
-  fails=$((fails+1))
+  selftest_fail
 fi
 
 # 6. An unavailable transport is NAMED, and no row prints a bare 000 (criterion 4).
@@ -7880,7 +7935,7 @@ if [ "$rc" -eq 3 ] && [ -n "$cf224_why" ] \
   say "  PASS  no published port -> exit $rc, 'no published port for cf-fixture:10800' in the row, and no 000 anywhere in the output"
 else
   say "  FAIL  an unavailable published port was not named (exit $rc): $(printf '%s\n' "$out" | grep -E '^(  (PASS|FAIL|WARN))|^VERIFY' | head -5 | tr '\n' ' ')"
-  fails=$((fails+1))
+  selftest_fail
 fi
 
 # 7. A tunnel endpoint on THIS host is legal even when it is loopback, because the declaration says
@@ -7891,7 +7946,7 @@ if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'VERIFY: PASS' \
   say "  PASS  --transport tunnel 127.0.0.1:18080 -> VERIFY: PASS, exit $rc (a declared forward, not a node-internal loopback)"
 else
   say "  FAIL  a declared tunnel endpoint did not verify (exit $rc): $(printf '%s\n' "$out" | grep -E '^(  (PASS|FAIL|WARN))|^VERIFY' | head -5 | tr '\n' ' ')"
-  fails=$((fails+1))
+  selftest_fail
 fi
 
 # 8. Criterion 3: a probe that never leaves the node is a FAIL, not a PASS — even though it measures
@@ -7906,7 +7961,7 @@ if [ "$rc" -eq 1 ] \
   say "  PASS  --transport bunker-exec -> exit $rc, named loopback FAIL, VERIFY: FAIL (2) (never PASS, never UNVERIFIED)"
 else
   say "  FAIL  an in-node loopback probe was not a FAIL (exit $rc): $(printf '%s\n' "$out" | grep -E '^(  (PASS|FAIL|WARN))|^VERIFY' | head -6 | tr '\n' ' ')"
-  fails=$((fails+1))
+  selftest_fail
 fi
 
 # 9. The transport flags fail closed as usage, so no run silently probes something nobody declared.
@@ -7922,7 +7977,7 @@ if cf224_usage '--transport must be node-address, published-port, tunnel or bunk
        --transport node-address --transport-address 203.0.113.9:10800; then
   say "  PASS  a bad transport, a missing address and an address with no transport are each exit 2 with a named refusal"
 else
-  say "  FAIL  the transport usage refusals did not all hold"; fails=$((fails+1))
+  say "  FAIL  the transport usage refusals did not all hold"; selftest_fail
 fi
 rm -rf "$cf224"
 # END cf224-transport
@@ -7946,11 +8001,11 @@ if git -C "$HERE" show 5e112be2e7da734fa5fa3faec915ca1f58328229:scripts/verify-n
     say "  PASS  CF-063 pre-fix verifier -> exit $cf063_old_rc, named unknown-arg control"
   else
     say "  FAIL  CF-063 pre-fix verifier did not reproduce unknown --help (exit $cf063_old_rc): $(printf '%s\n' "$cf063_old_out" | head -1)"
-    fails=$((fails+1))
+    selftest_fail
   fi
 else
   say "  FAIL  CF-063 pre-fix source unavailable from 5e112be2:scripts/verify-node.sh"
-  fails=$((fails+1))
+  selftest_fail
 fi
 cf063_usage_line="usage: $HERE/scripts/verify-node.sh --agent ID [--server NAME] [--port P] [--transport T [--transport-address HOST:PORT]] [--artifact PATH] [--strict-freshness] [--strict-seed]"
 cf063_check_usage() { # cf063_check_usage <label> [VAR=value ...] [script args...]
@@ -7972,7 +8027,7 @@ cf063_check_usage() { # cf063_check_usage <label> [VAR=value ...] [script args..
     say "  PASS  CF-063 $label -> usage, exit $rc2"
   else
     say "  FAIL  CF-063 $label -> exit $rc2, first line: $first"
-    fails=$((fails+1))
+    selftest_fail
   fi
 }
 cf063_check_usage bare
@@ -7986,7 +8041,7 @@ if [ "$cf063_operational_rc" -eq 2 ] && printf '%s\n' "$cf063_operational" | gre
   say "  PASS  CF-063 operational invocation -> exit $cf063_operational_rc, missing-server refusal names BUNKER_SERVER"
 else
   say "  FAIL  CF-063 operational invocation lost its missing-server refusal (exit $cf063_operational_rc): $(printf '%s\n' "$cf063_operational" | head -1)"
-  fails=$((fails+1))
+  selftest_fail
 fi
 cf063_flag=$(env -i PATH="$PATH" \
                XDG_CACHE_HOME="${CF_TOOLCHAIN_CACHE:+$CF_TOOLCHAIN_CACHE/xdg-cache}" \
@@ -7997,7 +8052,7 @@ if [ "$cf063_flag_rc" -eq 2 ] && printf '%s\n' "$cf063_flag" | grep -Fq 'verify-
   say "  PASS  CF-063 --server alone satisfies the server guard before transport validation, exit $cf063_flag_rc"
 else
   say "  FAIL  CF-063 --server alone did not reach transport validation (exit $cf063_flag_rc): $(printf '%s\n' "$cf063_flag" | head -1)"
-  fails=$((fails+1))
+  selftest_fail
 fi
 rm -rf "$cf063"
 
@@ -8018,7 +8073,7 @@ if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_bus_result_delivery.py
   say "  PASS  completed + failed results POST to reply_to before the ack; a mismatched corr_id expires the tick and is named; a refused/lost delivery retries with the same key and never re-runs the work"
 else
   say "  FAIL  the result leg on the producing side (tests/test_bus_result_delivery.py)"
-  fails=$((fails+1))
+  selftest_fail
   sed 's/^/    | /' "$cf211/out"
 fi
 # ARM (red control): the SAME fixture against the revision this row was raised on. It must show no
@@ -8031,12 +8086,12 @@ if git -C "$HERE" show 9af58a0:scripts/node-bus-worker.py > "$cf211/node-bus-wor
     say "  PASS  pre-fix 9af58a0 completes a failed gate and re-runs on redelivery (fixture detects CF-211)"
   else
     say "  FAIL  pre-fix control did not reproduce the result-leg defect"
-    fails=$((fails+1))
+    selftest_fail
     sed 's/^/    | /' "$cf211/prefix"
   fi
 else
   say "  FAIL  pre-fix source unavailable (git show 9af58a0:scripts/node-bus-worker.py)"
-  fails=$((fails+1))
+  selftest_fail
 fi
 # The contract the arms assert is only the contract if the spec states it: the verdict field, the
 # path home, the correlation rule, the durable-delivery rule and the ack-after-delivery rule.
@@ -8053,7 +8108,7 @@ if [ -z "$cf211_doc_missing" ]; then
   say "  PASS  specs/ENVELOPE.md states the verdict field, the path home, the correlation rule, the delivery budget/key and the ack-after-delivery rule"
 else
   say "  FAIL  specs/ENVELOPE.md no longer documents:$cf211_doc_missing"
-  fails=$((fails+1))
+  selftest_fail
 fi
 rm -rf "$cf211"
 
@@ -8075,7 +8130,7 @@ if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -q '^DSH-INSTALL-TEST: PASS' \
   say "  PASS  tests/harness/dsh-install-test.sh is green ($(printf '%s\n' "$out" | grep -c '^  PASS') rows), with the live turn skipped by name"
 else
   say "  FAIL  tests/harness/dsh-install-test.sh (exit $rc): $(printf '%s\n' "$out" | grep -E '^  FAIL|^DSH-INSTALL-TEST|^  SKIP' | head -4 | tr '\n' ' ')"
-  fails=$((fails+1))
+  selftest_fail
 fi
 # A green aggregate is not enough: the rows that decide the ordering must be present, so gutting
 # the test into a bare `exit 0` cannot satisfy this section.
@@ -8092,7 +8147,7 @@ if [ -z "$dsh_absent" ]; then
   say "  PASS  the rows that decide the ordering are present: SKIP/3, no run-set refusal before it, nothing started, and the strict refusal kept"
 else
   say "  FAIL  the dsh test did not print:$dsh_absent"
-  fails=$((fails+1))
+  selftest_fail
 fi
 # The red control: the same test file against the subject revision this row was raised on.
 dsh_prefix=$(mktemp -d)
@@ -8108,11 +8163,11 @@ if git -C "$HERE" show 899bfe5:scripts/harness/install-dsh.sh > "$dsh_prefix/scr
     say "  PASS  pre-fix 899bfe5 fails the same test on the ordering row (exit $rrc) — this section discriminates"
   else
     say "  FAIL  pre-fix 899bfe5 did not fail the ordering row (exit $rrc): $(printf '%s\n' "$rout" | grep -E '^  FAIL|^DSH-INSTALL-TEST' | head -3 | tr '\n' ' ')"
-    fails=$((fails+1))
+    selftest_fail
   fi
 else
   say "  FAIL  pre-fix source unavailable (git show 899bfe5:scripts/harness/install-dsh.sh)"
-  fails=$((fails+1))
+  selftest_fail
 fi
 rm -rf "$dsh_prefix"
 
@@ -8123,7 +8178,7 @@ if [ "$cf299_clean_rc" -eq 0 ] && printf '%s\n' "$cf299_clean" | grep -q '^PASS 
   say "  PASS  clean role tables -> exit 0: $(printf '%s\n' "$cf299_clean" | grep '^PASS role parity:')"
 else
   say "  FAIL  clean role tables -> exit $cf299_clean_rc: $cf299_clean"
-  fails=$((fails+1))
+  selftest_fail
 fi
 mkdir -p "$cf299/ladder/scripts" "$cf299/resolver/scripts" "$cf299/marker/scripts"
 cp "$HERE/scripts/check_role_parity.py" "$cf299/ladder/scripts/check_role_parity.py"
@@ -8145,26 +8200,26 @@ if [ "$cf299_ladder_rc" -eq 1 ] && printf '%s\n' "$cf299_ladder" | grep -q '^FAI
   say "  PASS  ladder mutation -> exit 1: $(printf '%s\n' "$cf299_ladder" | grep '^FAIL role builder:')"
 else
   say "  FAIL  ladder mutation -> exit $cf299_ladder_rc: $cf299_ladder"
-  fails=$((fails+1))
+  selftest_fail
 fi
 if [ "$cf299_resolver_rc" -eq 1 ] && printf '%s\n' "$cf299_resolver" | grep -q '^FAIL role full: resolver=25; ladder=20$'; then
   say "  PASS  resolver mutation -> exit 1: $(printf '%s\n' "$cf299_resolver" | grep '^FAIL role full:')"
 else
   say "  FAIL  resolver mutation -> exit $cf299_resolver_rc: $cf299_resolver"
-  fails=$((fails+1))
+  selftest_fail
 fi
 if [ "$cf299_marker_rc" -eq 1 ] && printf '%s\n' "$cf299_marker" | grep -q '^FAIL role-set drift:'; then
   say "  PASS  case marker mutation -> exit 1: $(printf '%s\n' "$cf299_marker" | grep '^FAIL role-set drift:')"
 else
   say "  FAIL  case marker mutation -> exit $cf299_marker_rc: $cf299_marker"
-  fails=$((fails+1))
+  selftest_fail
 fi
 cf299_dirty=$(git -C "$HERE" status --porcelain -- scripts/disk_floor.py)
 if [ -z "$cf299_dirty" ]; then
   say "  PASS  fixture mutations stayed in scratch copies; tracked role-table files are unchanged"
 else
   say "  FAIL  fixture mutation changed tracked files: $cf299_dirty"
-  fails=$((fails+1))
+  selftest_fail
 fi
 rm -rf "$cf299"
 
@@ -8175,7 +8230,7 @@ if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_node_lifecycle.py" >/d
   say "  PASS  CF-008 lifecycle supervisor restart evidence, TTL renewal/refusal, process-group cancellation and destroy/create replay"
 else
   say "  FAIL  CF-008 lifecycle battery"
-  fails=$((fails+1))
+  selftest_fail
 fi
 # CF-398 arm: keep this inside the existing section census; evidence pointers are an
 # additive board invariant, not a new numbered selftest section.
@@ -8229,7 +8284,7 @@ if [ "$cf398_ok" -eq 1 ]; then
   say "  PASS  CF-398 evidence checker contract on fixtures: ${cf398_proof}an unaccepted empty-evidence row and an unaccepted unresolved run exit 1 naming the row, and a run that resolves in events.jsonl is no finding"
 else
   say "  FAIL  CF-398 evidence checker contract on fixtures (accepted ${cf398_acc_rc:-skipped}/strict ${cf398_acc_strict:-skipped}, empty-evidence $cf398_zero_rc, unresolved $cf398_unres_rc, resolvable $cf398_res_rc)"
-  fails=$((fails+1))
+  selftest_fail
 fi
 
 # P5G-02 durable records: execute the handbook's offline oracle. Its scratch-free
@@ -8239,7 +8294,7 @@ if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_durable_records_vector
   say "  PASS  P5G-02 durable-record vector and trace marker"
 else
   say "  FAIL  P5G-02 durable-record vector or trace marker"
-  fails=$((fails+1))
+  selftest_fail
 fi
 
 # P5G-07 backup/restore: recompute the CV-06-B digest chain, then prove the same
@@ -8263,7 +8318,7 @@ if [ "$cfp507_clean_rc" -eq 0 ] && [ "$cfp507_corrupt_rc" -eq 1 ] && grep -q "CV
   say "  PASS  P5G-07 F15 digest chain recomputed (repo vector exit $cfp507_clean_rc) and the corrupt-copy control fails naming the store_sha256 mismatch (exit $cfp507_corrupt_rc)"
 else
   say "  FAIL  P5G-07 F15 vector arms (repo vector exit $cfp507_clean_rc, corrupt copy exit $cfp507_corrupt_rc)"
-  fails=$((fails+1))
+  selftest_fail
 fi
 
 # P5G-13 resident foreman contract: execute the checker, then prove its
@@ -8279,13 +8334,13 @@ if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_resident_foreman_contr
   say "  PASS  resident foreman checker executes 8 tests"
 else
   say "  FAIL  resident foreman checker did not pass"
-  fails=$((fails+1))
+  selftest_fail
   sed 's/^/    | /' "$cfp513/clean"
 fi
 sed -i 's/"native_session_id", //' "$cfp513/docs/handbook/contract-vectors.json"
 if PYTHONDONTWRITEBYTECODE=1 python3 -B "$cfp513/tests/test_resident_foreman_contract.py" >"$cfp513/native-session-control" 2>&1; then
   say "  FAIL  dropping native_session_id passed the checker"
-  fails=$((fails+1))
+  selftest_fail
 else
   say "  PASS  dropping native_session_id is rejected without touching the tree"
 fi
@@ -8293,7 +8348,7 @@ cp "$HERE/docs/handbook/contract-vectors.json" "$cfp513/docs/handbook/contract-v
 sed -i 's/"expected_state_version"/"state_version"/g' "$cfp513/tests/test_resident_foreman_contract.py"
 if PYTHONDONTWRITEBYTECODE=1 python3 -B "$cfp513/tests/test_resident_foreman_contract.py" >"$cfp513/version-control" 2>&1; then
   say "  FAIL  weakening expected_state_version handling passed the checker"
-  fails=$((fails+1))
+  selftest_fail
 else
   say "  PASS  weakening expected_state_version handling is rejected without touching the tree"
 fi
@@ -8303,10 +8358,10 @@ rm -rf "$cfp513"
 # insecure key modes, and tokens that cannot read the repository; the control must pass.
 say "66. GitHub App mode refuses incomplete credentials and proves repository access"
 for cf238_script in scripts/github-app-setup.sh scripts/github-app-refresh.sh; do
-  bash -n "$HERE/$cf238_script" && say "  PASS  bash -n $cf238_script" || { say "  FAIL  bash -n $cf238_script"; fails=$((fails+1)); }
+  bash -n "$HERE/$cf238_script" && say "  PASS  bash -n $cf238_script" || { say "  FAIL  bash -n $cf238_script"; selftest_fail; }
 done
 python3 -c 'import ast,sys; ast.parse(open(sys.argv[1]).read())' "$HERE/scripts/github-app-token.py" \
-  && say "  PASS  scripts/github-app-token.py parses" || { say "  FAIL  github-app-token.py parse"; fails=$((fails+1)); }
+  && say "  PASS  scripts/github-app-token.py parses" || { say "  FAIL  github-app-token.py parse"; selftest_fail; }
 cf238=$(mktemp -d)
 openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$cf238/key.pem" 2>/dev/null
 openssl rsa -in "$cf238/key.pem" -pubout -out "$cf238/pub.pem" 2>/dev/null
@@ -8317,14 +8372,14 @@ printf 'GITHUB_APP_ID=1\nGITHUB_APP_INSTALLATION_ID=2\nGITHUB_APP_PRIVATE_KEY_FI
 printf 'GITHUB_APP_ID=1\nGITHUB_APP_INSTALLATION_ID=2\nGITHUB_APP_PRIVATE_KEY_FILE=%s\n' "$cf238/key644.pem" > "$cf238/loose.env"
 chmod 600 "$cf238"/*.env
 out=$(python3 "$HERE/scripts/github-app-token.py" check --env-file "$cf238/missing.env" --api-base http://127.0.0.1:9 2>&1); rc=$?
-if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q 'FAIL  private_key_file'; then say "  PASS  absent key file refused"; else say "  FAIL  absent key file accepted"; fails=$((fails+1)); fi
+if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q 'FAIL  private_key_file'; then say "  PASS  absent key file refused"; else say "  FAIL  absent key file accepted"; selftest_fail; fi
 out=$(python3 "$HERE/scripts/github-app-token.py" check --env-file "$cf238/loose.env" --api-base http://127.0.0.1:9 2>&1); rc=$?
-if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '0644' && printf '%s\n' "$out" | grep -q 'chmod 600'; then say "  PASS  key mode 0644 refused with remediation"; else say "  FAIL  key mode 0644 accepted"; fails=$((fails+1)); fi
+if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '0644' && printf '%s\n' "$out" | grep -q 'chmod 600'; then say "  PASS  key mode 0644 refused with remediation"; else say "  FAIL  key mode 0644 accepted"; selftest_fail; fi
 # The setup check must not claim success when the API returns 403 for the repository.
 # Its hermetic API fixture is covered by the source-branch conformance arm; this local arm
 # additionally proves --check cannot pass merely because the key parses.
 out=$(bash "$HERE/scripts/github-app-setup.sh" --check --env-file "$cf238/missing.env" --api-base http://127.0.0.1:9 2>&1); rc=$?
-if [ "$rc" -ne 0 ] && ! printf '%s\n' "$out" | grep -q 'SETUP: PASS'; then say "  PASS  --check refuses without measurable App/repository evidence"; else say "  FAIL  --check passed vacuously"; fails=$((fails+1)); fi
+if [ "$rc" -ne 0 ] && ! printf '%s\n' "$out" | grep -q 'SETUP: PASS'; then say "  PASS  --check refuses without measurable App/repository evidence"; else say "  FAIL  --check passed vacuously"; selftest_fail; fi
 # A local API fixture proves the repository-read refusal is a real verdict, not a key/parser check.
 cat > "$cf238/api.py" <<'PY'
 import json, os, sys
@@ -8360,7 +8415,7 @@ cf238_api="http://127.0.0.1:$cf238_port"
 printf 'GITHUB_APP_ID=1\nGITHUB_APP_INSTALLATION_ID=2\nGITHUB_APP_PRIVATE_KEY_FILE=%s/key.pem\n' "$cf238" > "$cf238/api.env"
 chmod 600 "$cf238/api.env"
 out=$(bash "$HERE/scripts/github-app-setup.sh" --check --env-file "$cf238/api.env" --repo fixture/repo --api-base "$cf238_api" 2>&1); rc=$?
-if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q 'FAIL  repo_read — GET /repos/fixture/repo -> 403' && ! printf '%s\n' "$out" | grep -q 'SETUP: PASS'; then say "  PASS  repository token 403 -> named repo_read FAIL, no setup PASS"; else say "  FAIL  repository token 403 was not a verdict (exit $rc)"; fails=$((fails+1)); fi
+if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q 'FAIL  repo_read — GET /repos/fixture/repo -> 403' && ! printf '%s\n' "$out" | grep -q 'SETUP: PASS'; then say "  PASS  repository token 403 -> named repo_read FAIL, no setup PASS"; else say "  FAIL  repository token 403 was not a verdict (exit $rc)"; selftest_fail; fi
 kill "$cf238_api_pid" 2>/dev/null; wait "$cf238_api_pid" 2>/dev/null
 
 # CF-238 timer installation uses only fixture HOME and fixture command stubs.
@@ -8375,7 +8430,7 @@ out=$(HOME="$cf238/home" PATH="$cf238/bin:$PATH" CF_SYSTEMCTL="$cf238/bin/system
 if [ "$rc" -eq 0 ] && [ "$(stat -c %a "$cf238_service" 2>/dev/null)" = 644 ] && [ "$(stat -c %a "$cf238_timer" 2>/dev/null)" = 644 ] && grep -Fq -- '--node fixture-node --server fixture-server --min-age 2400 --quiet' "$cf238_service" && grep -Fxq 'OnUnitActiveSec=20min' "$cf238_timer"; then
   say "  PASS  CF-238 timer installation writes both units with node, server, age, cadence, mode"
 else
-  say "  FAIL  CF-238 timer installation: $out"; fails=$((fails+1))
+  say "  FAIL  CF-238 timer installation: $out"; selftest_fail
 fi
 cf238_before=$(sha256sum "$cf238_service" "$cf238_timer" 2>/dev/null)
 out=$(HOME="$cf238/home" PATH="$cf238/bin:$PATH" CF_SYSTEMCTL="$cf238/bin/systemctl-ok" bash "$HERE/scripts/github-app-refresh.sh" --install-timer --node fixture-node --server fixture-server 2>&1); rc=$?
@@ -8383,31 +8438,31 @@ cf238_after=$(sha256sum "$cf238_service" "$cf238_timer" 2>/dev/null)
 if [ "$rc" -eq 0 ] && [ -n "$cf238_before" ] && [ "$cf238_before" = "$cf238_after" ] && printf '%s\n' "$out" | grep -q unchanged; then
   say "  PASS  CF-238 second timer installation leaves both hashes unchanged"
 else
-  say "  FAIL  CF-238 timer idempotence: $out"; fails=$((fails+1))
+  say "  FAIL  CF-238 timer idempotence: $out"; selftest_fail
 fi
 out=$(HOME="$cf238/home" PATH="$cf238/bin:$PATH" CF_SYSTEMCTL="$cf238/bin/systemctl-fail" bash "$HERE/scripts/github-app-refresh.sh" --install-timer --node fixture-failure --server fixture-server 2>&1); rc=$?
 if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q 'FAIL  install_timer' && printf '%s\n' "$out" | grep -q 'unarmed' && ! printf '%s\n' "$out" | grep -Eq 'PASS|success|enabled'; then
   say "  PASS  CF-238 failed daemon-reload refuses and names unarmed timer"
 else
-  say "  FAIL  CF-238 daemon-reload refusal: $out"; fails=$((fails+1))
+  say "  FAIL  CF-238 daemon-reload refusal: $out"; selftest_fail
 fi
 out=$(HOME="$cf238/home" PATH="$cf238/bin:$PATH" CF_SYSTEMCTL="$cf238/bin/no-such-systemctl" bash "$HERE/scripts/github-app-refresh.sh" --install-timer --node fixture-nosys --server fixture-server 2>&1); rc=$?
 if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q 'FAIL  install_timer' && printf '%s\n' "$out" | grep -q 'unavailable' && [ ! -e "$cf238/home/.config/systemd/user/cf-github-app-refresh-fixture-nosys.service" ] && [ ! -e "$cf238/home/.config/systemd/user/cf-github-app-refresh-fixture-nosys.timer" ]; then
   say "  PASS  CF-238 absent systemctl refuses before writing any unit"
 else
-  say "  FAIL  CF-238 absent-systemctl refusal: $out"; fails=$((fails+1))
+  say "  FAIL  CF-238 absent-systemctl refusal: $out"; selftest_fail
 fi
 out=$(HOME="$cf238/home" PATH="$cf238/bin:$PATH" bash "$HERE/scripts/github-app-setup.sh" --check --node fixture-node --env-file "$cf238/missing.env" --api-base http://127.0.0.1:9 2>&1)
 if printf '%s\n' "$out" | grep -q 'PASS  refresh.*fixture-node'; then
   say "  PASS  CF-238 setup check accepts matching node and 20-minute cadence"
 else
-  say "  FAIL  CF-238 setup check matching timer: $out"; fails=$((fails+1))
+  say "  FAIL  CF-238 setup check matching timer: $out"; selftest_fail
 fi
 out=$(HOME="$cf238/home" PATH="$cf238/bin:$PATH" bash "$HERE/scripts/github-app-setup.sh" --check --node fixture-other --env-file "$cf238/missing.env" --api-base http://127.0.0.1:9 2>&1)
 if printf '%s\n' "$out" | grep -q 'WARN  refresh.*different node.*fixture-other'; then
   say "  PASS  CF-238 setup check warns on wrong node"
 else
-  say "  FAIL  CF-238 setup check wrong-node mismatch: $out"; fails=$((fails+1))
+  say "  FAIL  CF-238 setup check wrong-node mismatch: $out"; selftest_fail
 fi
 rm -rf "$cf238"
 
@@ -8416,7 +8471,7 @@ if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_lane_config_readonly.p
   say "  PASS  CF-304 default and dry-run leave copied DBs byte-identical; --apply is scoped; red control caught"
 else
   say "  FAIL  CF-304 lane configuration read-only fixture"
-  fails=$((fails+1))
+  selftest_fail
 fi
 
 # ch:trace row=CF-319 spec=docs/handbook/chapters/M7-github.md#M7-S1 wave=none:serial test=tests/test_github_app_check.py doc=docs/audits/code-factory-CF-319-fix-2026-11-13.md prompt=none:foreman-brief evidence=tests/test_github_app_check.py::arms-a-b-c witness=none:local-stub verdict=none:foreman-judges commit=none:foreman-commit memory=none:foreman-writes
@@ -8425,7 +8480,7 @@ if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_github_app_check.py"; 
   say "  PASS  CF-319 GitHub App repository-read fixture arms A/B/C"
 else
   say "  FAIL  CF-319 GitHub App repository-read fixture"
-  fails=$((fails+1))
+  selftest_fail
 fi
 
 say "69. node_env --check measures both target file modes and --apply repairs them (CF-268)"
@@ -8440,7 +8495,7 @@ out=$(envrun268 --env-file "$cf268/profile" --check 2>&1); rc=$?
 if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q "FAIL  mode:$cf268/home/.hermes/.env — expected 600, found 644"; then
   say "  PASS  a. --check fails a 644 .env, names the path and mode 644 (exit $rc)"
 else
-  say "  FAIL  a. --check did not fail the 644 .env fixture (exit $rc): $(printf '%s' "$out" | tail -1)"; fails=$((fails+1))
+  say "  FAIL  a. --check did not fail the 644 .env fixture (exit $rc): $(printf '%s' "$out" | tail -1)"; selftest_fail
 fi
 
 chmod 600 "$cf268/home/.hermes/.env"
@@ -8448,7 +8503,7 @@ out=$(envrun268 --env-file "$cf268/profile" --check 2>&1); rc=$?
 if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -q "PASS  mode:$cf268/home/.hermes/.env — 600"; then
   say "  PASS  b. --check passes the 600 .env control (exit $rc)"
 else
-  say "  FAIL  b. --check did not pass the 600 .env control (exit $rc): $(printf '%s' "$out" | tail -1)"; fails=$((fails+1))
+  say "  FAIL  b. --check did not pass the 600 .env control (exit $rc): $(printf '%s' "$out" | tail -1)"; selftest_fail
 fi
 
 chmod 644 "$cf268/home/.hermes/.env"
@@ -8459,7 +8514,7 @@ if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -q "corrected $cf268/home/.her
   && [ "$(stat -c %a "$cf268/home/.hermes/.env")" = 600 ]; then
   say "  PASS  c. --apply reports the .env correction and leaves mode 600 (exit $rc)"
 else
-  say "  FAIL  c. --apply did not report and make the .env mode correction (exit $rc): $(printf '%s' "$out" | tail -1)"; fails=$((fails+1))
+  say "  FAIL  c. --apply did not report and make the .env mode correction (exit $rc): $(printf '%s' "$out" | tail -1)"; selftest_fail
 fi
 
 out=$(envrun268 --env-file "$cf268/profile" --apply 2>&1); rc=$?
@@ -8467,7 +8522,7 @@ if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -q 'ENV: PASS — already matc
   && [ "$(stat -c %a "$cf268/home/.hermes/.env")" = 600 ]; then
   say "  PASS  d. second --apply is an idempotent no-op (exit $rc)"
 else
-  say "  FAIL  d. second --apply was not a no-op (exit $rc): $(printf '%s' "$out" | tail -1)"; fails=$((fails+1))
+  say "  FAIL  d. second --apply was not a no-op (exit $rc): $(printf '%s' "$out" | tail -1)"; selftest_fail
 fi
 
 printf 'model:\n  provider: cf-proxy\n' > "$cf268/home/.hermes/config.yaml"
@@ -8476,7 +8531,7 @@ out=$(envrun268 --env-file "$cf268/profile" --config-set model.provider=cf-proxy
 if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q "FAIL  mode:$cf268/home/.hermes/config.yaml — expected 600, found 644"; then
   say "  PASS  e. --check fails a 644 config.yaml, names the path and mode 644 (exit $rc)"
 else
-  say "  FAIL  e. --check did not fail the 644 config.yaml fixture (exit $rc): $(printf '%s' "$out" | tail -1)"; fails=$((fails+1))
+  say "  FAIL  e. --check did not fail the 644 config.yaml fixture (exit $rc): $(printf '%s' "$out" | tail -1)"; selftest_fail
 fi
 rm -rf "$cf268"
 
@@ -8489,26 +8544,26 @@ out=$(cd / && python3 "$HERE/scripts/handbook_spine.py" --handbook "$cf432/handb
 if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -q "M6-documentation: '19 contract'"; then
   say "  PASS  CF-432 dirty fixture from / finds planted count claim (exit $rc)"
 else
-  say "  FAIL  CF-432 dirty fixture did not name planted count claim (exit $rc): $out"; fails=$((fails+1))
+  say "  FAIL  CF-432 dirty fixture did not name planted count claim (exit $rc): $out"; selftest_fail
 fi
 sed -i 's/19 contract IDs/18 contract IDs/' "$cf432/handbook/chapters/M6-documentation.md"
 out=$(cd / && python3 "$HERE/scripts/handbook_spine.py" --handbook "$cf432/handbook" 2>&1); rc=$?
 if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -q '^findings=0'; then
   say "  PASS  CF-432 clean fixture from / reports findings=0"
 else
-  say "  FAIL  CF-432 clean fixture was not green (exit $rc): $out"; fails=$((fails+1))
+  say "  FAIL  CF-432 clean fixture was not green (exit $rc): $out"; selftest_fail
 fi
 missing="$cf432/missing"
 out=$(cd / && python3 "$HERE/scripts/handbook_spine.py" --handbook "$missing" 2>&1); rc=$?
 if [ "$rc" -eq 2 ] && printf '%s\n' "$out" | grep -q "handbook corpus directory not found: $missing"; then
   say "  PASS  CF-432 missing corpus fails closed with a named error"
 else
-  say "  FAIL  CF-432 missing corpus was not named (exit $rc): $out"; fails=$((fails+1))
+  say "  FAIL  CF-432 missing corpus was not named (exit $rc): $out"; selftest_fail
 fi
 if [ "$(grep -c 'expanduser(\"~/code-factory' "$HERE/scripts/handbook_spine.py")" -eq 0 ]; then
   say "  PASS  CF-432 hardcoded ~/code-factory corpus path is absent"
 else
-  say "  FAIL  CF-432 hardcoded corpus path remains"; fails=$((fails+1))
+  say "  FAIL  CF-432 hardcoded corpus path remains"; selftest_fail
 fi
 rm -rf "$cf432"
 
@@ -8548,7 +8603,7 @@ if [ "$rc" -ne 0 ] \
   && ! printf '%s\n' "$row_typo" | grep -Fq 'declared in specs/HARNESS.md'; then
   say "  PASS  a. typo -> exit $rc, one FAIL harness row naming the adapters this tree ships"
 else
-  say "  FAIL  a. typo did not name the shipped adapter set (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  a. typo did not name the shipped adapter set (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
@@ -8563,7 +8618,7 @@ if [ "$rc" -ne 0 ] \
   && ! printf '%s\n' "$out" | grep -Fq 'staged_set'; then
   say "  PASS  b. declared adapter with no installer -> exit $rc, a different row citing specs/HARNESS.md and CF-006"
 else
-  say "  FAIL  b. the declared-but-missing branch was not distinguished from a typo (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  b. the declared-but-missing branch was not distinguished from a typo (exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
@@ -8579,7 +8634,7 @@ if [ "$staged_rc" -eq 0 ] && printf '%s\n' "$staged_out" | grep -Fxq 'harness/in
   && printf '%s\n' "$out" | grep -Fxq '  FAIL  server_declared — BUNKER_SERVER unset — no agent host to create the node on'; then
   say "  PASS  c. the restored installer makes the name shipped: manifest exit $staged_rc carries it, create reaches server_declared"
 else
-  say "  FAIL  c. the restored installer did not move the name onto the shipped branch (manifest exit $staged_rc, create exit $rc)"; fails=$((fails+1))
+  say "  FAIL  c. the restored installer did not move the name onto the shipped branch (manifest exit $staged_rc, create exit $rc)"; selftest_fail
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
@@ -8604,7 +8659,7 @@ if [ "$help_rc" -eq 0 ] && [ "$short_rc" -eq 0 ] \
   && ! printf '%s\n' "$help_out" | grep -Fq 'CRIER_URL unset'; then
   say "  PASS  d. --help and -h -> exit 0 with CRIER_URL/BUNKER_SERVER unset, usage line names all $n_flags parser flags"
 else
-  say "  FAIL  d. --help demanded the environment or omitted a flag (help exit $help_rc, -h exit $short_rc, missing:${missing_flags:- none})"; fails=$((fails+1))
+  say "  FAIL  d. --help demanded the environment or omitted a flag (help exit $help_rc, -h exit $short_rc, missing:${missing_flags:- none})"; selftest_fail
   printf '%s\n' "$help_out" | sed 's/^/    | /'
 fi
 
@@ -8627,12 +8682,12 @@ if git -C "$HERE" show c1890a52:scripts/node-create.sh > "$cf125/before/scripts/
     && ! printf '%s\n' "$before_out" | grep -Fq 'is not an adapter'; then
     say "  PASS  e. pre-fix revision c1890a52 answers 'unknown arg: --help' and reports the typo as a missing staged file (red control)"
   else
-    say "  FAIL  e. pre-fix control did not reproduce the collapsed behaviour (help exit $before_help_rc, typo exit $before_rc)"; fails=$((fails+1))
+    say "  FAIL  e. pre-fix control did not reproduce the collapsed behaviour (help exit $before_help_rc, typo exit $before_rc)"; selftest_fail
     printf '%s\n' "$before_help" | sed 's/^/    | /'
     printf '%s\n' "$before_out" | sed 's/^/    | /'
   fi
 else
-  say "  FAIL  e. pre-fix source unavailable (git show c1890a52:scripts/node-create.sh)"; fails=$((fails+1))
+  say "  FAIL  e. pre-fix source unavailable (git show c1890a52:scripts/node-create.sh)"; selftest_fail
 fi
 rm -rf "$cf125"
 
@@ -8661,7 +8716,7 @@ if [ "$cf473_rc" -ne 0 ] \
   && printf '%s\n' "$cf473_out" | grep -Fq 'HERMES_PYTHON_BIN=python3.12'; then
   say "  PASS  a. the out-of-range python row names HERMES_PYTHON_BIN=python3.12"
 else
-  say "  FAIL  a. the out-of-range python row shipped without the remedy (exit $cf473_rc)"; fails=$((fails+1))
+  say "  FAIL  a. the out-of-range python row shipped without the remedy (exit $cf473_rc)"; selftest_fail
   printf '%s\n' "$cf473_out" | sed 's/^/    | /'
 fi
 
@@ -8676,7 +8731,7 @@ if printf '%s\n' "$cf473_red" | grep -Fq 'FAIL  python' \
   && ! printf '%s\n' "$cf473_red" | grep -Fq 'HERMES_PYTHON_BIN=python3.12'; then
   say "  PASS  b. with the remedy stripped the FAIL row no longer names it (red control)"
 else
-  say "  FAIL  b. the red control did not strip the remedy from the row"; fails=$((fails+1))
+  say "  FAIL  b. the red control did not strip the remedy from the row"; selftest_fail
   printf '%s\n' "$cf473_red" | sed 's/^/    | /'
 fi
 
@@ -8685,7 +8740,7 @@ cf473_readme=$(awk '/^## Quick start/,/^## Provisioning/' "$HERE/README.md" | gr
 if [ "${cf473_readme:-0}" -ge 1 ] && [ "${cf473_readme:-0}" -lt 5 ]; then
   say "  PASS  c. README Quick start names HERMES_PYTHON_BIN ($cf473_readme occurrence)"
 else
-  say "  FAIL  c. README Quick start does not name the remedy (count ${cf473_readme:-0})"; fails=$((fails+1))
+  say "  FAIL  c. README Quick start does not name the remedy (count ${cf473_readme:-0})"; selftest_fail
 fi
 rm -rf "$tmpd"
 # END cf473-python-remedy
@@ -8705,7 +8760,7 @@ say "76. README carries no traceability block (CF-481)"
 if readme_trace_block "$HERE/README.md" >/dev/null; then
   say "  PASS  published README.md carries no ch:trace / STATUS: / TIER: / EVIDENCE: line"
 else
-  say "  FAIL  published README.md carries a traceability block again:"; fails=$((fails+1))
+  say "  FAIL  published README.md carries a traceability block again:"; selftest_fail
   readme_trace_block "$HERE/README.md" | sed 's/^/    | /'
 fi
 
@@ -8717,7 +8772,7 @@ cf481_planted=$(readme_trace_block "$tmpd/planted-marker.md"); cf481_rc=$?
 if [ "$cf481_rc" -eq 1 ] && printf '%s\n' "$cf481_planted" | grep -Eq '^[0-9]+:ch:trace row=CF-999'; then
   say "  PASS  a. red control: a planted ch:trace line is rejected, exit $cf481_rc"
 else
-  say "  FAIL  a. red control: the planted ch:trace line was not named (exit $cf481_rc)"; fails=$((fails+1))
+  say "  FAIL  a. red control: the planted ch:trace line was not named (exit $cf481_rc)"; selftest_fail
   printf '%s\n' "$cf481_planted" | sed 's/^/    | /'
 fi
 # b. red control: the prefix forms the old footer used, one fixture per prefix
@@ -8728,7 +8783,7 @@ for cf481_prefix in STATUS: TIER: EVIDENCE:; do
   if [ "$cf481_rc" -eq 1 ] && printf '%s\n' "$cf481_out" | grep -Fq ":$cf481_prefix"; then
     say "  PASS  b. red control: a planted $cf481_prefix line is rejected, exit $cf481_rc"
   else
-    say "  FAIL  b. red control: a planted $cf481_prefix line was not named (exit $cf481_rc)"; fails=$((fails+1))
+    say "  FAIL  b. red control: a planted $cf481_prefix line was not named (exit $cf481_rc)"; selftest_fail
   fi
 done
 # c. non-vacuity control: the same words mid-sentence are prose, not a block, and must be accepted.
@@ -8738,7 +8793,7 @@ printf '%s\n' '# fixture' '' \
 if readme_trace_block "$tmpd/prose.md" >/dev/null; then
   say "  PASS  c. a mid-sentence mention is accepted (the check is anchored to line starts)"
 else
-  say "  FAIL  c. a mid-sentence mention was rejected (the check matches substrings)"; fails=$((fails+1))
+  say "  FAIL  c. a mid-sentence mention was rejected (the check matches substrings)"; selftest_fail
 fi
 rm -rf "$tmpd"
 # END cf481-readme-trace-guard
@@ -8780,7 +8835,7 @@ cf485_off=$(printf '%s\n' "$cf485_scan" | awk '/^BLOCK /{print $4; exit}')
 if [ "$cf485_rc" -eq 0 ] && [ "${cf485_off:-x}" = 0 ] && [ "${cf485_block:-0}" -gt 0 ]; then
   say "  PASS  a. shipped tests/selftest.sh section 7b scans clean — block $cf485_block lines, 0 offending"
 else
-  say "  FAIL  a. shipped tests/selftest.sh section 7b feeds a producer into grep -q (block ${cf485_block:-?} lines, ${cf485_off:-?} offending, exit $cf485_rc)"; fails=$((fails+1))
+  say "  FAIL  a. shipped tests/selftest.sh section 7b feeds a producer into grep -q (block ${cf485_block:-?} lines, ${cf485_off:-?} offending, exit $cf485_rc)"; selftest_fail
   printf '%s\n' "$cf485_scan" | awk '!/^BLOCK /{print "    | " $0}'
 fi
 # b. red control: the shape is planted inside the block of a COPY of the shipped suite, after its
@@ -8799,7 +8854,7 @@ esac
 if [ "$cf485_rc2" -eq 0 ] && [ "${cf485_off2:-x}" = 1 ] && [ "$cf485_named" -eq 1 ]; then
   say "  PASS  b. red control: the planted producer-piped grep -q is the one offending line — $cf485_hit2"
 else
-  say "  FAIL  b. red control: the planted producer-piped grep -q was not reported as exactly one offending line (offending ${cf485_off2:-?}, exit $cf485_rc2)"; fails=$((fails+1))
+  say "  FAIL  b. red control: the planted producer-piped grep -q was not reported as exactly one offending line (offending ${cf485_off2:-?}, exit $cf485_rc2)"; selftest_fail
   printf '%s\n' "$cf485_scan2" | sed 's/^/    | /'
 fi
 rm -rf "$tmpd"
@@ -8814,7 +8869,7 @@ say "78. configure_family commits one lane per transaction and a shortfall exits
 if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_configure_family.py" >"${TMPDIR:-/tmp}/cf356-suite.out" 2>&1; then
   say "  PASS  per-lane transaction, busy retry and non-zero shortfall exit (CF-356)"
 else
-  say "  FAIL  configure_family write contract (CF-356); suite output:"; fails=$((fails+1))
+  say "  FAIL  configure_family write contract (CF-356); suite output:"; selftest_fail
   sed 's/^/    | /' "${TMPDIR:-/tmp}/cf356-suite.out" | tail -20
 fi
 
@@ -8830,7 +8885,7 @@ if bash "$HERE/docs/audits/p5g16-artifact-register-probe.sh" >"$p5g16_out" 2>&1;
   say "  PASS  arms A-D hold: register present, every citation resolves, no minted profile or tag, published bytes recompute"
 else
   say "  FAIL  artifact-register probe rejected this tree (exit $?)"
-  fails=$((fails+1))
+  selftest_fail
   sed 's/^/    | /' "$p5g16_out" | tail -20
 fi
 p5g16_fix=$(mktemp -d)
@@ -8845,10 +8900,72 @@ if [ "$p5g16_rc" -eq 1 ] && [ "$p5g16_arms" = "A,B" ] && grep -q "MISSING: no '#
   say "  PASS  red control: register section removed -> exit 1 naming arms $p5g16_arms and the missing IV.2.9 heading"
 else
   say "  FAIL  red control: register section removed -> exit $p5g16_rc naming arms '${p5g16_arms:-none}' (want exit 1, arms A,B, missing-heading message)"
-  fails=$((fails+1))
+  selftest_fail
   sed 's/^/    | /' "$p5g16_fix/red.out" | tail -20
 fi
 rm -rf "$p5g16_fix"
+
+# CF-510: a non-zero tally must NAME the arms it counts. Driven against the SHIPPED file — the
+# helpers are extracted from tests/selftest.sh itself, so a recorder that stops naming, a
+# reporter that stops printing, or a tally that stops calling the reporter all red this arm.
+# The FAILIF (AC2): a run ending `SELFTEST: FAIL (n)` whose output names no arm is the defect.
+# Unnumbered on purpose: the CF-198 arm census counts numbered `say "N.` headers.
+# ch:trace row=CF-510 spec=docs/handbook/chapters/VIII-5-tests.md#7a-the-tally-names-its-arms test=tests/selftest.sh doc=docs/handbook/chapters/VIII-5-tests.md evidence=none:measured-in-this-chapter witness=none:local-hermetic-fixture verdict=none:foreman-runs-gitreins commit=none:worker-commit memory=none:foreman-writes-after-publication
+say "the selftest tally names the failing arms it counts (CF-510)"
+cf510_fix=$(mktemp -d)
+{
+  sed -n '/^say() {$/,/^}$/p' "$HERE/tests/selftest.sh"
+  sed -n '/^selftest_fail() {$/,/^}$/p' "$HERE/tests/selftest.sh"
+  sed -n '/^selftest_section_label() {$/,/^}$/p' "$HERE/tests/selftest.sh"
+  sed -n '/^selftest_report_failures() {$/,/^}$/p' "$HERE/tests/selftest.sh"
+} > "$cf510_fix/tally.sh"
+cat > "$cf510_fix/driver.sh" <<'CF510_DRIVER'
+#!/usr/bin/env bash
+# Drives the extracted tally helpers with three counted failures: two labelled arms and one
+# increment that printed no row of its own.
+set -uo pipefail
+fails=0
+selftest_fail_arms=()
+selftest_pending_fail=""
+selftest_section="startup"
+selftest_last_command="initialization"
+. "$(dirname "$0")/tally.sh"
+selftest_section="11. lane workdir targets: local paths AND remote user@host targets"
+say "  FAIL  lane target contract"
+selftest_fail
+say "  PASS  a passing row must not donate its label to the next failure"
+say "  FAIL  CF-266: hook did not run on commit"
+selftest_fail
+selftest_section="12. node disk floor resolves from CLI/env/config with fail-closed values"
+selftest_last_command="python3 scripts/disk_floor.py resolve --cli 5.9G"
+selftest_fail
+selftest_report_failures "$fails"
+printf "COUNT=%s\n" "$fails"
+printf "GREEN-ROWS="; selftest_report_failures 0 | grep -c "^FAIL ARM  section=" || true
+CF510_DRIVER
+cf510_wired=$(awk '/^finish\(\) \{/,/^\}/' "$HERE/tests/selftest.sh" | grep -c 'selftest_report_failures "\$count"')
+cf510_out=$(bash "$cf510_fix/driver.sh" 2>&1)
+cf510_rc=$?
+cf510_count=$(printf '%s\n' "$cf510_out" | awk -F= '/^COUNT=/{print $2; exit}')
+cf510_green=$(printf '%s\n' "$cf510_out" | awk -F= '/^GREEN-ROWS=/{print $2; exit}')
+cf510_names=$(printf '%s\n' "$cf510_out" | grep -c '^FAIL ARM  section=')
+cf510_first=$(printf '%s\n' "$cf510_out" | grep '^FAIL ARM  section=' | sed -n 1p)
+cf510_second=$(printf '%s\n' "$cf510_out" | grep '^FAIL ARM  section=' | sed -n 2p)
+cf510_third=$(printf '%s\n' "$cf510_out" | grep '^FAIL ARM  section=' | sed -n 3p)
+cf510_ok=1
+[ "$cf510_rc" -eq 0 ] && [ "${cf510_count:-x}" = 3 ] && [ "${cf510_names:-x}" = 3 ] || cf510_ok=0
+[ "${cf510_green:-x}" = 0 ] && [ "${cf510_wired:-x}" = 1 ] || cf510_ok=0
+case "$cf510_first" in "FAIL ARM  section=11  lane target contract") ;; *) cf510_ok=0 ;; esac
+case "$cf510_second" in "FAIL ARM  section=11  CF-266: hook did not run on commit") ;; *) cf510_ok=0 ;; esac
+case "$cf510_third" in "FAIL ARM  section=12  counted with no FAIL row (last command: python3 scripts/disk_floor.py resolve --cli 5.9G)") ;; *) cf510_ok=0 ;; esac
+if [ "$cf510_ok" -eq 1 ]; then
+  say "  PASS  CF-510: 3 counted failures -> 3 named arms (sections 11,11,12; the unlabelled one names its section and command), 0 failures -> $cf510_green rows, reporter wired in finish()"
+else
+  say "  FAIL  CF-510: tally did not name its arms (rc $cf510_rc, count ${cf510_count:-?}, named ${cf510_names:-?}, green ${cf510_green:-?}, wired ${cf510_wired:-?})"
+  selftest_fail
+  printf '%s\n' "$cf510_out" | sed 's/^/    | /' | tail -20
+fi
+rm -rf "$cf510_fix"
 
 say ""
 [ "$fails" -eq 0 ] && finish 0 || finish 1

@@ -181,6 +181,34 @@ terminal summary and exit code, not a raw count of the word `FAIL`, decide the s
 skip is legitimate only when the output names the unavailable prerequisite or the control mode;
 a skip with no reason is not a green proof.
 
+### 7a. The tally names its arms
+
+A non-zero tally is attributable from its own last lines. `finish()` calls
+`selftest_report_failures "$count"` immediately before the tally, so a red run ends:
+
+```
+SELFTEST: failing arms (3):
+FAIL ARM  section=11  lane target contract
+FAIL ARM  section=11  CF-266: hook did not run on commit
+FAIL ARM  section=12  counted with no FAIL row (last command: python3 scripts/disk_floor.py resolve --cli 5.9G)
+SELFTEST: FAIL (3)
+EXIT=1
+```
+
+The names come from the same accounting that produces `n`. Every increment of `fails` is a
+`selftest_fail()` call, which records the `  FAIL  ` row the arm just printed in this shell —
+captured at `say()`, not restated at the ~495 call sites where it could drift from the row. An
+increment that printed no row (an abort, or a counted command with no labelled row) is named
+anyway, with the live section and the command that failed. A count of `n` therefore always comes
+with `n` `FAIL ARM` lines, and a green tally names nothing.
+
+The FAILIF: a run that ends `SELFTEST: FAIL (n)`, `n > 0`, with no line naming those arms is
+itself the defect. `tests/selftest.sh` drives the shipped helpers (extracted from the file
+itself, so a recorder, reporter or tally that stops naming reds the arm) with three counted
+failures — two labelled arms and one unlabelled increment — and asserts three named arms in
+sections 11/11/12, zero naming lines on a green tally, and that `finish()` calls the reporter.
+Measured 2026-11-20 at `6e51eb04` plus this change: `SELFTEST: PASS`, exit 0, clean `HOME`.
+
 ## 7. Failure modes and recovery
 
 | Failure | Indication | Recovery |
