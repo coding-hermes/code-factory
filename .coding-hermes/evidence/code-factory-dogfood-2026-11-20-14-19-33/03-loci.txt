@@ -1,0 +1,48 @@
+# textual loci quoted by the report
+== bunker-provision.sh 266-276 (with numbers):
+      1	    bad "server" "$SERVER not listed by 'bunker list'"
+      2	  fi
+      3	
+      4	  [ -n "$AGENT" ] || { bad "agent" "AGENT unset"; return 1; }
+      5	  if info=$(timeout 45 "$b" info "$AGENT" --server "$SERVER" 2>&1); then
+      6	    ok "agent" "$AGENT exists ($(printf '%s' "$info" | head -1 | cut -c1-60))"
+      7	  else
+      8	    bad "agent" "$AGENT absent — run --apply to create it"
+      9	    return 1
+     10	  fi
+     11	
+(cat -n is 1-based on the window; add 265 for file line numbers)
+
+== exact grep -n for the agent row:
+270:  if info=$(timeout 45 "$b" info "$AGENT" --server "$SERVER" 2>&1); then
+440:  if timeout 45 "$b" info "$AGENT" --server "$SERVER" >/dev/null 2>&1; then
+271:    ok "agent" "$AGENT exists ($(printf '%s' "$info" | head -1 | cut -c1-60))"
+
+== template credential keys (grep -n):
+5:# REPO must be an HTTPS URL: the provisioning bundle installs an HTTPS credential store
+11:REPO=https://github.com/coding-hermes/code-factory.git
+32:GITHUB_TOKEN_FILE=~/.config/code-factory/github.token
+33:DUCKBRAIN_TOKEN_FILE=~/.duckbrain/9router-foreman.token
+34:S3_ENV_FILE=~/.config/code-factory/s3.env
+36:# the two services a node must be able to reach
+39:CRIER_AGENT_KEY_FILE=~/.config/code-factory/<project>/agent.key
+40:CRIER_AUTH_TOKEN_FILE=~/.hermes/secrets/crier-fleet.env
+
+== README 148-162 (quoted transcript block):
+     1	edited them sees its own values there:
+     2	
+     3	```
+     4	  PASS  config — bunker.example.conf — 53 lines, KEY=VALUE only
+     5	  FAIL  inputs — not readable: GITHUB_TOKEN_FILE(~/.config/code-factory/github.token) CRIER_AGENT_KEY_FILE(~/.config/code-factory/<project>/agent.key) S3_ENV_FILE(~/.config/code-factory/s3.env)
+     6	bunker-provision --check — project=code-factory agent=<agent-id> server=<bunker-server>
+     7	  ..    resolved repo=https://github.com/coding-hermes/code-factory.git ref=main harness=hermes namespaces=code-factory,coder (primary code-factory) ttl=30d crier=http://<control-host>:8767 duckbrain=http://<control-host>:3000
+     8	  FAIL  github_auth — GITHUB_TOKEN_FILE ~/.config/code-factory/github.token is unreadable
+     9	  PASS  bunker_cli — ~/.local/bin/bunker
+    10	  FAIL  server — <bunker-server> not listed by 'bunker list'
+    11	  FAIL  agent — <agent-id> absent — run --apply to create it
+    12	```
+    13	
+    14	The `53 lines` in the first row is `wc -l config/bunker.example.conf`, and the `inputs` row names
+    15	every credential path the template expects before any bunker call is made.
+
+# the stub that turns the agent row green with no information

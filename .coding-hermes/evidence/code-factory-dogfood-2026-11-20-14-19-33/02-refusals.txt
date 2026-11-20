@@ -1,0 +1,50 @@
+# (C) malformed config + stub recorder on PATH
+# (D) --destroy without --yes
+########## C. documented refusal: non-KEY=VALUE line ##########
+conf:
+     1	# bad conf
+     2	this line is not KEY=VALUE
+     3	PROJECT=code-factory
+  FAIL  config — /tmp/dt-1419/home2.evSbrk/bad.conf:2 is not KEY=VALUE — refusing to run it
+EXIT=1
+bunker invocations during refusal (docs: 'refused before a single bunker call'):
+  count=0
+
+########## D. documented refusal: --destroy without --yes ##########
+AGENT=cf-dogfood-sentinel-nonexistent
+SERVER=cf-dogfood-sentinel-server
+  PASS  config — destroy.conf — 53 lines, KEY=VALUE only
+refusing to destroy without --yes (would remove agent cf-dogfood-sentinel-nonexistent on cf-dogfood-sentinel-server)
+EXIT=2
+
+########## E. documented constraint: REPO must be HTTPS ##########
+REPO=git@github.com:github/gitignore.git
+  PASS  config — ssh.conf — 53 lines, KEY=VALUE only
+  FAIL  inputs — not readable: GITHUB_TOKEN_FILE(/tmp/dt-1419/home2.evSbrk/.config/code-factory/github.token) DUCKBRAIN_TOKEN_FILE(/tmp/dt-1419/home2.evSbrk/.duckbrain/9router-foreman.token) CRIER_AGENT_KEY_FILE(/tmp/dt-1419/home2.evSbrk/.config/code-factory/<project>/agent.key) CRIER_AUTH_TOKEN_FILE(/tmp/dt-1419/home2.evSbrk/.hermes/secrets/crier-fleet.env) S3_ENV_FILE(/tmp/dt-1419/home2.evSbrk/.config/code-factory/s3.env)
+bunker-provision --check — project=code-factory agent=cf-dogfood-sentinel-nonexistent server=cf-dogfood-sentinel-server
+  ..    resolved repo=git@github.com:github/gitignore.git ref=main harness=hermes namespaces=code-factory,coder (primary code-factory) ttl=30d crier=http://<control-host>:8767 duckbrain=http://<control-host>:3000
+  FAIL  github_auth — GITHUB_TOKEN_FILE /tmp/dt-1419/home2.evSbrk/.config/code-factory/github.token is unreadable
+  PASS  bunker_cli — /tmp/dt-1419/home2.evSbrk/bin/bunker
+  FAIL  server — cf-dogfood-sentinel-server not listed by 'bunker list'
+  PASS  agent — cf-dogfood-sentinel-nonexistent exists ()
+  FAIL  repo — no clone at $HOME/repo — run --apply
+  FAIL  node_json — $HOME/.node/node.json absent
+  FAIL  auth_github — no $HOME/.node/auth/github.token
+  FAIL  auth_duckbrain — no $HOME/.node/auth/duckbrain.token
+  FAIL  crier_key — no $HOME/.node/agent.key — the inbox answers 401 to every read
+  FAIL  crier_bearer — no $HOME/.node/auth/crier.token — a signed read still needs the bearer
+  FAIL  git_credential — no $HOME/.git-credentials — the clone cannot authenticate
+  FAIL  gateway_auth — no dashboard.basic_auth — the gateway will refuse to bind (CF-150)
+  FAIL  commit_hook — no pre-commit hook — the gate is not armed
+  FAIL  harness — no hermes binary on the node
+  WARN  env_profile — no NODE_ENV_FILE or CONFIG_SET_* — the node's environment is declared nowhere
+  FAIL  crier — FAIL  bus_health — http://<control-host>:8767/health -> 000 (bus not answering)
+  WARN  duckbrain — DUCKBRAIN_URL or token file unset — namespace unproven
+
+BUNKER: FAIL (14)
+EXIT=1
+
+########## F. existing board rows touching this surface ##########
+Traceback (most recent call last):
+  File "<stdin>", line 8, in <module>
+TypeError: can only concatenate str (not "list") to str

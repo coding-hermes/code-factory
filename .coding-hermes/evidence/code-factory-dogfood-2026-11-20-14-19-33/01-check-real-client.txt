@@ -1,0 +1,20 @@
+# (A) README:147-161's quoted --check transcript, re-run with a throwaway HOME
+# (B) wc -l config/bunker.example.conf and the read-only claim
+########## A. line-count claim (README says 53 lines) ##########
+53 config/bunker.example.conf
+non-comment non-blank lines: 17
+
+########## B. documented --check, verbatim, throwaway HOME ##########
+HOME=/tmp/dt-1419/home.FvaJsg
+EXIT=1
+--- stdout+stderr ---
+  PASS  config — bunker.example.conf — 53 lines, KEY=VALUE only
+  FAIL  inputs — not readable: GITHUB_TOKEN_FILE(/tmp/dt-1419/home.FvaJsg/.config/code-factory/github.token) DUCKBRAIN_TOKEN_FILE(/tmp/dt-1419/home.FvaJsg/.duckbrain/9router-foreman.token) CRIER_AGENT_KEY_FILE(/tmp/dt-1419/home.FvaJsg/.config/code-factory/<project>/agent.key) CRIER_AUTH_TOKEN_FILE(/tmp/dt-1419/home.FvaJsg/.hermes/secrets/crier-fleet.env) S3_ENV_FILE(/tmp/dt-1419/home.FvaJsg/.config/code-factory/s3.env)
+bunker-provision --check — project=code-factory agent=<agent-id> server=<bunker-server>
+  ..    resolved repo=https://github.com/coding-hermes/code-factory.git ref=main harness=hermes namespaces=code-factory,coder (primary code-factory) ttl=30d crier=http://<control-host>:8767 duckbrain=http://<control-host>:3000
+  FAIL  github_auth — GITHUB_TOKEN_FILE /tmp/dt-1419/home.FvaJsg/.config/code-factory/github.token is unreadable
+  PASS  bunker_cli — ~/.local/bin/bunker
+  FAIL  server — <bunker-server> not listed by 'bunker list'
+  FAIL  agent — <agent-id> absent — run --apply to create it
+--- files written under throwaway HOME (read-only claim) ---
+entries: 0

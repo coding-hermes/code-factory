@@ -1,0 +1,75 @@
+# (04) the lost board-field update: three readings, eight minutes apart
+
+########## reading 1 — working copy vs HEAD, while the tree was dirty ##########
+    597 /tmp/dt-1419/out/tasks.head.jsonl
+    597 /tmp/dt-1419/out/tasks.work.jsonl
+   1194 total
+head rows 597 work rows 597
+ids only in work: []
+ids only in head: []
+CHANGED CF-474
+  field defer_review_by
+   head: null
+   work: "2026-11-27"
+  field updated_at
+   head: "2026-11-17T11:21:08Z"
+   work: "2026-11-20T15:23:24Z"
+
+########## reading 2 — HEAD moved, tree clean, CF-474 line back to its old value ##########
+== now: 2026-11-20T10:33:50-05:00
+== head: a6ef8941  2026-11-20 10:31:29 -0500 board: record the CF-262 completion row the guard stashed out of 2fd97718
+== HEAD...origin/main: 0	0
+== log -4:
+a6ef8941 2026-11-20 10:31:29 -0500 board: record the CF-262 completion row the guard stashed out of 2fd97718
+2fd97718 2026-11-20 10:26:09 -0500 board: close CF-262 on 0a1dfba2 — tilde expansion for every CLI path flag
+a8291e68 2026-11-20 10:08:41 -0500 board: close CF-472 on 47aa7ebc, file CF-505 (README Quick start has no owning chapter)
+0a1dfba2 2026-11-20 09:54:30 -0500 fix(bunker-provision): expand ~/ for --node-env-file and --config, not just the token files (CF-262)
+== porcelain:
+== rows: work=597 head=597
+== CF-474 in HEAD:
+{'status': 'pending', 'defer_review_by': None, 'updated_at': '2026-11-17T11:21:08Z', 'foreman_note': 'ROUTED 2026-11-17 by foreman tick code-factory-2026-11-17-07-55-13. The premise is CONFIRMED, not disputed: the cited guard log .gitreins/logs/guard-20261116T202625.433680Z.log still reads "overall: PASS (DEGRADED — skipped checks) / guards: 3 (0 failed, 2 skipped) / skipped_steps: - lint: no staged files - tests: no staged files", while the commit it certified carried 2 files. The cause is now ATTRIBUTED to code this repo does not own: the guard\'s change set is the INDEX, not the commit\'s pathspec. Evidence in the installed package (gitreins 0.21.0): engine/guard_manager.py:384 "Uses git diff --cached when HEAD exists (only changed files)"; :1665 records that every scope except working-tree runs its own `git diff --cached`; :2902 emits the lint lane\'s skip_reason "no staged files" and :3092-3094 the tests lane\'s "No files staged — skipped". `git commit --only <path>` from a clean index therefore presents an empty change set and both lanes degrade to SKIP by construction. Fixing the diff basis (index ∪ pathspec, or a --paths-scope that reads the commit\'s paths) belongs to the gitreins project (engine/guard_manager.py), not to code-factory: no edit in this repo can make the guard grade a pathspec commit. DEFERRED with the owning agent named (gitreins lane) per the support-agent routing clause so this row stops being picked as an in-repo code row. The repo-local remedy that does NOT need gitreins is separate and remains open for a future row: any lane using `git commit --only` must `git add` the exact paths first (index non-empty) and accept the sibling-staged-file sweep risk it was avoiding, or commit from an isolated index (GIT_INDEX_FILE) so the sweep cannot happen. Do not re-dispatch this row to a code-factory coding worker; it needs gitreins. ch:trace row=CF-474 spec=docs/handbook/chapters/M3-repository.md test=none:owner-is-external doc=.gitreins/config.yaml prompt=none evidence=.gitreins/logs/guard-20261116T202625.433680Z.log verdict=none:open-finding commit=none:open'}
+== a6ef8941 touched files:
+ .coding-hermes/board/tasks.jsonl | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+########## reading 3 — no commit ever held the value, and no stash parks it ##########
+== git stash list:
+stash@{0}: On main: pass5-wave4-pre-rebase-recovery-preserve
+stash@{1}: autostash
+stash@{2}: On wt/CF-006-aider-goose: CF-006 aider+goose staged work carried in proj-wt-cf-006 (parked by CF-226 worker; restore with: git stash apply)
+(empty above = no stash holds the vanished edit)
+
+== does '2026-11-27' ever appear in board history?
+(empty above = the defer never landed in any commit)
+
+== reflog (who moved HEAD, last 8):
+a6ef8941 HEAD@{2026-11-20 10:31:29 -0500}: commit: board: record the CF-262 completion row the guard stashed out of 2fd97718
+2fd97718 HEAD@{2026-11-20 10:26:09 -0500}: commit: board: close CF-262 on 0a1dfba2 — tilde expansion for every CLI path flag
+a8291e68 HEAD@{2026-11-20 10:08:41 -0500}: commit: board: close CF-472 on 47aa7ebc, file CF-505 (README Quick start has no owning chapter)
+0a1dfba2 HEAD@{2026-11-20 09:54:30 -0500}: commit: fix(bunker-provision): expand ~/ for --node-env-file and --config, not just the token files (CF-262)
+ae06e4e2 HEAD@{2026-11-20 09:44:54 -0500}: commit: board: file CF-504 — the handbook outline still says prompts/ ships 11 files (CF-472 dogfood walk)
+47aa7ebc HEAD@{2026-11-20 09:37:36 -0500}: commit: docs(README): the Quick start step-2 check creates $HOME/.node, so say so and scope the read-only claim (CF-472)
+cf3a7d82 HEAD@{2026-11-20 09:26:20 -0500}: commit: chore(gitignore): ignore .tmp/, the hermetic toolchain cache the test harnesses write
+968426f8 HEAD@{2026-11-20 07:19:43 -0500}: commit: board: close CF-503 on commit 97fd218e — publish-path trigger removed by 32f100d2, fixture_root() fail-closed repair landed through the guard
+
+== a8291e68 vs a6ef8941 board blob: differing lines
+2
+== 2fd97718 vs a8291e68 board blob: differing lines
+0
+
+########## stash list / stash contents ##########
+== stash@{1} header:
+890dcec4 2026-11-11 17:12:32 -0500 On main: autostash
+
+== does stash@{1} carry the CF-474 defer field?
+0
+
+== stash@{1} touched paths:
+docs/handbook/chapters/M0-shared-contract.md
+docs/handbook/chapters/M12-inference-proxy.md
+docs/handbook/chapters/M3-repository.md
+docs/handbook/chapters/M4-board.md
+docs/handbook/chapters/M7-github.md
+
+== stash@{0} (other stash) paths:
+docs/handbook/chapters/M12-inference-proxy.md
