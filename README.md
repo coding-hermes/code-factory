@@ -44,6 +44,21 @@ On a host with no bunker server, no Crier and no repo, all three commands reach 
 fail with the missing value named. That is the honest result on a fresh host, and every message
 tells you which value to supply.
 
+**Step 2 is not a read-only check: it creates `$HOME/.node` before it measures anything.** The
+command writes that directory — one entry, zero files — even when every row it prints is a FAIL, so
+run it on a designated test node, or against a throwaway `HOME`, and account for the directory as a
+side effect. Measured from a clean state at `968426f8`:
+
+```bash
+H=$(mktemp -d); HOME=$H bash ./scripts/project-node.sh --check --project myproject >/dev/null 2>&1
+find "$H" -mindepth 1        # -> $H/.node   (1 entry, 0 files)
+```
+
+`docs/OPERATIONS.md:38` states the same contract for the node-side form of the command
+(`~/node-scripts/project-node.sh`). The read-only claim further down — "nothing is written" — is
+scoped to the command it describes, `scripts/bunker-provision.sh --check`, which leaves a throwaway
+`HOME` empty; it does not describe this step.
+
 **Step 3 needs a spawn-capable target, and step 1 does not test that.** `bunker-server-install.sh
 --check` qualifies only the *control* host (client, server entry, control tools, disk); it makes no
 claim about the agent host's container runtime. The target server must be spawn-capable: a host
@@ -92,7 +107,8 @@ config file.
 entries as **paths** — the file names credentials, it never holds them.
 
 ```bash
-# read-only: every row names the value it measured, and nothing is written
+# read-only for this command: every row names the value it measured, and nothing is written
+# (the Quick start step-2 node check is the exception — it creates $HOME/.node)
 scripts/bunker-provision.sh --config ~/.config/code-factory/cf.conf --check
 
 # idempotent: reuses an existing agent and leaves an existing clone at its commit
