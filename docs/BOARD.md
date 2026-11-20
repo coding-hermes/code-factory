@@ -152,6 +152,19 @@ scripts/boardctl validate
 bash tests/selftest.sh | grep -E 'rows parse|^SELFTEST'
 ```
 
+- **Re-measured 2026-11-20T07:47Z at tip `5391a3e8`:** **590 task rows, 930 events**. Status split:
+  195 `complete`, 16 `in_progress`, 375 `pending`, 4 `blocked`. The census was read from
+  `git show origin/main:...` (the published ref), not from the shared cache, because a sibling
+  foreman lane held live worker pid 2454977 in the same checkout. `scripts/board_drift.py check
+  --ref origin/main` prints `RESULT: OK` — byte parity, 0 divergent ids. `scripts/boardctl validate`
+  prints `RESULT: OK (91 warning(s))` (74 of them the branch-uniformity class). `bash tests/selftest.sh`
+  on a detached worktree at this ref prints `SELFTEST: PASS` / `EXIT=0`. `scripts/board_evidence_check.py`
+  prints `checked 195 complete rows, 64 unresolved`; `--strict` exits 1 because `new=CF-470,PERF-018`
+  are absent from the still-dated 2026-11-16 allowlist (62 of 64 findings accepted) — the same red arm
+  **CF-475** tracks. Three complete rows now carry no commit hash at all: **CF-245**, **P5G-34**, and
+  **CF-473**. `docs/audits/cf198-section-mapping.sh` prints 74 `OK §` lines and no `FAIL`.
+  `docs/audits/cf181-verdict-binding-sweep.py` still dies with `AttributeError: 'str' object has no
+  attribute 'get'` — the rows storing `detail`/`detail.evidence` as bare strings (**CF-200**, pending).
 - **Re-measured 2026-11-16T16:31Z at tip `93922d61`:** **536 task rows, 826 events**. Status split:
   168 `complete`, 15 `in_progress`, 351 `pending`, 2 `blocked`. `scripts/boardctl validate` prints
   `RESULT: OK (89 warning(s))`; the only complete rows with no commit hash at all are still **CF-245**
