@@ -59,7 +59,12 @@ FAIL from a deliberately broken gate. The nearest rows and why each falls short:
 but no node has produced one; `CF-302` hardens the lander's refusal of an unattributed branch, not
 the digest round trip; `CF-110` stays `blocked` on node teardown. The counts and prose in the
 2026-11-04 paragraph below still reproduce at the tips it names; it is superseded only where this
-paragraph measures a changed tree.
+paragraph measures a changed tree. It supersedes the 2026-11-04 blocker leg in measurement, not in
+membership: the open defects these three legs still depend on are `CF-001`, `CF-002`, `CF-004`,
+`CF-136`, `CF-137`, `CF-138` and `CF-139` (`in_progress`), `CF-080`, `CF-131`, `CF-132` and
+`CF-133` (`pending`), and `CF-110` and `CF-112` (`blocked`) — all thirteen re-checked on the board
+at `0d50d6f0`, none `complete`, and the closed-membership reasons in the 2026-11-04 list below still
+stand.
 
 **Status 2026-11-04T09:34Z (board re-measured at `aef18d2` — 161 task rows, 322 events: 54 complete,
 8 in_progress, 99 pending; the previous snapshots still reproduce at the tips they name — `171bf23`
