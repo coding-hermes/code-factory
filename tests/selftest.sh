@@ -8769,5 +8769,37 @@ else
   sed 's/^/    | /' "${TMPDIR:-/tmp}/cf356-suite.out" | tail -20
 fi
 
+# P5G-16 canonical bytes and signature transcripts: run the shipped artifact-register
+# probe over this handbook, then re-run it over a scratch copy of docs/ with the register
+# section removed. The stripped copy is the same fixture shape the pre-fix blob at
+# 6f6b1c04 produces (it carries no IV.2.9 at all), so the red arm does not depend on a
+# retained git revision. Unnumbered on purpose: the CF-198 arm census counts numbered
+# `say "N.` headers, and a new numbered section would red the section-mapping instrument.
+say "the artifact register pins canonical bytes and signature transcripts for all six classes (P5G-16)"
+p5g16_out="${TMPDIR:-/tmp}/p5g16-probe-clean.out"
+if bash "$HERE/docs/audits/p5g16-artifact-register-probe.sh" >"$p5g16_out" 2>&1; then
+  say "  PASS  arms A-D hold: register present, every citation resolves, no minted profile or tag, published bytes recompute"
+else
+  say "  FAIL  artifact-register probe rejected this tree (exit $?)"
+  fails=$((fails+1))
+  sed 's/^/    | /' "$p5g16_out" | tail -20
+fi
+p5g16_fix=$(mktemp -d)
+cp -a "$HERE/docs" "$p5g16_fix/docs"
+awk '/^### IV\.2\.9 /{skip=1} skip && /^#{1,3} / && !/^### IV\.2\.9 /{skip=0} !skip{print}' \
+  "$HERE/docs/handbook/parts/IV-contract-register.md" \
+  > "$p5g16_fix/docs/handbook/parts/IV-contract-register.md"
+P5G16_ROOT="$p5g16_fix" bash "$HERE/docs/audits/p5g16-artifact-register-probe.sh" >"$p5g16_fix/red.out" 2>&1
+p5g16_rc=$?
+p5g16_arms=$(awk '/^P5G-16: FAIL/{sub(/^P5G-16: FAIL — arms /,""); sub(/ do not hold.*$/,""); print; exit}' "$p5g16_fix/red.out")
+if [ "$p5g16_rc" -eq 1 ] && [ "$p5g16_arms" = "A,B" ] && grep -q "MISSING: no '### IV.2.9' heading" "$p5g16_fix/red.out"; then
+  say "  PASS  red control: register section removed -> exit 1 naming arms $p5g16_arms and the missing IV.2.9 heading"
+else
+  say "  FAIL  red control: register section removed -> exit $p5g16_rc naming arms '${p5g16_arms:-none}' (want exit 1, arms A,B, missing-heading message)"
+  fails=$((fails+1))
+  sed 's/^/    | /' "$p5g16_fix/red.out" | tail -20
+fi
+rm -rf "$p5g16_fix"
+
 say ""
 [ "$fails" -eq 0 ] && finish 0 || finish 1

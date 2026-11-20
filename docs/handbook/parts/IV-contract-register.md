@@ -646,6 +646,89 @@ ships a deterministic ed25519 test key derived from a published seed string. It 
 this transcript and nothing else, authorizes nothing, and is labelled as such in the
 bundle; the credential itself never appears in any fixture, only its CAS reference.
 
+### IV.2.9 The artifact register: canonical bytes and signature transcripts
+
+P5G-16. This subsection is a projection, not a new authority: it mints no digest, no
+domain tag, no profile identifier, no audience and no key source, and every cell names
+the section that owns the value. Change the owner, not this table. The framing
+conventions are stated once and are not restated here: **record digest** and
+**layer-crossing digest** are §IV.2.6, and the construction order is §IV.2.5. Profile
+identifiers appear only as their owners spell them (M10 §16, M1 §17.1, M1 §17.3,
+M1 §17.4, M3 §17.4, VI §35.1). The webhook delivery profile has no `CF2A-*`
+identifier, and none is created here (V §V.0.3).
+
+| Artifact class | Canonical byte sequence | Signature profile and transcript | Key-id source | Audience | Timestamp and replay window | Rotation rule |
+|---|---|---|---|---|---|---|
+| brief | RFC 8785 JCS UTF-8 of the whole validated `cf.brief-input.v1` object: sorted keys, compact separators, no BOM, no trailing LF, whitespace and Unicode bytes preserved. `input_digest` is SHA-256 of exactly those bytes and `brief_ref` addresses the same bytes (§IV.2, §IV.2.3, §IV.2.6, M3 §17.4). `worker-brief.v1` carries the ref and the digest and does not redefine either (§IV.2). Vector CV-01-B. | No signature covers the brief object: `cf.brief-input.v1` and `worker-brief.v1` are closed and carry ref plus digest only (§IV.2, §IV.2.6). Where a brief travels inside a Crier application request, that request is signed under `CF2A-CRIER-1` (M10 §16). | `X-CF2A-Key-Id` on a Crier application request (M10 §16); `cf.brief-input.v1` carries no key id of its own (§IV.2). | NOT SPECIFIED at the object level: neither `cf.brief-input.v1` nor `worker-brief.v1` declares an audience (§IV.2); the only stated audience is `crier.factory` for a Crier application request (M10 §16). | `X-Agent-Ts` with ±30 s skew, and `request_id` plus `idempotency_key` as the replay nonce, differing bytes under the same nonce being `REPLAY_CONFLICT` (M10 §16); the brief's own replay rule is receipt replay on an identical ref and digest (§IV.2). | NOT SPECIFIED for the enrolled Crier signing key (M10 §16 states no rotation); see the table below. |
+| report | JCS of the final `round-report.v1` body including its schema and idempotency key, its evidence and its timestamps; `report_digest` excludes itself, its `signature` and `closure_ref` (§IV.2.3, §IV.2.6, §IV.5.5). CT-06 settlement reads the `(round_id, report_digest)` pair (§IV.1). | The digest domain excludes a `signature` member (§IV.2.6, §IV.5.5) but no section assigns it a profile or a transcript — NOT SPECIFIED (table below). The carrying request is `CF2A-CRIER-1` (M10 §16). | NOT SPECIFIED — no profile is named for the report signature (§IV.2.6); the only key id in play is the transport's `X-CF2A-Key-Id` (M10 §16). | NOT SPECIFIED — `round-report.v1` declares none (§IV.2 CT-06R), and settlement is addressed by the `(round_id, report_digest)` pair (CT-06, §IV.1). | `finished_at` is a body member (§IV.2 CT-06R); the request's replay identity is `request_digest` and `replay_digest` with its declared excluded list (§IV.2.7, I §1.9.10); no replay window is stated for the report body (§IV.5.5). | NOT SPECIFIED — no key is assigned to the report signature (§IV.2.6); see the table below. |
+| payload | The unsigned `cf.crier.response-payload.v1` result only, as JCS UTF-8 (§IV.2.8). `response_body_digest` is SHA-256 over the bare tag `cf.crier.response-body.v1` concatenated with those bytes, no separator (§IV.2.6, §IV.2.8), and `receipt_digest` is SHA-256 over the bare tag `cf.crier.receipt.v1` plus the receipt body minus `receipt_digest` and `signature` (§IV.2.6, §IV.2.8). Vector CV-18-A. | `CF2A-CRIER-1`: Ed25519, lowercase hex, over five UTF-8 lines with no prefix and no final newline — `<METHOD>`, `<origin-form path with bytewise-canonical query>`, `<X-Agent-Ts>`, `sha256:<request-body-sha256>`, `audience:<registered-principal>`; the response uses the same five lines with `response_ts` and `sha256:<response_envelope_digest>` and carries the value in `X-CF2A-Signature` (M10 §16, §IV.2.8). | `X-CF2A-Key-Id`, resolving only to the enrolled principal and registration generation (M10 §16); the signed envelope names `signer.key_id` with its public key and algorithm (CV-18-A). | Request audience is `crier.factory`; response audience is the original requester, compared to the receiver's own node identity and generation before the credential reference is accepted (M10 §16, §IV.2.8). | `X-Agent-Ts` for requests and `response_ts` for responses with ±30 s skew; the replay nonce is `request_id` plus `idempotency_key` bound to the body digest, and a stale timestamp or nonce/digest conflict is refused before any custody effect (M10 §16). | NOT SPECIFIED for the enrolled Crier signing key (M10 §16 states revocation refusal, not rotation); see the table below. |
+| manifest | JCS of the whole object except an explicitly self-named digest and signature (§IV.2.3). `cf.release-lock.v1` carries `manifest_digest` and its signature covers JCS with `signature` omitted (M1 §18.1); `cf.backup.v1` hashes RFC 8785 JSON of the complete content object excluding only `content_digest` and `signature` (VI §35.1); `config_digest` and the other registered manifest digests are §IV.2.6 rows. | Ed25519 over `CF2A-RELEASE-1\n` plus JCS with `signature` omitted (M1 §17.3, M1 §18.1); a `SignedArtifact` signature covers `CF2A-RELEASE-1\n` plus the referenced JCS body without the signature (V §V.9). Seed: `CF2A-SEED-1\n` plus JCS excluding signature (M1 §17.4). Backup: `CF2A-BACKUP-1\n` plus the content digest's lowercase hex bytes (VI §35.1). Evidence receipt: `CF2A-EVIDENCE-1\n` (M3 §17.4). | `issuer_key_id` on the lock (M1 §18.1), `signature.key_id` on `SignedArtifact` (V §V.9), `issuer_key_id` on the evidence receipt (M3 §17.4); the offline operator trust bundle pins the release signer (M1 §17.3). | NOT SPECIFIED — the lock declares no audience (§IV.2 type registry); it is consumed by the release manager after signature, digest, platform, dependency-closure and compatibility verification (M1 §18.2). | NOT SPECIFIED — the lock carries no timestamp member and no replay window (M1 §18.1); deduplication is `expected_generation` plus `operation_id` on the release operation (M1 §18.2). | NOT SPECIFIED — only the trust-bundle pin is stated (M1 §17.3); signer rotation has no procedure, overlap window or re-key transcript. |
+| tree | `tree_digest` is SHA-256 of JCS of the path-byte-sorted array of `{path_b64,mode,type,content_digest,git_oid}`; paths are repository-relative raw Git bytes in padded base64, an empty tree is `[]`, and no native SHA-1 tree or commit is labelled a SHA-256 `tree_digest` (§IV.2.3). | None — `tree_digest` is an unsigned digest. What binds it is the commit it was computed over, the fresh-fetch publication readback naming `accepted_object`, `observed_tip` and `remote_tree_digest`, and the closure validator that proves the permitted paths and ancestry (M3 §17.2, M3 §17.3). | NOT SPECIFIED — no signature, hence no key (M3 §17.3; table below). | NOT SPECIFIED — no signature, hence no audience (M3 §17.3; table below). | Records carry `observed_at` and `fetched_at` per publication phase (M3 §17.2); the digest itself carries no timestamp and no replay window — NOT SPECIFIED (table below). | NOT SPECIFIED — no key exists to rotate (§IV.2.3 defines a digest only; table below). |
+| webhook | The `event.v1` object as RFC 8785 JSON, delivered as the exact body bytes with no final newline added by the sender (V §V.0.3). | HMAC-SHA256, lowercase hex, in `X-Factory-Signature`: UTF-8 `factory-event-v1`, newline, key ID, newline, delivery time, newline, event ID, newline, then the exact body bytes (V §V.0.3). Not Ed25519, and not a `CF2A-*` profile (V §V.0.3). | `X-Factory-Key-Id`, resolved from the destination bundle's `active_key_id` (V §V.0.3, V §V.4). | NOT SPECIFIED — the receiver is the subscription `endpoint_ref`, and the transcript carries no audience string (V §V.0.3, V §V.4). | `X-Factory-Delivery-Time` in decimal Unix seconds with ±60 s skew; duplicate suppression is `event_id` plus body digest with a changed digest refused as 409; cursor replay signs a fresh delivery time with the active key, retention is 604800 s, and a stale or unknown key returns 401 and cannot advance the cursor (V §V.0.3). | Atomic `active_key_id` change with verification keys preserved for 300 s; a URL change requires a new subscription generation and never reuses the old destination key (V §V.4). |
+
+The memory record is the one payload-shaped artifact outside the custody chain: its
+`payload_digest` is the §IV.2.6 row for `cf.memory-record.v1`, JCS of the record
+excluding `payload_digest`, `sync` and `signature`. No profile is named for that
+`signature` member; the gap is recorded in the table below, not inferred here.
+
+**Authoritative actor, ordering, failure behavior and recovery.** The six classes differ
+in what is signed, not in who may act or in which order. One rule set governs them:
+
+* **Actor.** The component that allocates an identity owns the bytes that carry it
+  (§IV.2.5 rule 2). The foreman builds and persists the `BriefInput`; the reporter
+  builds the round summary and then the report; Crier builds the unsigned payload, then
+  the receipt, then the envelope; the release owner publishes and signs the lock; the
+  node commits the tree and the landing path publishes it and reads it back; the
+  manager's delivery worker signs each webhook with the active key.
+* **Ordering.** Content → record → envelope (§IV.2.5); round summary → report → closure
+  witness (§IV.5.5); payload → receipt → envelope (§IV.2.8); manifest digest → signature
+  (M1 §18.1); tree → commit → publication readback (M3 §17.2); persist → sign → deliver
+  (V §V.0.3). A reader recomputes in the same order and rejects a record whose
+  lower-layer digest moves when a higher-layer field changes.
+* **Failure.** Every class refuses before effects. A digest or ref mismatch is
+  `DIGEST_MISMATCH`; a record whose derived identifier does not recompute is
+  `CONTRACT_INVALID`; a reused nonce with different bytes is `REPLAY_CONFLICT`
+  (§IV.2.7); an unknown key or profile, stale generation, bad body hash, sender or
+  audience mismatch, or stale timestamp is `UNAUTHORIZED` (M10 §16); a webhook key or
+  signature failure is `ENDPOINT_UNAUTHORIZED` and is not delivery success (V §V.0.3).
+  No class permits iterating to a fixed point (§IV.2.5 rule 5).
+* **Recovery.** Recover by recomputation and readback, never by re-derivation: fetch the
+  object by its reference, recompute the digest in the declared order, and compare
+  against the stored value together with the excluded-field list it was computed under
+  (§IV.2.7). An identical retry replays the original receipt and the original receipt
+  stays available by `request_id` (§IV.2, M10 §16). A publication whose acknowledgement
+  is lost is resolved by GET readback and by replaying the same commit, never by
+  choosing a new generation (M3 §17.2, M10 §16). A webhook replay re-signs a fresh
+  delivery time with the active key and never re-authors the event (V §V.0.3).
+
+**Cells with no normative answer at this revision.** These are findings, not
+placeholders: the question asks for a value, the tip has none, and inventing one would
+mint a competing contract. Each names the board row that owns the missing rule when one
+exists at this revision (`.coding-hermes/board/tasks.jsonl`, read through
+`scripts/board_read.py`).
+
+| Artifact class | Cell with no normative answer | Status at this revision | Owning board row |
+|---|---|---|---|
+| brief | audience at the object level | NOT SPECIFIED: `cf.brief-input.v1` and `worker-brief.v1` declare no audience (§IV.2); only a carrying Crier request has one (M10 §16) | none — digest-pinned delivery is the P5G-08 decision |
+| brief, payload, report | rotation of the enrolled Crier signing key | NOT SPECIFIED: M10 §16 resolves a key id to the enrolled principal and generation and refuses an expired or revoked identity, but states no rotation procedure, overlap window or re-key transcript | P5G-09 |
+| report | profile, key-id source and audience of the report `signature` member | NOT SPECIFIED: §IV.2.6 and §IV.5.5 exclude a `signature` member from `report_digest`, and the closed `round-report.v1` body carries no signature field (§IV.2 CT-06R), so no profile, key id or audience is assigned | none |
+| payload (memory-record variant) | profile over the `cf.memory-record.v1` `signature` member | NOT SPECIFIED: the §IV.2.6 `payload_digest` row excludes `signature`, but no section names the profile that produces it | P5G-22 |
+| manifest | audience, timestamp, replay window, signer rotation | NOT SPECIFIED: the lock declares no audience and no timestamp (M1 §18.1), deduplication is generation and operation based (M1 §18.2), and the only trust statement is the trust-bundle pin (M1 §17.3) | none |
+| tree | signature, key-id, audience | NOT SPECIFIED: `tree_digest` is unsigned, and certification is commit ancestry plus the closure validator (M3 §17.3) | none |
+| webhook | audience | NOT SPECIFIED: the receiver is the subscription `endpoint_ref` and the transcript has no audience field (V §V.0.3, V §V.4) | none |
+
+**One retired spelling (AC2).** The two response domains that §IV.2.6 registers are
+concatenated with the bare tag. M10 §16 prints its three response-domain formulas with a
+trailing `\n` inside the tag; for the two §IV.2.6 registers — `response_body_digest` and
+`receipt_digest` — that shell spelling is **superseded by §IV.2.6** and must not be
+reproduced. The published bytes decide it: `CV-18-A`, and the same digests in
+`docs/handbook/conformance/fixtures/custody-request-response.json`, recompute only under
+the bare tag, and inserting a newline between tag and body changes both values.
+M10 §16's profile, signed header set, audience rule and five-line transcript are
+unaffected and remain authoritative. `response_envelope_digest` (M10 §16) has no
+§IV.2.6 row, so this subsection cites it and neither confirms nor retires its
+spelling; registering it is open work, not an alternate contract.
+
 ## IV.3 Complete protocol examples
 
 Examples use declared fixture identities and SHA values. They validate wire shape,
