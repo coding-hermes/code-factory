@@ -6,6 +6,9 @@ probe a node it had never seen. Existence is the agent id appearing in `info`'s 
 same run's `server` row already measures emptiness (`bunker list` must name the server), so
 the two rows must not draw opposite conclusions from the same empty client.
 
+The id must appear as a WHOLE TOKEN, not a substring: a client that names only `demo-node`
+does not certify the configured `demo`, or the row sends the operator to a node it never saw.
+
 Every arm below drives the REAL script with a stub client first on PATH, a throwaway HOME and
 TMPDIR, and a minimal config: no network, no node, no credentials.
 """
@@ -19,6 +22,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "bunker-provision.sh"
 AGENT = "demo-node"
+SHORT_AGENT = "demo"
 SERVER = "fixture-server"
 
 
@@ -36,7 +40,7 @@ def client(info_body: str, info_status: int = 0) -> str:
     )
 
 
-def run_check(stub: str) -> tuple[str, int]:
+def run_check(stub: str, agent: str = AGENT) -> tuple[str, int]:
     """Run `bunker-provision.sh --check` with `stub` as the bunker client; return output+status."""
     with tempfile.TemporaryDirectory(prefix="cf507-") as directory:
         temp = Path(directory)
@@ -48,7 +52,7 @@ def run_check(stub: str) -> tuple[str, int]:
         binary.write_text(stub)
         binary.chmod(0o755)
         config = temp / "cf.conf"
-        config.write_text(f"PROJECT=demo\nAGENT={AGENT}\nSERVER={SERVER}\n")
+        config.write_text(f"PROJECT=demo\nAGENT={agent}\nSERVER={SERVER}\n")
         env = {
             "PATH": f"{bin_dir}:/usr/bin:/bin",
             "HOME": str(home),
@@ -111,3 +115,40 @@ def test_non_zero_exit_keeps_the_absent_wording() -> None:
     assert len(failed) == 1, f"expected one FAIL agent row, got {failed}\n{output}"
     assert "absent — run --apply to create it" in failed[0], failed[0]
     assert status != 0, output
+
+
+def test_superstring_id_does_not_certify_the_configured_id() -> None:
+    """A client naming only `demo-node` must not certify the configured `demo` (CF-507 seam).
+
+    `demo` is a substring of `demo-node`, so a substring test certifies an agent the client
+    never returned. The row must name the measured bytes and fail closed instead.
+    """
+    output, status = run_check(
+        client('printf "demo-node   online\\n";', 0), agent=SHORT_AGENT
+    )
+    agent_rows = rows(output, "PASS", "agent") + rows(output, "FAIL", "agent")
+    assert len(agent_rows) == 1, (
+        f"expected exactly one agent row, got {agent_rows}\n{output}"
+    )
+    row = agent_rows[0]
+    assert row.startswith("  FAIL  agent — "), row
+    # 18 = the measured `printf '%s' "$info"` width of "demo-node   online" (no trailing newline).
+    assert "18 bytes" in row, row
+    assert "does not name the agent" in row, row
+    assert f"{SHORT_AGENT} exists" not in output, (
+        f"a superstring id certified the configured one\n{output}"
+    )
+    assert status != 0, (
+        f"a superstring id turned the gate green (exit {status})\n{output}"
+    )
+
+
+def test_exact_token_still_passes_the_agent_row() -> None:
+    """The tightening must not fail a client that really does name the id as a token."""
+    output, _ = run_check(
+        client('printf "name: demo  status: online\\n";', 0), agent=SHORT_AGENT
+    )
+    passed = rows(output, "PASS", "agent")
+    assert len(passed) == 1, f"expected one PASS agent row, got {passed}\n{output}"
+    assert f"{SHORT_AGENT} exists" in passed[0], passed[0]
+    assert not rows(output, "FAIL", "agent"), output

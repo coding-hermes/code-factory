@@ -229,7 +229,7 @@ check() {
     bad "inputs" "not readable:$missing"
   fi
 
-  local b info sha branch dirty harness_bin code
+  local b info sha branch dirty harness_bin code names
   resolve_namespaces || return 1
   say "bunker-provision --check — project=${PROJECT:-<unset>} agent=${AGENT:-<unset>} server=${SERVER:-<unset>}"
   note "resolved repo=${REPO:-<unset>} ref=${REF:-main} harness=${HARNESS:-hermes} namespaces=${NAMESPACES:-$PROJECT} (primary ${NAMESPACE:-$PROJECT}) ttl=${TTL:-default(6h)} crier=${CRIER_URL:-unset} duckbrain=${DUCKBRAIN_URL:-unset}"
@@ -280,14 +280,19 @@ check() {
   # rc 0 and prints nothing (a shim, a hollow transport) used to certify `exists ()` — an empty
   # measurement printed as a green row — and the run then probed a node it had never seen, while
   # the `server` row above drew the opposite conclusion from the same empty client (CF-507).
+  # The id must appear as a WHOLE TOKEN over [A-Za-z0-9._-]. A substring test is the same false
+  # green in a different costume: `demo` matches inside `demo-node`, so a client naming only a
+  # DIFFERENT, longer agent would certify the configured one (CF-507 rework). The id charset is
+  # split on here rather than by `grep -w`, which treats '-' as a word break and so still matches
+  # `demo` inside `demo-node`.
   if info=$(timeout 45 "$b" info "$AGENT" --server "$SERVER" 2>&1); then
-    case "$info" in
-      *"$AGENT"*)
-        ok "agent" "$AGENT exists ($(printf '%s' "$info" | head -1 | cut -c1-60))" ;;
-      *)
-        bad "agent" "client printed $(printf '%s' "$info" | wc -c | tr -d '[:space:]') bytes for info $AGENT (rc 0 does not name the agent)"
-        return 1 ;;
-    esac
+    names=$(printf '%s' "$info" | tr -c 'A-Za-z0-9._-' '\n')
+    if printf '%s\n' "$names" | grep -Fxq -- "$AGENT"; then
+      ok "agent" "$AGENT exists ($(printf '%s' "$info" | head -1 | cut -c1-60))"
+    else
+      bad "agent" "client printed $(printf '%s' "$info" | wc -c | tr -d '[:space:]') bytes for info $AGENT (rc 0 does not name the agent)"
+      return 1
+    fi
   else
     bad "agent" "$AGENT absent — run --apply to create it"
     return 1
