@@ -49,6 +49,39 @@ One project (crier), one node, one directive that travelled over crier and reach
 gateway, one commit produced there, one artifact digest verified back on the control host, and a
 recorded FAIL when the gate is made to fail.
 
+**Status 2026-11-21T10:57Z (board re-measured at `fc26da9b` — 604 task rows, 962 events: 209
+complete, 16 in_progress, 4 blocked, 375 pending): NOT MET, and the three legs are still absent —
+re-scanned rather than re-asserted.** The scan behind the 2026-11-20 paragraph was re-run at
+`fc26da9b` over the title and acceptance criteria of all 209 `complete` rows for the three legs. It
+returned seven hits and each was read: `CF-013` and `CF-202` are absence findings that *name* the
+missing digest recomputation, `CF-302` and `CF-315` are the commit-attribution rows, `CF-396` and
+`CF-443` match the word "broken" in an unrelated sense, and `P5G-12` is the release-manifest
+specification. None is a commit produced on a node, none recomputes an artifact digest from pulled
+bytes on the control host, and none records a FAIL from a gate deliberately made to fail. So the leg
+status is unchanged, and is now stated with the hits that were inspected and rejected rather than by
+absence of evidence. The thirteen blocker rows keep their 2026-11-20 statuses at `fc26da9b`:
+`CF-001`, `CF-002`, `CF-004`, `CF-136`, `CF-137`, `CF-138`, `CF-139` `in_progress`; `CF-080`,
+`CF-131`, `CF-132`, `CF-133` `pending`; `CF-110`, `CF-112` `blocked`.
+
+**`complete` does not mean gradable, and this paragraph measures the legs accordingly.** At
+`fc26da9b`, 41 of 209 `complete` rows (19%) and 136 of 375 `pending` rows (36%, 31 of them P0/P1)
+carry acceptance criteria containing no command, path, exit code or number — text a reader can agree
+with but nobody can re-run. The `P5G` specification wave is the worst case: 33 of its 38 rows carry
+the same three-clause prose ("the normative specification answers this question explicitly"), and 14
+of them (`P5G-01`, `-02`, `-03`, `-04`, `-06`, `-07`, `-08`, `-10`, `-11`, `-12`, `-13`, `-14`,
+`-15`, `-16`) were closed `complete` on it. Those rows are a record of what the wave's authors
+believed, not evidence that the specification exists; certifying the milestone means reading the
+chapter, never counting the row. This tick converted `P5G-17` through `P5G-33` — the 17 `pending` P1
+rows in that wave — from prose into four re-runnable arms: the cited chapter contains a section that
+names the row id (`grep -c 'P5G-17' <chapter>` >= 1) and carries the five labelled lines `Actor:`,
+`Data shape:`, `Ordering:`, `Failure behavior:`, `Recovery rule:`; the section ships one deterministic
+artifact plus the command that validates it and its exit code; every repository path it cites resolves
+(`test -e` on each extracted path prints nothing); and the section pins the version or commit it was
+measured against. The row is not tightened because the text reads better — it is tightened because a
+stranger can run those four checks and get an answer. Left for later ticks: 119 bare `pending` rows
+and the 41 bare `complete` ones, which are a measurement problem (nothing can re-open them
+mechanically) before they are a documentation problem.
+
 **Status 2026-11-20T07:12Z (board re-measured at `9f7cd648` — 590 task rows, 930 events: 195
 complete, 16 in_progress, 4 blocked, 375 pending): NOT MET, and the three legs the 2026-11-04
 paragraph names as absent are still absent.** Checked by scanning every `complete` row at
