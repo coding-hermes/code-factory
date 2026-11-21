@@ -3267,6 +3267,17 @@ else
   say "  FAIL  agent row accepted a silent rc-0 client (CF-507)"; selftest_fail
 fi
 
+# ch:trace row=CF-247 spec=docs/handbook/chapters/M1-provisioning.md#a-bunker-exec-budget-is-capped-at-300-s test=tests/test_bunker_exec_ceiling.py doc=docs/handbook/chapters/M1-provisioning.md evidence=tests/test_bunker_exec_ceiling.py::test_over_ceiling_is_refused_before_any_bunker_call witness=none:refusal-stub-marker-never-written verdict=none:foreman-will-run-gitreins commit=none:worker-commit memory=none:foreman-close
+# CF-247: a bunker exec budget above the 300 s client stream ceiling is refused BEFORE any
+# network call, in both probe CLIs. The pytest file pins the refusal, the at-ceiling and
+# default permissive arms, local mode, the help text, and the single definition of the
+# number; this row is what keeps that file reachable from the repo gate.
+if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_bunker_exec_ceiling.py" >/dev/null 2>&1; then
+  say "  PASS  bunker exec budget above the 300s ceiling is refused before any bunker call (CF-247)"
+else
+  say "  FAIL  a bunker exec budget above the 300s ceiling reached the network (CF-247)"; selftest_fail
+fi
+
 # BEGIN cf057-apply-refusal
 # CF-057: bunker-server-install.sh has no measured generic install path. Its --apply
 # spelling must therefore be a deliberate refusal, not an ignored argument that runs
@@ -5342,8 +5353,13 @@ printf 'one\n' > "$tmpd/seed2/a.txt"
 git -C "$tmpd/seed2" add a.txt
 git -C "$tmpd/seed2" commit -qm one
 mkdir -p "$tmpd/seed2/scripts"
+# CF-247: the probe and the exec-ceiling module ship as a PAIR — the ceiling and its
+# refusal sentence are defined once, in bunker_exec.py, and both probes import it. A
+# clone of this repo carries both, so the fixture that stands in for such a clone does
+# too; copying only node_freshness.py would grade a layout no checkout has.
 cp "$NF" "$tmpd/seed2/scripts/node_freshness.py"
-git -C "$tmpd/seed2" add scripts/node_freshness.py
+cp "$HERE/scripts/bunker_exec.py" "$tmpd/seed2/scripts/bunker_exec.py"
+git -C "$tmpd/seed2" add scripts/node_freshness.py scripts/bunker_exec.py
 git -C "$tmpd/seed2" commit -qm "carry the probe"
 git init -q --bare "$tmpd/origin2.git"
 git -C "$tmpd/origin2.git" symbolic-ref HEAD refs/heads/main

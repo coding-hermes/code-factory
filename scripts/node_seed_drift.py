@@ -21,6 +21,11 @@ This probe runs that check where the node is, and folds one row named
                              database: this is the mode fixtures and the
                              selftest drive both ways offline.
 
+Because both modes are one `bunker exec` round trip, and that stream's client
+deadline is a fixed 300 s, a `--timeout` above it is REFUSED before any network
+call (`scripts/bunker_exec.py` owns the ceiling and the sentence): the call would
+otherwise die at the client after five minutes having measured nothing (CF-247).
+
 The verdict is the seeder's own verdict — the wrapper does not reimplement the
 digest comparison, it delegates to scripts/node_seed.py and parses its rows, so
 the two cannot drift apart.
@@ -76,6 +81,27 @@ import shutil
 import subprocess
 import sys
 from typing import Optional
+
+# Same directory: the exec ceiling has ONE definition (CF-247) and both probes ask
+# it rather than keeping a copy of the number and its refusal sentence. The import
+# is a real dependency, so a build that ships this file WITHOUT its sibling is a
+# named refusal rather than a ModuleNotFound traceback buried in a stderr file.
+#
+# dont_write_bytecode FIRST for the same reason as in node_freshness.py: a probe
+# that writes scripts/__pycache__/ into the tree it grades reports its own bytecode
+# as a local edit.
+sys.dont_write_bytecode = True
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    import bunker_exec  # noqa: E402
+except ImportError:  # pragma: no cover — ships as a pair; asserted in tests
+    sys.stderr.write(
+        "node_seed_drift.py needs its sibling scripts/bunker_exec.py: the bunker exec\n"
+        "stream ceiling and its refusal sentence are defined there, not here. Copy\n"
+        "the pair together.\n"
+    )
+    print("RESULT: FAIL (missing sibling module scripts/bunker_exec.py)")
+    raise SystemExit(2)
 
 BUNKER_BIN = shutil.which("bunker") or "bunker"
 
@@ -623,7 +649,11 @@ def main(argv: Optional[list] = None) -> int:
         "--timeout",
         type=int,
         default=180,
-        help="exec timeout in seconds; the bunker exec stream dies at 300 (default 180)",
+        help=(
+            "exec timeout in seconds (default 180); a bunker exec stream is capped at "
+            "%ds and a budget above it is refused before any network call"
+            % bunker_exec.BUNKER_EXEC_CEILING_S
+        ),
     )
     ap.add_argument(
         "--strict-note",
@@ -662,6 +692,14 @@ def main(argv: Optional[list] = None) -> int:
         )
     if bunker and not (opts.agent and opts.server):
         return usage_error("bunker mode needs both --agent ID and --server NAME")
+
+    # CF-247: a bunker exec stream has a fixed 300 s client deadline, so this probe
+    # cannot honour a larger --timeout — the call would die at the client after 5
+    # minutes, having measured nothing. Refuse BEFORE any network call instead of
+    # failing late and ambiguously. Local mode has no exec stream (its --timeout is
+    # a plain subprocess budget), so it is neither capped nor refused.
+    if bunker and bunker_exec.exceeds_ceiling(opts.timeout):
+        return usage_error(bunker_exec.ceiling_error("--timeout", opts.timeout))
 
     if local:
         d = probe_local(opts.home, opts.timeout, seed_script, opts.strict_seed)

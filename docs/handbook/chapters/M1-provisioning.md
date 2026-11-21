@@ -13,11 +13,11 @@ references, not executable target definitions. §§15–17 specify the current t
 | Field | Value |
 |---|---|
 | Module name | PROVISIONING |
-| Path | `~/code-factory/scripts/` — `bunker-server-install.sh`, `disk_floor.py`, `bunker-provision.sh`, `bunker_config_gen.py`, `node-create.sh`, `bunker-crier-connect.sh`, `node_identity.py`, `node_gateway_auth.py`, `node_seed.py`, `node_seed_drift.py`, `node_env.py`, `verify-node.sh`, `node_freshness.py` |
+| Path | `~/code-factory/scripts/` — `bunker-server-install.sh`, `disk_floor.py`, `bunker-provision.sh`, `bunker_config_gen.py`, `node-create.sh`, `bunker-crier-connect.sh`, `node_identity.py`, `node_gateway_auth.py`, `node_seed.py`, `node_seed_drift.py`, `node_env.py`, `bunker_exec.py`, `verify-node.sh`, `node_freshness.py` |
 | Revision | `fbc19cbc807de729e25c358fa7e94207b912f010` (code-factory HEAD; `scripts/verify-node.sh` changed in `47d68b4..08a2c8a` — commit `f1d5cfb`, CF-270 — so every §9/§10/§11 ladder locator is re-pinned against the 241-line file; `scripts/node-create.sh` changed in `08a2c8a..fbc19cb` — commit `85a7271`, CF-150 — staging `node_gateway_auth.py` as the eighth staged file, already reflected in §3 S3 and §11) |
 | Language / runtime | bash 5.3.9 + Python 3.14.9 (measured) |
 | Owner lane | code-factory (node-side) |
-| Status | **UNVERIFIED (bodies)** — `bunker-provision.sh` `--check` probe, config loader (`:95-123`), CLI (`:561-609`), `destroy` (`:550-558`), `disk_floor.py` `resolve()` (`:115-141`), `verify-node.sh` (`:22-510`, current 510-line ladder), `node_identity.py` (111 lines, full), `node_seed.py` (405 lines, apply/build/check state machine) read; `node_env.py` (589), `node_seed_drift.py` (558), `node_freshness.py` (732), `bunker_config_gen.py` (724) read at their **settings surface** (argparse + constants), bodies not line-by-line; `node_gateway_auth.py` docstring read (B03 — it writes dashboard basic-auth, not a registration); body not line-by-line |
+| Status | **UNVERIFIED (bodies)** — `bunker-provision.sh` `--check` probe, config loader (`:95-123`), CLI (`:561-609`), `destroy` (`:550-558`), `disk_floor.py` `resolve()` (`:115-141`), `verify-node.sh` (`:22-510`, current 510-line ladder), `node_identity.py` (111 lines, full), `node_seed.py` (405 lines, apply/build/check state machine) read; `node_env.py` (589), `node_seed_drift.py` (731), `node_freshness.py` (771), `bunker_exec.py` (51, the exec-stream ceiling both probes import), `bunker_config_gen.py` (724) read at their **settings surface** (argparse + constants), bodies not line-by-line; `node_gateway_auth.py` docstring read (B03 — it writes dashboard basic-auth, not a registration); body not line-by-line |
 
 ## 2. Purpose, authority and position
 
@@ -311,8 +311,10 @@ EVIDENCE: docs/OPERATIONS.md
 
 | Setting | Default | Range | Governs | What breaks if changed |
 |---|---|---|---|---|
-| `--path` | `repo` (`:677-682`) | a remote path (relative to agent home) | which checkout is measured | a wrong path measures a different tree |
-| `--timeout` | **180 s** (`:684-689`) | int >= 1 | per-command bunker exec timeout | `< 1` is refused: `--timeout must be >= 1, got N` → `RESULT: FAIL (usage…)`, `EXIT_USAGE` (`:701-702`); the help notes the bunker exec stream dies at 300 |
+| `--path` | `repo` (`:704-709`) | a remote path (relative to agent home) | which checkout is measured | a wrong path measures a different tree |
+| `--timeout` | **180 s** (`:710-719`) | int >= 1 | per-command bunker exec timeout | `< 1` is refused: `--timeout must be >= 1, got N` → `RESULT: FAIL (usage…)`, `EXIT_USAGE` (`:732-733`); above the 300 s exec-stream ceiling it is refused before any network call (`:745-751`, see "A bunker exec budget is capped at 300 s" below) |
+
+**A bunker exec budget is capped at 300 s.** `bunker exec` streams one gRPC call whose client deadline is fixed at 300 s on the client side, so `--timeout` cannot buy more: a larger budget is spent on the node while the call dies at the client after five minutes, having measured nothing (measured 2026-11-21: `--timeout 600` around a 330 s remote `sleep` ended `deadline_exceeded … Client.Timeout exceeded while awaiting headers` at a real 5m0.106s). Both `scripts/node_freshness.py` and `scripts/node_seed_drift.py` therefore REFUSE a `--timeout` above the ceiling before any network or bunker call: `RESULT: FAIL (usage: --timeout 900 exceeds the bunker exec stream ceiling (300s); the client deadline is fixed — stage the run and detach, or keep the budget <= 300s)` at `EXIT_USAGE`, with the `bunker` binary never executed (pinned by `tests/test_bunker_exec_ceiling.py`). The number and that sentence live once, in `scripts/bunker_exec.py`, which both probes import, so a flag cannot drift from the deadline it quotes. A budget at or below 300 s behaves exactly as before, and local mode (`--workdir`, `--home`) opens no exec stream at all — its `--timeout` is a plain subprocess budget and is neither capped nor refused.
 
 **`node-create.sh` (S2, create path — CF-003):**
 
