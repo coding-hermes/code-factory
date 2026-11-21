@@ -155,6 +155,11 @@ if bash "$HERE/tests/test_cf298_missing_lib.sh"; then
 else
   say "  FAIL  CF-298 missing library fixture"; selftest_fail
 fi
+if bash "$HERE/tests/test_cf261_missing_lib.sh"; then
+  say "  PASS  CF-261 missing library fails closed"
+else
+  say "  FAIL  CF-261 missing library fixture"; selftest_fail
+fi
 # CF-262: every path-valued CLI flag expands a leading ~/ before the value is used. The two that
 # did not (--config, --node-env-file) handed the literal string to load_config and to the inputs /
 # env_profile rows, so a "~/" profile read as an unreadable file. The fixture prints nothing on

@@ -160,7 +160,15 @@ its path and exits 1; a source failure is also a named refusal. This does not de
 `set -u`. `bash tests/test_cf298_missing_lib.sh` exercises both nounset variants using
 isolated script copies without the library; it does not certify a live node.
 
+The S2 control-host provisioner, `bunker-provision.sh`, carries the same readable-regular-file
+and source-failure guards before argument parsing or helper use (CF-261). A missing library
+prints `  FAIL  lib.sh — missing or unreadable: <path>` to stderr and exits 1; a source failure
+prints `  FAIL  lib.sh — could not source: <path>` and exits 1. The isolated two-line-config
+fixture, `bash tests/test_cf261_missing_lib.sh`, verifies the missing-library refusal is
+non-zero, contains the exact named row, and emits neither PASS rows nor `command not found`.
+
 ch:trace row=CF-298 spec=docs/handbook/chapters/M1-provisioning.md test=tests/test_cf298_missing_lib.sh evidence=tests/test_cf298_missing_lib.sh witness=none:fixture-only verdict=none:pending commit=none:pending memory=none:pending
+ch:trace row=CF-261 spec=docs/handbook/chapters/M1-provisioning.md test=tests/test_cf261_missing_lib.sh evidence=tests/test_cf261_missing_lib.sh witness=none:fixture-only verdict=none:pending commit=none:pending memory=none:pending
 
 **4b. Library contracts**
 

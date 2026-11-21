@@ -49,7 +49,15 @@
 # ch:trace row=CF-214 spec=docs/handbook/OUTLINE.md#M1-PROVISIONING wave=none:serial-worker test=tests/selftest.sh::CF-214 evidence=none:worker-implementation-awaits-foreman-gitreins witness=none:live-node-not-authorized verdict=none:foreman-judge-pending commit=none:worker-sha memory=none:foreman-closeout
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
-. "$HERE/lib.sh"
+# CF-261: refuse an unavailable library before parsing arguments or using helpers.
+if [ ! -f "$HERE/lib.sh" ] || [ ! -r "$HERE/lib.sh" ]; then
+  printf '  FAIL  lib.sh — missing or unreadable: %s\n' "$HERE/lib.sh" >&2
+  exit 1
+fi
+if ! . "$HERE/lib.sh"; then
+  printf '  FAIL  lib.sh — could not source: %s\n' "$HERE/lib.sh" >&2
+  exit 1
+fi
 
 CONFIG="" MODE="" AGENT="" PROJECT="" SERVER="" REPO="" REF="" HARNESS="" NAMESPACE="" NAMESPACES="" TTL=""
 GIT_AUTHOR_NAME="" GIT_AUTHOR_EMAIL="" GIT_CO_AUTHOR=""
