@@ -41,3 +41,6 @@ __pycache__/
 # panel loop runtime state (rounds are transcripts; tracking them lets a checkout rewind
 # the counter — it rewound 17 -> 12 and killed five rounds of work)
 docs/handbook/_panel/
+
+# per-tick foreman wave scratch (generated helpers + captured output; never reviewed)
+waves/
