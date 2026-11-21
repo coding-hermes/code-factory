@@ -219,11 +219,45 @@ def arm_red_control(parent: Path, root: Path) -> None:
     )
 
 
+# CF-441 (handbook III.M4.S7): every other expectation in this file is derived
+# from cooldown_policy.policy_for_lane(), which arranges the fixture AND asserts
+# against it — so on its own section 67 can only prove the loader agrees with
+# the module, never that the module is right.  The two literals below were read
+# by hand from scripts/cooldown_policy.py (ROLE_POLICY["qa"] == (43200, 345600))
+# and are deliberately NOT computed from the module: if that constant moves,
+# arm_literal_cadence fails by lane name with both values instead of agreeing.
+LITERAL_CADENCE_LANE = "code-factory-qa"
+LITERAL_CADENCE_S = 43200
+
+
+def arm_literal_cadence(parent: Path, root: Path) -> None:
+    """Pin one applied cadence to a literal written outside the policy module."""
+    db = parent / "literal-cadence.db"
+    shutil.copy2(parent / "scheduler.db", db)
+    result = run(SCRIPT, db, root, "--apply")
+    require(result.returncode == 0, f"apply exit {result.returncode}: {result.stderr}")
+    con = sqlite3.connect(db)
+    try:
+        row = con.execute(
+            "SELECT cooldown_s FROM projects WHERE name = ?", (LITERAL_CADENCE_LANE,)
+        ).fetchone()
+    finally:
+        con.close()
+    require(row is not None, f"{LITERAL_CADENCE_LANE} row missing after apply")
+    actual = row[0]
+    require(
+        actual == LITERAL_CADENCE_S,
+        f"{LITERAL_CADENCE_LANE} cadence_s: expected literal {LITERAL_CADENCE_S} "
+        f"from this test but the loader wrote {actual}",
+    )
+
+
 def main() -> int:
     arms = [
         ("default read-only report", arm_default),
         ("dry-run exact update set", arm_dry_run),
         ("explicit apply", arm_apply),
+        ("literal cadence pinned outside the policy module", arm_literal_cadence),
         ("named missing DB/prompt refusals", arm_refusals),
     ]
     failures = []
@@ -247,7 +281,9 @@ def main() -> int:
         print(f"LANE-CONFIG-READONLY: FAIL ({len(failures)})")
         return 1
     print(
-        "LANE-CONFIG-READONLY: PASS (5 arms; default and dry-run byte-identical, apply scoped, refusals named, red control caught)"
+        "LANE-CONFIG-READONLY: PASS (6 arms; default and dry-run byte-identical, "
+        "apply scoped, literal cadence pinned outside the policy module, "
+        "refusals named, red control caught)"
     )
     return 0
 
