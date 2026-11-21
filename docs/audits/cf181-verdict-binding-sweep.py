@@ -24,12 +24,14 @@ ref = sys.argv[3] if len(sys.argv) > 3 else "origin/main"
 
 
 def git(*args):
-    return subprocess.run(["git", "-C", repo, *args], capture_output=True, text=True)
+    return subprocess.run(
+        ["git", "-C", repo, *args], capture_output=True, text=True, check=False
+    )
 
 
-board = git("show", "%s:%s" % (ref, board_rel)).stdout
+board = git("show", f"{ref}:{board_rel}").stdout
 if not board:
-    print("FATAL: cannot read %s:%s" % (ref, board_rel))
+    print(f"FATAL: cannot read {ref}:{board_rel}")
     sys.exit(2)
 
 rows = [json.loads(line) for line in board.splitlines() if line.strip()]
@@ -38,22 +40,34 @@ complete = [row for row in rows if row.get("status") == "complete"]
 checked = 0
 orphans = []
 unresolved = []
+malformed = []
 nonverdict = 0
 rows_resolving = set()
 for row in complete:
     detail = row.get("detail")
-    entries = detail.get("evidence") if isinstance(detail, dict) else []
-    for entry in entries or []:
+    entries = detail.get("evidence", []) if isinstance(detail, dict) else []
+    if not isinstance(entries, list):
+        value = f" value={entries[:60]!r}" if isinstance(entries, str) else ""
+        malformed.append(
+            "{} evidence type={}{}".format(row["id"], type(entries).__name__, value)
+        )
+        continue
+    for index, entry in enumerate(entries):
+        if not isinstance(entry, dict):
+            malformed.append(
+                "{} evidence[{}] type={}".format(row["id"], index, type(entry).__name__)
+            )
+            continue
         for artifact in entry.get("artifacts") or []:
             path = artifact.split("::", 1)[0]
             if not path.endswith(".json"):
                 continue
-            body = git("show", "%s:%s" % (ref, path)).stdout
+            body = git("show", f"{ref}:{path}").stdout
             if not body:
                 # Pointer names a file that does not exist at the ref. Reported, never
                 # swallowed: an unresolvable pointer is a missing artifact, not a pass.
                 unresolved.append(
-                    "%s run=%s artifact=%s" % (row["id"], entry.get("run_id"), path)
+                    "{} run={} artifact={}".format(row["id"], entry.get("run_id"), path)
                 )
                 continue
             try:
@@ -72,8 +86,7 @@ for row in complete:
                 or git("merge-base", "--is-ancestor", commit, ref).returncode != 0
             ):
                 orphans.append(
-                    "%s run=%s artifact=%s commit=%s passed=%s"
-                    % (
+                    "{} run={} artifact={} commit={} passed={}".format(
                         row["id"],
                         entry.get("run_id"),
                         path,
@@ -82,19 +95,26 @@ for row in complete:
                     )
                 )
 
-print("ref=%s complete_rows=%d" % (ref, len(complete)))
-print("verdict_artifacts_checked=%d" % checked)
+print(f"ref={ref} complete_rows={len(complete)}")
+print(f"verdict_artifacts_checked={checked}")
 print(
-    "rows_with_resolving_evidence=%d rows_without=%d"
-    % (len(rows_resolving), len(complete) - len(rows_resolving))
+    f"rows_with_resolving_evidence={len(rows_resolving)} "
+    f"rows_without={len(complete) - len(rows_resolving)}"
 )
 print("=== UNRESOLVABLE ===")
 for line in unresolved:
     print(line)
-print("unresolvable_pointers=%d" % len(unresolved))
-print("non_verdict_records=%d" % nonverdict)
+print(f"unresolvable_pointers={len(unresolved)}")
+print(f"non_verdict_records={nonverdict}")
+print("=== MALFORMED EVIDENCE ENTRIES ===")
+for line in malformed:
+    print(line)
+print(f"malformed_evidence_entries={len(malformed)}")
 print("=== ORPHANED ===")
 for line in orphans:
     print(line)
-print("orphan_count=%d" % len(orphans))
-print("status=%s" % ("UNRESOLVED" if (unresolved or checked == 0) else "CLEAN"))
+print(f"orphan_count={len(orphans)}")
+print(
+    "status=%s"
+    % ("UNRESOLVED" if (unresolved or malformed or checked == 0) else "CLEAN")
+)

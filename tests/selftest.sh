@@ -672,6 +672,29 @@ say "7. the board is valid JSONL"
 b="$HERE/.coding-hermes/board/tasks.jsonl"
 board_arm "$b" || selftest_fail
 
+# Part of section 7: no new numbered section or census change.
+tmpd=$(mktemp -d)
+git init -q -b main "$tmpd/repo"
+mkdir -p "$tmpd/repo/docs/audits/fixtures"
+cp "$HERE/docs/audits/cf181-verdict-binding-sweep.py" "$tmpd/repo/docs/audits/"
+cp "$HERE/docs/audits/fixtures/cf181-board-string-evidence.jsonl" "$HERE/docs/audits/fixtures/cf181-verdict-on-ref.json" "$tmpd/repo/docs/audits/fixtures/"
+printf '%s\n' '{"id":"CF-container-string","status":"complete","detail":{"evidence":"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789OVERFLOW"}}' '{"id":"CF-container-dict","status":"complete","detail":{"evidence":{}}}' '{"id":"CF-container-number","status":"complete","detail":{"evidence":42}}' > "$tmpd/repo/docs/audits/fixtures/containers.jsonl"
+git -C "$tmpd/repo" add docs/audits
+git -C "$tmpd/repo" -c user.name=selftest -c user.email=selftest@example.invalid commit -q -m fixture
+out=$(python3 "$tmpd/repo/docs/audits/cf181-verdict-binding-sweep.py" "$tmpd/repo" docs/audits/fixtures/cf181-board-string-evidence.jsonl HEAD 2>&1); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq '=== MALFORMED EVIDENCE ENTRIES ===' && printf '%s\n' "$out" | grep -Fxq 'CF-514 evidence[0] type=str' && printf '%s\n' "$out" | grep -Fxq 'malformed_evidence_entries=1' && printf '%s\n' "$out" | grep -Fxq 'status=UNRESOLVED' && printf '%s\n' "$out" | grep -Fxq 'verdict_artifacts_checked=1'; then
+  say "  PASS  CF-514 mixed evidence is named and verdict still checked"
+else
+  say "  FAIL  CF-514 mixed evidence (pre-fix exits 1 with AttributeError): rc=$rc $out"; selftest_fail
+fi
+out=$(python3 "$tmpd/repo/docs/audits/cf181-verdict-binding-sweep.py" "$tmpd/repo" docs/audits/fixtures/containers.jsonl HEAD 2>&1); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fq 'CF-container-string evidence type=str' && printf '%s\n' "$out" | grep -Fxq 'CF-container-dict evidence type=dict' && printf '%s\n' "$out" | grep -Fxq 'CF-container-number evidence type=int' && printf '%s\n' "$out" | grep -Fxq 'malformed_evidence_entries=3' && printf '%s\n' "$out" | grep -Fxq 'status=UNRESOLVED' && ! printf '%s\n' "$out" | grep -Fq OVERFLOW; then
+  say "  PASS  CF-514 malformed evidence containers are bounded and unresolved"
+else
+  say "  FAIL  CF-514 malformed evidence containers: rc=$rc $out"; selftest_fail
+fi
+rm -rf "$tmpd"
+
 say "7b. board gate rejects invalid records with line-numbered FAIL rows (CF-088)"
 tmpd=$(mktemp -d)
 # Every fixture has the same valid first/last rows; only the middle record changes.
