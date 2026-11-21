@@ -1944,6 +1944,12 @@ if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_reclaim.py" >/dev/null
 else
   say "  FAIL  reclaim contract"; selftest_fail
 fi
+# CF-323: prove legacy overwrite/renumber/write and safe regeneration.
+if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_master_doc_skeleton.py"; then
+  say "  PASS  CF-323 master skeleton refusal, pinned mapping, dry-run and idempotence"
+else
+  say "  FAIL  CF-323 master skeleton contract"; selftest_fail
+fi
 # CF-307: the scan-scope gate must never print a green it did not measure. Its
 # surface resolution is exercised arm-by-arm (unreadable dir, dangling symlink,
 # root one level off, readable-but-empty, unscoped, scoped) in a python unit leg

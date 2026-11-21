@@ -7,11 +7,18 @@ is that the RED markers are true today and can only turn green by running
 something.
 """
 
+import argparse
+import difflib
+import hashlib
 import json
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
+
+MANIFEST = Path(__file__).with_name("master_doc_manifest.json")
+MARKER = "<!-- master-doc-skeleton sha256:"
 
 OUT = Path(os.path.expanduser("~/code-factory/docs/master"))
 REPOS = [
@@ -194,8 +201,62 @@ def section(idx, name, path, repo, revision):
     return "\n".join(lines) + "\n"
 
 
-def main():
-    OUT.mkdir(parents=True, exist_ok=True)
+def seal(text):
+    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    return f"{MARKER}{digest} -->\n" + text
+
+
+def is_skeleton(text):
+    marker, separator, body = text.partition("\n")
+    match = re.fullmatch(r"<!-- master-doc-skeleton sha256:([0-9a-f]{64}) -->", marker)
+    return bool(
+        separator
+        and match
+        and hashlib.sha256(body.encode("utf-8")).hexdigest() == match.group(1)
+    )
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(
+        description="Preview the pinned master-document skeleton; use --apply to write."
+    )
+    parser.add_argument(
+        "--repo-root", type=Path, default=Path(__file__).resolve().parent.parent
+    )
+    parser.add_argument(
+        "--output", type=Path, help="output directory (default: REPO_ROOT/docs/master)"
+    )
+    parser.add_argument(
+        "--apply", action="store_true", help="write the previewed changes"
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="allow replacing non-skeleton documents with --apply",
+    )
+    args = parser.parse_args(argv)
+    if args.force and not args.apply:
+        parser.error("--force requires --apply")
+    root = args.repo_root.resolve()
+    out = args.output or root / "docs/master"
+    try:
+        entries = json.loads(MANIFEST.read_text(encoding="utf-8"))
+        numbers = [entry["number"] for entry in entries]
+        components = [entry["component"] for entry in entries]
+        if (
+            any(type(n) is not int or n < 1 for n in numbers)
+            or len(set(numbers)) != len(numbers)
+            or len(set(components)) != len(components)
+        ):
+            raise ValueError("duplicate or invalid manifest numbers/components")
+        for component in components:
+            path = Path(component)
+            if path.is_absolute() or ".." in path.parts or not (root / path).is_file():
+                raise ValueError(f"missing or invalid component: {component}")
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        print(f"FAIL manifest: {exc}", file=sys.stderr)
+        return 1
+
     index = [
         "# CODE FACTORY — MASTER DOCUMENT SKELETON",
         "",
@@ -205,21 +266,16 @@ def main():
         "| # | Module | Repo | Status |",
         "|---|---|---|---|",
     ]
-    entries = []
-    for repo, path in REPOS:
-        for name, p in modules_for(path):
-            entries.append((repo, path, name, p))
-    entries.append(("host", "/home/kara", "cf-inference-proxy", Path(PROXY)))
-    entries = entries[:40]
-    for i, (repo, path, name, p) in enumerate(entries, 1):
-        r = rev(path) if repo != "host" else "host"
-        title = name.split(":", 1)[-1]
-        fn = OUT / (
+    generated = {}
+    revision = rev(str(root))
+    for entry in sorted(entries, key=lambda e: e["number"]):
+        i, title = entry["number"], entry["component"]
+        fn = out / (
             "%02d-%s.md"
             % (i, re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:60])
         )
-        fn.write_text(section(i, title, p, repo, r), encoding="utf-8")
-        index.append(f"| {i} | [`{title}`]({fn.name}) | {repo} | RED |")
+        generated[fn] = seal(section(i, title, root / title, str(root), revision))
+        index.append(f"| {i} | [`{title}`]({fn.name}) | code-factory | RED |")
     index += [
         "",
         "## Counts",
@@ -231,13 +287,56 @@ def main():
         "",
         "The zeros are the finding. They are what the fill pass must move, one command at a time.",
     ]
-    (OUT / "00-INDEX.md").write_text("\n".join(index) + "\n", encoding="utf-8")
+    generated[out / "00-INDEX.md"] = seal("\n".join(index) + "\n")
+    changes = []
+    refused = []
+    try:
+        for path, content in generated.items():
+            old = path.read_text(encoding="utf-8") if path.exists() else ""
+            if path.is_symlink():
+                raise ValueError(f"refusing symlink: {path}")
+            if old == content:
+                continue
+            changes.append((path, content))
+            if old and not is_skeleton(old) or path.exists() and not old:
+                refused.append(path)
+            print(
+                "".join(
+                    difflib.unified_diff(
+                        old.splitlines(keepends=True),
+                        content.splitlines(keepends=True),
+                        fromfile=str(path),
+                        tofile=str(path),
+                    )
+                ),
+                end="",
+            )
+        if args.apply and refused and not args.force:
+            for path in refused:
+                print(
+                    f"FAIL refusing to overwrite non-skeleton: {path} (use --apply --force)",
+                    file=sys.stderr,
+                )
+            return 1
+        if args.apply and changes:
+            out.mkdir(parents=True, exist_ok=True)
+            for path, content in changes:
+                path.write_text(content, encoding="utf-8")
+    except (OSError, UnicodeError, ValueError) as exc:
+        print(f"FAIL: {exc}", file=sys.stderr)
+        return 1
     print(
         json.dumps(
-            {"modules": len(entries), "out": str(OUT), "red_fields": len(entries) * 4}
+            {
+                "modules": len(entries),
+                "out": str(out),
+                "changes": len(changes),
+                "mode": "apply" if args.apply else "dry-run",
+            }
         )
     )
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
