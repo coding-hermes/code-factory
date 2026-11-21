@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2016  # fixtures below are single-quoted on purpose: they are literal
+# shell text (X="${HERE}/unstaged.py") written INTO a project node, never expanded here.
 # node-create-staged-set.sh — CF-087: the staged-set validator's bounded behavioural probe.
 #
 #   bash tests/node-create-staged-set.sh <spellings|members|derive|nested|all>
