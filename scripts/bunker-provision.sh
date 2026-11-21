@@ -37,6 +37,15 @@
 # Idempotent: an existing agent is reused, an existing clone is fast-forwarded, an existing
 # node.json is rewritten only when a value differs, and a second profile apply changes nothing.
 # --check is read-only and names every measured value; it never writes.
+#
+# What the --check rows measure. Every row states the VALUE it compared, never a proxy for it:
+#   server  the server name appearing in `bunker list` output
+#   agent   the configured AGENT id appearing in `bunker info` output — NOT the client's exit
+#           status. A client that answers rc 0 and prints nothing (a shim, a hollow transport)
+#           proves nothing about the agent, so that row FAILs and quotes the byte count it read;
+#           only an id present in the output is existence (CF-507).
+#   repo / node_json / auth_* / crier_* / git_credential / gateway_auth / gitreins / commit_hook /
+#           harness  the key=value lines the staged probe printed from inside the node
 # ch:trace row=CF-214 spec=docs/handbook/OUTLINE.md#M1-PROVISIONING wave=none:serial-worker test=tests/selftest.sh::CF-214 evidence=none:worker-implementation-awaits-foreman-gitreins witness=none:live-node-not-authorized verdict=none:foreman-judge-pending commit=none:worker-sha memory=none:foreman-closeout
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -220,7 +229,7 @@ check() {
     bad "inputs" "not readable:$missing"
   fi
 
-  local b info sha branch dirty harness_bin code
+  local b info sha branch dirty harness_bin code names
   resolve_namespaces || return 1
   say "bunker-provision --check — project=${PROJECT:-<unset>} agent=${AGENT:-<unset>} server=${SERVER:-<unset>}"
   note "resolved repo=${REPO:-<unset>} ref=${REF:-main} harness=${HARNESS:-hermes} namespaces=${NAMESPACES:-$PROJECT} (primary ${NAMESPACE:-$PROJECT}) ttl=${TTL:-default(6h)} crier=${CRIER_URL:-unset} duckbrain=${DUCKBRAIN_URL:-unset}"
@@ -267,8 +276,23 @@ check() {
   fi
 
   [ -n "$AGENT" ] || { bad "agent" "AGENT unset"; return 1; }
+  # Existence is the agent id in the client's OUTPUT, not its exit status: a client that answers
+  # rc 0 and prints nothing (a shim, a hollow transport) used to certify `exists ()` — an empty
+  # measurement printed as a green row — and the run then probed a node it had never seen, while
+  # the `server` row above drew the opposite conclusion from the same empty client (CF-507).
+  # The id must appear as a WHOLE TOKEN over [A-Za-z0-9._-]. A substring test is the same false
+  # green in a different costume: `demo` matches inside `demo-node`, so a client naming only a
+  # DIFFERENT, longer agent would certify the configured one (CF-507 rework). The id charset is
+  # split on here rather than by `grep -w`, which treats '-' as a word break and so still matches
+  # `demo` inside `demo-node`.
   if info=$(timeout 45 "$b" info "$AGENT" --server "$SERVER" 2>&1); then
-    ok "agent" "$AGENT exists ($(printf '%s' "$info" | head -1 | cut -c1-60))"
+    names=$(printf '%s' "$info" | tr -c 'A-Za-z0-9._-' '\n')
+    if printf '%s\n' "$names" | grep -Fxq -- "$AGENT"; then
+      ok "agent" "$AGENT exists ($(printf '%s' "$info" | head -1 | cut -c1-60))"
+    else
+      bad "agent" "client printed $(printf '%s' "$info" | wc -c | tr -d '[:space:]') bytes for info $AGENT (rc 0 does not name the agent)"
+      return 1
+    fi
   else
     bad "agent" "$AGENT absent — run --apply to create it"
     return 1

@@ -3259,6 +3259,14 @@ else
   say "  FAIL  missing bunker client did not surface (exit $rc)"; selftest_fail
 fi
 
+# CF-507: the agent row must measure the client's OUTPUT, not its exit status. The pytest
+# file pins the stub arms; this row is what keeps that file reachable from the repo gate.
+if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_bunker_provision_agent_row.py" >/dev/null 2>&1; then
+  say "  PASS  agent row measures the client output: a silent rc-0 client FAILs and quotes 0 bytes (CF-507)"
+else
+  say "  FAIL  agent row accepted a silent rc-0 client (CF-507)"; selftest_fail
+fi
+
 # BEGIN cf057-apply-refusal
 # CF-057: bunker-server-install.sh has no measured generic install path. Its --apply
 # spelling must therefore be a deliberate refusal, not an ignored argument that runs
@@ -3645,7 +3653,10 @@ printf '%s\n' "$*" >> "${BUNKER_FAKE_LOG:?BUNKER_FAKE_LOG unset}"
 cmd="${1:-}"; [ $# -gt 0 ] && shift
 case "$cmd" in
   list) printf '%s\n' "${BUNKER_FAKE_SERVER:-demo-server}" ;;
-  info) exit 0 ;;
+  # CF-507: a real client's `info` names the agent it looked up, and the --check row now MEASURES
+  # that name. A fixture that answers rc 0 with no output models the hollow client this row
+  # refuses, not a provisioned node.
+  info) printf 'agent %s 6h\n' "${1:-}" ;;
   spawn) : > "${BUNKER_FAKE_LOG}.spawn" ;;
   cp)
     src="${1:-}"; dst="${2:-}"; dst="${dst#*:}"
