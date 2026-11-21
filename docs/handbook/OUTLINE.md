@@ -280,8 +280,10 @@ present
 ## PART VIII — DELIVERY MECHANISMS (new)
 
 Shipped mechanisms that change system behaviour and had no chapter:
-- **VIII.1 `prompts/`** — 11 files; the `foreman → scheduler` contract is **broken**
-  because 3 of 11 disagree
+- **VIII.1 `prompts/`** — 12 files (`ls prompts/*.md | wc -l`); the `foreman → scheduler`
+  contract is **UNVERIFIED**, not broken: Part IV CT-05 and chapter M9 §6 record that the
+  "3 disagree" breakage was never measured, so this line states the file count and claims no
+  agreement either way
 - **VIII.2 `skills/`** — seeded to every node; a node's behaviour changes with the seed
 - **VIII.3 `config/`** — harness-matrix, node-seed, node.env.example, bunker.example,
   github-app.example
