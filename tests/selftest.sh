@@ -3639,7 +3639,10 @@ printf '%s\n' "$*" >> "${BUNKER_FAKE_LOG:?BUNKER_FAKE_LOG unset}"
 cmd="${1:-}"; [ $# -gt 0 ] && shift
 case "$cmd" in
   list) printf '%s\n' "${BUNKER_FAKE_SERVER:-demo-server}" ;;
-  info) exit 0 ;;
+  # CF-507: a real client's `info` names the agent it looked up, and the --check row now MEASURES
+  # that name. A fixture that answers rc 0 with no output models the hollow client this row
+  # refuses, not a provisioned node.
+  info) printf 'agent %s 6h\n' "${1:-}" ;;
   spawn) : > "${BUNKER_FAKE_LOG}.spawn" ;;
   cp)
     src="${1:-}"; dst="${2:-}"; dst="${dst#*:}"

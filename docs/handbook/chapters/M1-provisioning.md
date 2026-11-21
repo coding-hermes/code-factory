@@ -226,6 +226,21 @@ quota exhausted, transport error — keeps the plain `FAIL spawn — failed; log
 | `--node-env-file` | none | a path; a leading `~/` is expanded | which declared profile (`ENV_<NAME>=…` / `@path`) the apply stages on the node | an unreadable path is named twice — in the `inputs` row and in `  FAIL  env_profile — NODE_ENV_FILE <path> is unreadable` (`:337`) — before any host is touched |
 | path-valued flags — `--config` plus the seven `*_FILE` flags | none | a path | the file the flag names | **a leading `~/` in any path-valued flag is expanded to `$HOME` before use** (`expand_tilde`, `:68`, called in every path arm `:695-714`); a flag that skipped it handed `load_config` and the `env_profile` row the literal `~/…` (CF-262) |
 
+**What the `--check` rows measure (CF-507, `III.M1.S2`).** Each row states the value it compared,
+never a proxy for it. The `server` row is the server name appearing in `bunker list` output; the
+`agent` row is the configured `AGENT` id appearing in `bunker info` output — **not** the client's
+exit status. A client that answers rc 0 and prints nothing (a shim, a hollow transport) used to
+certify `PASS  agent — <id> exists ()` with empty parentheses and let the run probe a node it had
+never seen, while the `server` row drew the opposite conclusion from the same empty client; it is
+now `FAIL  agent — client printed 0 bytes for info <agent-id> (rc 0 does not name the agent)`,
+quoting the byte count it measured, and the run stops there. A non-zero exit keeps the
+`FAIL  agent — <agent> absent — run --apply to create it` wording; an id present in the output
+PASSes, and the parenthetical quotes the first line the client printed. The rows after `agent`
+(`repo`, `node_json`, `auth_*`, `crier_*`, `git_credential`, `gateway_auth`, `gitreins`,
+`commit_hook`, `harness`) are the key=value lines the staged probe printed from inside the node.
+Both arms are mechanised offline in `tests/test_bunker_provision_agent_row.py`; the red control was
+the same stub client against the pre-fix script, which printed `PASS  agent — demo-node exists ()`.
+
 **`node_seed.py` (S4):**
 
 | Setting | Default | Range | Governs | What breaks if changed |
