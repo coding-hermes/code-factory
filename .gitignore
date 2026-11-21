@@ -18,6 +18,10 @@ key*
 .gitreins/tasks.yaml.lock
 .gitreins/verdicts/
 .gitreins/quality.json
+# gitreins review state: per-machine cursor + finding fingerprints (a checkout that carried it
+# across machines replayed another host's ACTIVE findings). Runtime state, never source.
+.gitreins/review-state.json
+.gitreins/review-state.lock
 .coding-hermes/board/.lock
 
 # Python bytecode, kept out of every checkout including nodes
