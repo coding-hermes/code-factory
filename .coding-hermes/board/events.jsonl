@@ -961,3 +961,7 @@
 {"id": 960, "timestamp": "2026-11-21T09:50:40Z", "event_type": "task_completed", "task_id": "CF-323", "actor": "foreman", "detail": "{\"status\":\"complete\"}"}
 {"id": 961, "timestamp": "2026-11-21T10:24:57Z", "event_type": "task_completed", "task_id": "CF-170", "actor": "foreman", "detail": "{\"status\":\"complete\"}"}
 {"id": 962, "timestamp": "2026-11-21T11:14:45Z", "event_type": "task_completed", "task_id": "CF-507", "actor": "foreman", "detail": "{\"status\":\"complete\"}"}
+{"id": 963, "timestamp": "2026-11-21T11:57:13Z", "event_type": "task_created", "task_id": "CF-513", "actor": "foreman", "detail": "{\"id\":\"CF-513\",\"status\":\"pending\"}"}
+{"id": 964, "timestamp": "2026-11-21T11:57:21Z", "event_type": "task_created", "task_id": "CF-514", "actor": "foreman", "detail": "{\"id\":\"CF-514\",\"status\":\"pending\"}"}
+{"id": 965, "timestamp": "2026-11-21T11:57:27Z", "event_type": "task_created", "task_id": "CF-515", "actor": "foreman", "detail": "{\"id\":\"CF-515\",\"status\":\"pending\"}"}
+{"id": 966, "timestamp": "2026-11-21T12:13:39Z", "event_type": "task_updated", "task_id": "CF-515", "actor": "foreman", "detail": "{\"status\":\"pending\"}"}
