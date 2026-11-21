@@ -142,8 +142,7 @@ a leg and was missing from this list before 2026-11-04 — `CF-002` (P0: a node 
 `agent init failed: No inference provider configured`, so the "commit produced on a node" leg cannot
 be reached) — plus the dispatch
 defects the live runs exposed: `CF-131` (a completion reply that echoes the task body is refused
-`403 GUARD_BLOCKED`), `CF-132` (no receive-side idempotency key), `CF-133` (a result dialect
-`specs/ENVELOPE.md` does not define), `CF-136` (a dispatch row never reaches a terminal state when its
+`403 GUARD_BLOCKED`), `CF-132` (no receive-side idempotency key), `CF-136` (a dispatch row never reaches a terminal state when its
 tick times out), `CF-137` (a failed dispatch is never acked, so it redelivers the same failure
 forever) and `CF-138` (the dispatcher still kills a real task on a caller-derived timeout — 32.1 s in
 the 02:35Z runs; the old 243 s constant the row's title names is in no shipped file, `grep -rn '243'
@@ -152,7 +151,11 @@ scripts/ specs/` = 0 hits) far below the 15 m 40 s the scheduler budgets for the
 <!-- milestone-blockers:end -->
 
 Closed since this list was written (`row=complete`, so it is no longer a blocker and the check
-rejects a citation of it): `CF-150` — the documented create path staged no `dashboard.basic_auth`, so
+rejects a citation of it): `CF-133` — the node emitted a result dialect `specs/ENVELOPE.md` did not
+define; the completed/failed envelope now carries `harness.served_model` as `specs/ENVELOPE.md:96`
+defines it (code `b9d60860`, close `09ca606a`, verdict `839c3bb6`), with the requested-vs-served
+gap it cannot close by itself left open as `CF-521`. It left this list 2026-11-21, the day the row
+closed. Then `CF-150` — the documented create path staged no `dashboard.basic_auth`, so
 `install-hermes.sh` refused the public bind and a node created by the documented path never started
 the gateway the directive leg has to reach (reproduced 2026-11-04T06:13Z:
 `installer_basic_auth=3 create_path_basic_auth=scripts/node-create.sh:0,scripts/project-node.sh:0,`
