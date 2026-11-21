@@ -1,6 +1,10 @@
 # SPEC — NODE
 
 A **node** is the unit of execution: one bunker agent bound to one project and one repo.
+The physical mapping — one bunker per project, one physical system per bunker, multiple
+bunkers per unit allowed, CPU-only nodes served by central inference racks with resident
+lane caches — is specified in `specs/NODE-PHYSICAL.md`; the hardware sizing and rack plan
+live in `docs/HARDWARE-PLAN.md`.
 
 ## Manifest (`$HOME/.node/node.json`)
 
