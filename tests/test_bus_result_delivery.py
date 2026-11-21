@@ -67,6 +67,7 @@ import json
 import os
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -148,7 +149,12 @@ def unb64(text):
 
 
 def dispatch_envelope(
-    dispatch_id, corr_id, reply_to="scheduler", gate=None, text=DIRECTIVE
+    dispatch_id,
+    corr_id,
+    reply_to="scheduler",
+    gate=None,
+    text=DIRECTIVE,
+    dispatch_vars=None,
 ):
     """A dispatch exactly as the scheduler sends it, with a cf.brief-input.v1 digest over what runs."""
     dispatch = {
@@ -161,6 +167,8 @@ def dispatch_envelope(
     }
     if gate is not None:
         dispatch["gate"] = gate
+    if dispatch_vars is not None:
+        dispatch["vars"] = dispatch_vars
     # The digest covers text+gate+repo+ref+workdir+vars, and `brief` itself is not hashed, so it
     # can be attached after the rest of the envelope exists.
     dispatch["brief"] = {
@@ -646,7 +654,12 @@ class BusResultDeliveryTest(Rig):
     # -- A1 --------------------------------------------------------------------------------
     def test_a1_completed_result_reaches_the_scheduler_inbox(self):
         """A1  completed run: envelope with corr_id + dispatch_id to reply_to, then the ack"""
-        dispatch = dispatch_envelope("d-a1", self.fixture.corr_id, reply_to="scheduler")
+        dispatch = dispatch_envelope(
+            "d-a1",
+            self.fixture.corr_id,
+            reply_to="scheduler",
+            dispatch_vars={"CF_MODEL": "requested-fixture-model"},
+        )
         self.relay.seed(self.fixture.message_id, dispatch)
 
         code, output = self.run_once()
@@ -690,6 +703,14 @@ class BusResultDeliveryTest(Rig):
             True, payload.get("ok"), f"a completed run did not say ok: {payload}"
         )
         self.assertEqual("completed", payload.get("status"))
+        self.assertEqual(socket.gethostname(), payload.get("host_identity"))
+        self.assertEqual(
+            {"name": "fixture-recorder", "served_model": "requested-fixture-model"},
+            payload.get("harness"),
+        )
+        self.assertEqual([0], payload.get("exit_codes"))
+        self.assertGreaterEqual(payload.get("wall_s", -1), 0)
+        self.assertTrue(payload.get("finished_at"))
 
         text = unb64(payload["reply_b64"])
         self.assertIn("node result: completed", text)
@@ -704,11 +725,15 @@ class BusResultDeliveryTest(Rig):
             "the ack did not name exactly the delivered message",
         )
         self.assertEqual(DIRECTIVE, self.fixture.received_prompt())
-
-        received = consumer_await(
-            [{"payload": payload}],
-            {"corr_id": self.fixture.corr_id, "message_id": self.fixture.message_id},
+        receipt = {
+            "corr_id": self.fixture.corr_id,
+            "message_id": self.fixture.message_id,
+        }
+        self.assertTrue(
+            consumer_correlate(payload, receipt),
+            "the consumer mirror rejected the result envelope's correlation fields",
         )
+        received = consumer_await([{"payload": payload}], receipt)
         self.assertEqual(
             "completed",
             received["state"],

@@ -125,6 +125,17 @@ the five covered systems, so the covered side is named and the far side is hones
 external. The state for a boundary contract with no measured wire is **UNVERIFIED** — an outline
 "works" annotation is not implementation evidence (B03).
 
+### III.M2.S3 — Result attribution (CF-133)
+
+The result builder identifies the hand-out with `dispatch_id`, `corr_id` and `in_reply_to`,
+classifies the run with `status`/`ok`, and records `host_identity` from the node worker's own
+`socket.gethostname()`. Its `harness` object carries both the configured harness `name` and
+`served_model`. The current worker does not have a trustworthy served-model observation from
+every harness: it uses the dispatched `CF_MODEL` as the best available attribution, and emits
+`unreported` when no model was requested. A requested model is not proof of which model served
+the run; this field must not be read as independent provider evidence. The scheduler-side
+`correlateDispatchReply` implementation and its contract test remain outside this repository.
+
 ## 7. Verification
 
 | Check | Command | Expected | Last run | Result |

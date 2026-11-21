@@ -1502,7 +1502,13 @@ def process(dispatch, ident, signer, args, seen, in_reply_to=""):
             status, summary, one_line(stdout or stderr, REPLY_TAIL_CHARS)
         ),
         "host_identity": socket.gethostname(),
-        "harness": {"name": ident.harness_name},
+        # This worker does not receive a trustworthy served-model report from every harness yet.
+        # In that case, record the requested model as the best available attribution; do not
+        # invent a served name. If no request was supplied, say that explicitly.
+        "harness": {
+            "name": ident.harness_name,
+            "served_model": str(values.get("CF_MODEL") or "unreported"),
+        },
         # The §5 run receipt: name + set/unset + length, never a value, so two runs compare.
         "vars": section5_receipt(values),
         "exit_codes": [code],

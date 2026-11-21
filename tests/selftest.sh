@@ -8223,6 +8223,7 @@ else
 fi
 rm -rf "$cf063"
 
+# ch:trace row=CF-133 spec=specs/ENVELOPE.md#result-node--reply_to-inbox test=tests/test_bus_result_delivery.py doc=docs/handbook/chapters/M2-dispatch.md#III.M2.S3 evidence=tests/test_bus_result_delivery.py::BusResultDeliveryTest::test_a1_completed_result_reaches_the_scheduler_inbox witness=none:local-fixture verdict=none:foreman-will-run-gitreins commit=none:worker-commit memory=none:foreman-close
 # ch:trace row=CF-211 spec=specs/ENVELOPE.md#result-node--reply_to-inbox wave=none:serial-worker test=tests/test_bus_result_delivery.py doc=specs/ENVELOPE.md prompt=none:worker-brief evidence=tests/test_bus_result_delivery.py witness=none:local-fixture verdict=none:foreman-runs-judge commit=none:self-referential-hash memory=none:foreman-closeout
 say "63. a node result completes a tick, fails one, and a wrong corr_id completes nothing (CF-211)"
 # The scheduler always had the RECEIVING half: dispatch_leg.go polls its own inbox, correlates by
@@ -8237,7 +8238,7 @@ say "63. a node result completes a tick, fails one, and a wrong corr_id complete
 cf211=$(mktemp -d)
 if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_bus_result_delivery.py" \
      >"$cf211/out" 2>&1; then
-  say "  PASS  completed + failed results POST to reply_to before the ack; a mismatched corr_id expires the tick and is named; a refused/lost delivery retries with the same key and never re-runs the work"
+  say "  PASS  completed + failed results POST to reply_to before the ack; result attribution carries node host and harness model and correlates in the consumer mirror; a mismatched corr_id expires the tick and is named; refused/lost delivery retries with the same key and never re-runs the work"
 else
   say "  FAIL  the result leg on the producing side (tests/test_bus_result_delivery.py)"
   selftest_fail
