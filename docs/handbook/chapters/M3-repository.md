@@ -115,8 +115,9 @@ consumer (`land-node-branch.sh`) is operator-triggered, not called by the envelo
 | python compile | `python3 -m py_compile scripts/clone_lane.py scripts/repo_freshness.py` | exit 0 | 2026-11-06 | PASS |
 | landing arm (shipped) | `tests/selftest.sh` arm `cf213-land-node-branch` (`:2464-2730`) | gate rejection, dry-run, successful landing, fresh-clone proof, repeat landing, refused push, no-ff isolation | 2026-11-07 | **PASS** — `SHIPPED_LANDING_ARM_RC=0`, `LANDING_ARM_FAILURES=0` (the arm creates a bare origin + clean clones and exercises all seven behaviours; B07) |
 | freshness gate | `tests/selftest.sh` arm `cf244-node-freshness` (`:3434-3671`) | freshness sub-cases PASS (sync, drift, dirty edit, detached HEAD, no-origin, bunker mode, provisioning fallback, `--apply` node.json record) | 2026-11-07 | **PASS** — `SHIPPED_FRESHNESS_ARM_RC=0`, `FRESHNESS_ARM_FAILURES=0` (13 sub-cases against disposable local git fixtures, run standalone) |
-| tier-1 secrets scope | `gitleaks detect --no-git --no-banner --redact` (repo root) | `no leaks found`, exit 0 | 2026-11-07 | **PASS** — `INF scanned ~2962145 bytes (2.96 MB)` then `INF no leaks found` (the leading `~` is gitleaks' own approximately marker in its scan log — the count is roughly 2.96 MB, never negative); before the bytecode exclusion the same command reported rule `private-key` at `tests/__pycache__/test_node_provisioning.cpython-314.pyc:35` and exited 1. Tier-1 grades the **working tree**; the commit guard grades **staged files only**, which is why the guard was clean on the same tree |
+| tier-1 secrets scope | `python3 scripts/gitleaks_scope.py --check` then `gitleaks detect --no-git --no-banner --redact` (repo root) | `RESULT: OK`, then `no leaks found`, exit 0 | 2026-11-21 | **PASS** — `RESULT: OK (7 derived ignored root(s) match .gitleaks.toml, 0 dormant)` and `INF scanned ~5479023 bytes (5.48 MB)` in 3.73 s, `no leaks found`, exit 0. The scope is DERIVED (§III.M3.S3): on `cfe075c9` the same command reported **38 findings, 28 under `.node/` + 10 under `.tmp/`, 0 under any tracked path**, `scanned ~132731913 bytes (132.73 MB)` in 57.5 s, exit 1. Before CF-383 the same defect reported rule `private-key` at `tests/__pycache__/test_node_provisioning.cpython-314.pyc:35`. Tier-1 grades the **working tree**; the commit guard grades **staged files only**, which is why the guard was clean on the same tree (the leading `~` is gitleaks' own approximately marker in its scan log) |
 | bytecode allowlist arm (shipped) | `tests/selftest.sh` §34 arms `bytecode-allowlist`, `bytecode-allowlist-control`, `bytecode-allowlist-loadbearing` | bytecode clean; a PEM outside `__pycache__` still reported; entry removal re-reports the bytecode | 2026-11-07 | **PASS** — `PASS  bytecode-allowlist — a PEM in tests/__pycache__/*.pyc yields no finding (18 bytes graded)`, `PASS  bytecode-allowlist-control`, `PASS  bytecode-allowlist-loadbearing`. Mutation-checked: deleting the two entries reds arm 1 only; widening the allowlist to `.*\.py` reds all three (`scanned ~0 bytes` — the `~` is gitleaks' approximately marker, so this reads "approximately zero bytes scanned", the anti-vacuity guard) |
+| secrets scope arms (shipped) | `tests/selftest.sh` §34 arms `secrets-scope-drift`, `secrets-scope`, `secrets-scope-control` (`:2757-2879`) | an ignored root the script never saw is named MISSING and its canary reported; after `--write` every ignored canary is ungraded with bytes > 0 and a byte-identical second write; a PEM outside every ignored root is still reported | 2026-11-21 | **PASS** — `PASS  secrets-scope-drift`, `PASS  secrets-scope — ignored canaries (incl. a root the script never saw) graded clean (82 bytes read)`, `PASS  secrets-scope-control`. Mutation-checked both ways: reverting `derive_paths` to the CF-383 hand list (`.tmp` + `.node`) reds drift + green (`2 unnamed`, `1 leaked`) with control still PASS; a blanket `plain\.py$` allowlist entry reds control alone (`no leaks found`) |
 
 **Behavioral verification (B07).**
 `tests/selftest.sh` arm `cf213-land-node-branch` (`:2464-2730`) ships a disposable local
@@ -134,6 +135,59 @@ not the landing half.
 nothing. The numbered-arm pointers are unrepeatable; they are replaced with the named arms above.
 The arm locators `:2464-2730` (cf213) and `:3434-3671` (cf244) still resolve exactly at this line
 count (re-pinned after `tests/selftest.sh` grew +150 lines in `08a2c8a..fbc19cb`).
+
+<a id="III.M3.S3"></a>
+### III.M3.S3 — commit hooks and gates: the tier-1 secrets scope is derived, never hand-listed
+
+**What the gate is.** `.gitreins/config.yaml` runs three tier-1 guards on every commit —
+`secrets` (gitleaks), `lint` (`bash -n` over staged shell; the Python lane grades `*.py`) and
+`tests` (`bash tests/selftest.sh`, `test_mode: full`, `test_timeout: 900`). A red tier-1 reds every
+verdict in the repository whatever lint, tests and tier-2 say, so the secrets gate's *scope* is a
+verdict-wide fact, not a detail.
+
+**The defect (measured 2026-11-21 on `cfe075c9`).** The `secrets` step runs
+`gitleaks detect --no-git`, which grades the WORKING TREE: artifact content git can never commit is
+graded as if it were source. That tree carried **38 findings — 28 under `.node/`, 10 under `.tmp/`,
+0 under any tracked path** (`git ls-files` carries no path beneath either root, and
+`git check-ignore -v .tmp .node` names both ignore rules), `INF scanned ~132731913 bytes (132.73 MB)`
+in 57.5 s, exit 1. CF-383 fixed one instance by hand-adding generated bytecode (`__pycache__/`,
+`\.pyc$`) to `[allowlist].paths` and that is the recurring defect: a hand-maintained set means the
+next artifact root (`.tmp/`, `.node/`, or anything tomorrow) silently reds the gate again.
+
+**The scope is now derived.** `scripts/gitleaks_scope.py` is the single declared scope.
+
+| Action | Behaviour |
+|---|---|
+| `--write` | reads `git status --ignored --porcelain -z`, collapses every ignored instance to the deepest ancestor git still ignores that holds no tracked file, drops roots a static `[allowlist].paths` entry already covers, regex-escapes the rest, and rewrites ONLY the block between `# BEGIN gitleaks-scope (generated)` and `# END gitleaks-scope (generated)` in `.gitleaks.toml`; sorted, atomic, idempotent (a second run is a byte-identical no-op) |
+| `--check` | re-derives the same set; exit 0 in sync, 1 with every MISSING root named (ignored content the block does not cover), 2 when the tree or the config cannot be used. An entry whose path is absent from the tree is reported DORMANT rather than stale: a fresh checkout has no `.tmp`/`.node` artifacts yet, and failing there would teach operators to skip the gate |
+
+No root name is hard-coded in the script, and that is proved rather than asserted: the shipped
+GREEN arm creates `.artifact-canary/`, a root written after the script existed, and requires the
+drift gate to name it and the rewrite to silence its canary.
+
+**The exclusion is scoped, not a mute.** Every file under an ignored root is proven uncommittable
+by git before it is excluded, so the exclusion cannot hide a key that could reach a commit: a
+synthetic PEM at `tests/plain.py` is still REPORTED, both in the arm and in the repo-level
+measurement. Detection is unchanged — only the content git can commit is graded.
+
+**Measured after the fix** (same command, same tree): `no leaks found`,
+`INF scanned ~5479023 bytes (5.48 MB)` in 3.73 s, exit 0. The scan still reads megabytes, so a clean
+verdict is not an empty one (CF-378 doctrine: a gate whose empty case passes is decoration).
+
+**Arms of record.** `tests/selftest.sh` §34, three arms over one scratch repo (`:2757-2879`):
+`secrets-scope-drift` (`--check` names every uncovered root *and* the canary is really reported
+before the rewrite), `secrets-scope` (after `--write`, canaries in `.tmp/`, `.node/`,
+`node_modules/`, `__pycache__/` and `.artifact-canary/` are ungraded, bytes read > 0, and a second
+write is byte-identical) and `secrets-scope-control` (the same PEM outside every ignored root is
+still reported). Both directions are mutation-checked: reverting the derivation to the CF-383 hand
+list (`.tmp` + `.node` only) reds the drift and green arms while the control arm stays PASS, and
+adding a blanket `plain\.py$` entry to the allowlist reds the control arm alone — a mute is caught,
+not tolerated.
+
+**Operator runbook.** Run `python3 scripts/gitleaks_scope.py --check` in review. When it names a
+MISSING root, run `--write` and commit the regenerated block together with the artifacts that
+introduced it. Never hand-edit inside the markers: the block is generated, and `--check` is what
+keeps that true.
 
 ## 8. Metrics
 

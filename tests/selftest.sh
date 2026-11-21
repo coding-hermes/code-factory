@@ -2754,6 +2754,130 @@ else
   rm -rf "$cf383"
 fi
 
+# --- CF-511: the tier-1 secrets scope is DERIVED from git, not a hand-listed allowlist -----------
+# CF-383 allowlisted ONE artifact root by hand, and that is the defect: on HEAD cfe075c9 tier-1
+# `secrets` still reported 38 findings, 100% under the gitignored `.tmp/` and `.node/` and 0 under
+# any tracked path, so every verdict graded red while lint, tests and tier-2 all passed.
+# `scripts/gitleaks_scope.py` now derives the ignored roots from `git status --ignored` and rewrites
+# only the marked block of `.gitleaks.toml`; `--check` is the drift gate. Three arms over one
+# scratch repo: DRIFT (a root this script has never seen is MISSING before the rewrite, and its
+# canary is really REPORTED then — so the gate and the canary are both load-bearing), GREEN (after
+# `--write` every ignored canary is ungraded, with bytes > 0 and a byte-identical second write),
+# CONTROL (the same PEM at a path no ignored root covers is still REPORTED — a scope, not a mute).
+say "  section 34 secrets scope (CF-511): tier-1 grades committable content, the ignored roots are derived"
+if ! command -v gitleaks >/dev/null 2>&1; then
+  say "  SKIP  secrets-scope — gitleaks absent from PATH, tier-1 secrets not measurable here"
+else
+  cf511=$(mktemp -d)
+  mkdir -p "$cf511/tree/tests"
+  cp "$HERE/.gitleaks.toml" "$cf511/tree/.gitleaks.toml"
+  printf '%s\n' '.tmp/' '.node/' 'node_modules/' '.artifact-canary/' '__pycache__/' '*.pyc' \
+    > "$cf511/tree/.gitignore"
+  cf511_git() { git -C "$cf511/tree" -c user.name=selftest -c user.email=selftest@example.invalid \
+    -c commit.gpgsign=false -c core.hooksPath=/dev/null "$@"; }
+  cf511_git init -q
+  cf511_git add .gitignore
+  cf511_git commit -q -m fixture
+  # Assembled from parts: this file is graded by the very ruleset it exercises (CF-383 precedent).
+  cf511_b='-----BE'; cf511_b2='GIN '; cf511_k='OPENSSH PRIVATE KEY-----'
+  cf511_e='-----E'; cf511_e2='ND '
+  cf511_pem() { printf '%s\n%s\n%s\n' "$cf511_b$cf511_b2$cf511_k" 'FIXTUREKEYMATERIALnobody-should-print-this' "$cf511_e$cf511_e2$cf511_k"; }
+  # A scannable anchor, so a clean run cannot be a scan that read nothing (CF-378 doctrine).
+  printf "anchor = 'graded'\n" > "$cf511/tree/tests/anchor.py"
+
+  # The copied block describes THIS repo's artifact roots, so the scratch repo is out of sync by
+  # construction. Rewrite it once over an artifact-free tree: the derived set is then empty, which
+  # is the clean starting point the drift arm measures against.
+  out=$(python3 -B "$HERE/scripts/gitleaks_scope.py" --write \
+    --repo "$cf511/tree" --config "$cf511/tree/.gitleaks.toml" 2>&1); rc=$?
+  out2=$(python3 -B "$HERE/scripts/gitleaks_scope.py" --check \
+    --repo "$cf511/tree" --config "$cf511/tree/.gitleaks.toml" 2>&1); rc2=$?
+  if [ "$rc" -ne 0 ] || [ "$rc2" -ne 0 ]; then
+    say "  FAIL  secrets-scope-setup — the scratch repo cannot reach a clean derived state (write $rc, check $rc2)"
+    selftest_fail
+    printf '%s\n' "$out" "$out2" | sed 's/^/    | /'
+  else
+
+    # ARM 1 — DRIFT: every ignored root is new here, and none of them may be covered yet.
+    for cf511_d in .tmp .node node_modules .artifact-canary __pycache__; do
+      mkdir -p "$cf511/tree/$cf511_d"
+      case "$cf511_d" in
+        __pycache__) cf511_pem > "$cf511/tree/$cf511_d/canary.cpython-314.pyc" ;;
+        *)           cf511_pem > "$cf511/tree/$cf511_d/canary.pem" ;;
+      esac
+    done
+    out=$(python3 -B "$HERE/scripts/gitleaks_scope.py" --check \
+      --repo "$cf511/tree" --config "$cf511/tree/.gitleaks.toml" 2>&1); rc=$?
+    # Compare on the DE-ESCAPED text: the entry for `.tmp` is written `.tmp/` in the config but
+    # `\.tmp/` in the report, and the assertion is about the root being named, not about regex
+    # spelling. (`__pycache__/` is deliberately absent from the loop: a static allowlist entry
+    # already covers it, so the derivation must NOT spend a generated line on it.)
+    flat=$(printf '%s\n' "$out" | grep -F 'MISSING' | tr -d '\\')
+    missing=0
+    for cf511_d in .tmp .node node_modules .artifact-canary; do
+      printf '%s\n' "$flat" | grep -Fq "'''$cf511_d/'''" || missing=$((missing + 1))
+    done
+    out_scan=$(cd "$cf511/tree" && gitleaks detect --no-git --no-banner --redact \
+      --report-format json --report-path "$cf511/drift.json" 2>&1); scan_rc=$?
+    if [ "$rc" -ne 0 ] && [ "$missing" -eq 0 ] && [ "$scan_rc" -ne 0 ] \
+       && grep -qF '.artifact-canary/canary.pem' "$cf511/drift.json"; then
+      say "  PASS  secrets-scope-drift — --check names every uncovered root and the canary is really reported"
+    else
+      say "  FAIL  secrets-scope-drift — an uncovered ignored root passed --check or its canary was invisible (check $rc, $missing unnamed, scan $scan_rc)"
+      selftest_fail
+      printf '%s\n' "$out" "$out_scan" | sed 's/^/    | /'
+    fi
+
+    # ARM 2 — GREEN: after --write the same canaries are not graded, the scan still read bytes,
+    # and a second --write is a byte-identical no-op.
+    out=$(python3 -B "$HERE/scripts/gitleaks_scope.py" --write \
+      --repo "$cf511/tree" --config "$cf511/tree/.gitleaks.toml" 2>&1); rc=$?
+    cp "$cf511/tree/.gitleaks.toml" "$cf511/after1.toml"
+    python3 -B "$HERE/scripts/gitleaks_scope.py" --write \
+      --repo "$cf511/tree" --config "$cf511/tree/.gitleaks.toml" >/dev/null 2>&1
+    out2=$(python3 -B "$HERE/scripts/gitleaks_scope.py" --check \
+      --repo "$cf511/tree" --config "$cf511/tree/.gitleaks.toml" 2>&1); rc2=$?
+    out_scan=$(cd "$cf511/tree" && gitleaks detect --no-git --no-banner --redact \
+      --report-format json --report-path "$cf511/green.json" 2>&1); scan_rc=$?
+    graded=$(printf '%s\n' "$out_scan" | sed -n 's/.*scanned ~\([0-9][0-9]*\) bytes.*/\1/p' | head -1)
+    # The rewrite must have RECORDED the derived roots — a no-op write that leaves the block empty
+    # would otherwise pass this arm on the strength of `--check`, which re-derives its own answer.
+    missing_cfg=0
+    for cf511_d in .tmp .node node_modules .artifact-canary; do
+      tr -d '\\' < "$cf511/tree/.gitleaks.toml" | grep -Fq "'''$cf511_d/'''" \
+        || missing_cfg=$((missing_cfg + 1))
+    done
+    leaked=0
+    for cf511_p in .tmp/canary.pem .node/canary.pem node_modules/canary.pem \
+      .artifact-canary/canary.pem __pycache__/canary.cpython-314.pyc; do
+      grep -qF "$cf511_p" "$cf511/green.json" 2>/dev/null && leaked=$((leaked + 1))
+    done
+    if [ "$rc" -eq 0 ] && [ "$rc2" -eq 0 ] && [ "$scan_rc" -eq 0 ] && [ "$leaked" -eq 0 ] \
+       && cmp -s "$cf511/after1.toml" "$cf511/tree/.gitleaks.toml" \
+       && [ "$missing_cfg" -eq 0 ] \
+       && [ "${graded:-0}" -gt 0 ]; then
+      say "  PASS  secrets-scope — ignored canaries (incl. a root the script never saw) graded clean ($graded bytes read)"
+    else
+      say "  FAIL  secrets-scope — an ignored canary still failed tier-1 (write $rc, check $rc2, scan $scan_rc, $leaked leaked, ${graded:-0} bytes read)"
+      selftest_fail
+      printf '%s\n' "$out" "$out2" "$out_scan" | sed 's/^/    | /'
+    fi
+
+    # ARM 3 — CONTROL: the same PEM at a path no ignored root covers is still a finding.
+    cf511_pem > "$cf511/tree/tests/plain.py"
+    out_scan=$(cd "$cf511/tree" && gitleaks detect --no-git --no-banner --redact \
+      --report-format json --report-path "$cf511/control.json" 2>&1); scan_rc=$?
+    if [ "$scan_rc" -ne 0 ] && grep -qF 'tests/plain.py' "$cf511/control.json"; then
+      say "  PASS  secrets-scope-control — a PEM outside every ignored root is still reported"
+    else
+      say "  FAIL  secrets-scope-control — a tracked-path PEM escaped the scan, so the scope is a mute (exit $scan_rc)"
+      selftest_fail
+      printf '%s\n' "$out_scan" | sed 's/^/    | /'
+    fi
+  fi
+  rm -rf "$cf511"
+fi
+
 
 # CF-153: the node-side checker tells the operator to "pass --ref <branch-or-tag>", so the
 # documented control-host create command must accept that exact flag and carry it across the
