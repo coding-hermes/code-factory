@@ -16,6 +16,7 @@ TMPDIR, and a minimal config: no network, no node, no credentials.
 from __future__ import annotations
 
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -152,3 +153,35 @@ def test_exact_token_still_passes_the_agent_row() -> None:
     assert len(passed) == 1, f"expected one PASS agent row, got {passed}\n{output}"
     assert f"{SHORT_AGENT} exists" in passed[0], passed[0]
     assert not rows(output, "FAIL", "agent"), output
+
+
+def main() -> int:
+    """Run every `test_*` function without pytest."""
+    import inspect
+    import traceback
+
+    tests = [
+        (name, fn)
+        for name, fn in globals().items()
+        if name.startswith("test_") and callable(fn)
+    ]
+    failures = 0
+    for name, fn in tests:
+        try:
+            if len(inspect.signature(fn).parameters) == 1:
+                with tempfile.TemporaryDirectory() as scratch:
+                    fn(Path(scratch))
+            else:
+                fn()
+        except Exception:  # noqa: BLE001 — report every failed arm
+            failures += 1
+            print(f"FAIL  {name}")
+            traceback.print_exc()
+        else:
+            print(f"PASS  {name}")
+    print(f"{len(tests) - failures}/{len(tests)} passed")
+    return 1 if failures else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
