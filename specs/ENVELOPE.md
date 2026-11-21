@@ -93,7 +93,12 @@ is never copied into a log or a reply.
   "ok": true,
   "reply_b64": "<base64 of the UTF-8 report the scheduler records on the tick>",
   "host_identity": "node-host-1",
-  "harness": {"name": "hermes", "served_model": "openai/gpt-6.1-sol"},
+  "harness": {
+    "name": "hermes",
+    "model_requested": "openai/gpt-6.1-sol",
+    "served_model": null,
+    "served_model_source": "unobserved"
+  },
   "vars": {"CF_MODEL": {"set": true, "len": 17}, "CF_API_KEY_FILE": {"set": true, "len": 27},
            "CF_HARNESS_OPTS": {"set": false, "len": 0}},
   "exit_codes": [0, 0],
@@ -105,6 +110,15 @@ is never copied into a log or a reply.
   "finished_at": "2026-10-29T18:41:00Z"
 }
 ```
+
+The three model-attribution members are always present on `completed`, `failed` and `refused`
+results. `model_requested` is the dispatched `CF_MODEL`, or JSON `null` when none was supplied;
+`served_model` is populated only from an explicit harness observation, never from the request or a
+route/default. If no observation exists, `served_model` is JSON `null` and
+`served_model_source` is `"unobserved"`; an observed value uses `"harness_report"`. A harness may
+report its observation by writing one line to captured stdout or stderr in the form
+`CF-HARNESS-SERVED-MODEL: <model>`. Empty or conflicting report lines are treated as unobserved.
+The marker carries only the model identifier, not credentials or other run variables.
 
 `host_identity` is the node's hostname, **not** the control host's. The control host recomputes
 every digest from the bytes it pulls; a reported digest that cannot be recomputed is unverified,

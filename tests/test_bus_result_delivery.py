@@ -88,6 +88,7 @@ SCHED_CANDIDATES = (
 # Control mode: the arms must then hold a PRE-FIX worker source (CF_BUS_WORKER_SOURCE) to the
 # defect this row was raised on, rather than to the contract.
 PREFIX_CONTROL = os.environ.get("CF_BUS_RESULT_PREFIX_CONTROL") == "1"
+ONLY_ARM = os.environ.get("CF_BUS_RESULT_ONLY_ARM", "")
 
 
 def load_worker():
@@ -116,6 +117,9 @@ run_dir.mkdir(parents=True, exist_ok=True)
 with open(run_dir / "runs.txt", "a", encoding="utf-8") as handle:
     handle.write("run\\n")
 (run_dir / "prompt.txt").write_text(prompt, encoding="utf-8")
+served_path = run_dir / "served-model.txt"
+if served_path.exists():
+    sys.stdout.write("CF-HARNESS-SERVED-MODEL: %s\\n" % served_path.read_text(encoding="utf-8"))
 sys.stdout.write("foreman report: shipped CF-211, %d chars of directive\\n" % len(prompt))
 sys.stderr.write("stub harness stderr\\n")
 sys.exit(code)
@@ -705,7 +709,12 @@ class BusResultDeliveryTest(Rig):
         self.assertEqual("completed", payload.get("status"))
         self.assertEqual(socket.gethostname(), payload.get("host_identity"))
         self.assertEqual(
-            {"name": "fixture-recorder", "served_model": "requested-fixture-model"},
+            {
+                "name": "fixture-recorder",
+                "model_requested": "requested-fixture-model",
+                "served_model": None,
+                "served_model_source": "unobserved",
+            },
             payload.get("harness"),
         )
         self.assertEqual([0], payload.get("exit_codes"))
@@ -743,6 +752,82 @@ class BusResultDeliveryTest(Rig):
             "shipped CF-211", received["text"], "the tick carries no reply text"
         )
 
+    def test_a8_observed_different_model_is_not_misattributed(self):
+        """A8  a harness observation distinct from CF_MODEL stays distinct in the result"""
+        requested = "requested-fixture-model"
+        observed = "fixture/harness-actually-served-model"
+        with open(
+            os.path.join(self.fixture.run_dir, "served-model.txt"),
+            "w",
+            encoding="utf-8",
+        ) as handle:
+            handle.write(observed)
+        dispatch = dispatch_envelope(
+            "d-a8",
+            self.fixture.corr_id,
+            dispatch_vars={"CF_MODEL": requested},
+        )
+        self.relay.seed(self.fixture.message_id, dispatch)
+
+        self.run_once()
+        harness = self.delivered_payload().get("harness")
+        self.assertIsInstance(harness, dict)
+        self.assertNotEqual(
+            requested,
+            harness.get("served_model"),
+            "misattribution: requested CF_MODEL was recorded as the served model",
+        )
+        self.assertEqual(requested, harness.get("model_requested"))
+        self.assertEqual(
+            observed,
+            harness.get("served_model"),
+            "the harness report was not recorded as the served model",
+        )
+        self.assertEqual("harness_report", harness.get("served_model_source"))
+
+    def test_a9_missing_model_observation_is_explicit(self):
+        """A9  without a harness report, served_model is null and source says unobserved"""
+        requested = "requested-fixture-model"
+        dispatch = dispatch_envelope(
+            "d-a9",
+            self.fixture.corr_id,
+            dispatch_vars={"CF_MODEL": requested},
+        )
+        self.relay.seed(self.fixture.message_id, dispatch)
+
+        self.run_once()
+        harness = self.delivered_payload().get("harness")
+        self.assertEqual(requested, harness.get("model_requested"))
+        self.assertIsNone(
+            harness.get("served_model"),
+            "misattribution: requested CF_MODEL was reused as served_model without observation",
+        )
+        self.assertEqual("unobserved", harness.get("served_model_source"))
+        self.assertNotEqual(requested, harness.get("served_model"))
+
+    def test_a10_refused_result_keeps_the_same_model_attribution_shape(self):
+        """A10  refusal reports the request and marks the absent observation explicitly"""
+        dispatch = dispatch_envelope(
+            "d-a10",
+            self.fixture.corr_id,
+            dispatch_vars={"CF_MODEL": "requested-fixture-model"},
+        )
+        dispatch["text_b64"] = "not base64"
+        self.relay.seed(self.fixture.message_id, dispatch)
+
+        self.run_once()
+        payload = self.delivered_payload()
+        self.assertEqual("refused", payload.get("status"))
+        self.assertEqual(
+            {
+                "name": "fixture-recorder",
+                "model_requested": "requested-fixture-model",
+                "served_model": None,
+                "served_model_source": "unobserved",
+            },
+            payload.get("harness"),
+        )
+
     # -- A2 --------------------------------------------------------------------------------
     def test_a2_failed_gate_result_fails_the_tick_with_the_nodes_reason(self):
         """A2  failing gate: ok=false + the node's reason, and the tick FAILS (not completes)"""
@@ -764,6 +849,11 @@ class BusResultDeliveryTest(Rig):
             f"{payload}",
         )
         self.assertEqual("failed", payload.get("status"))
+        self.assertIsNone(payload.get("harness", {}).get("model_requested"))
+        self.assertIsNone(payload.get("harness", {}).get("served_model"))
+        self.assertEqual(
+            "unobserved", payload.get("harness", {}).get("served_model_source")
+        )
         self.assertIn(
             "exit 7", str(payload.get("error") or ""), "the reason is not in `error`"
         )
@@ -1160,6 +1250,9 @@ ARMS = (
     "test_a5_budget_exhaustion_is_retried_not_dropped",
     "test_a6_lost_answer_still_lands_exactly_once",
     "test_a7_a_gate_that_could_not_run_is_not_a_pass",
+    "test_a8_observed_different_model_is_not_misattributed",
+    "test_a9_missing_model_observation_is_explicit",
+    "test_a10_refused_result_keeps_the_same_model_attribution_shape",
 )
 
 CONTROL_ARMS = (
@@ -1196,4 +1289,8 @@ if __name__ == "__main__":
     consumer_pin(problems)
     for problem in problems:
         print(f"  FAIL  {problem}")
-    sys.exit(1 if run_arms(ARMS) + len(problems) else 0)
+    arms = (ONLY_ARM,) if ONLY_ARM else ARMS
+    if ONLY_ARM and ONLY_ARM not in ARMS:
+        print(f"  FAIL  unknown arm {ONLY_ARM}")
+        sys.exit(2)
+    sys.exit(1 if run_arms(arms) + len(problems) else 0)

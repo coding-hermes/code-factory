@@ -129,12 +129,19 @@ external. The state for a boundary contract with no measured wire is **UNVERIFIE
 
 The result builder identifies the hand-out with `dispatch_id`, `corr_id` and `in_reply_to`,
 classifies the run with `status`/`ok`, and records `host_identity` from the node worker's own
-`socket.gethostname()`. Its `harness` object carries both the configured harness `name` and
-`served_model`. The current worker does not have a trustworthy served-model observation from
-every harness: it uses the dispatched `CF_MODEL` as the best available attribution, and emits
-`unreported` when no model was requested. A requested model is not proof of which model served
-the run; this field must not be read as independent provider evidence. The scheduler-side
-`correlateDispatchReply` implementation and its contract test remain outside this repository.
+`socket.gethostname()`. Its `harness` object carries the configured harness `name`,
+`model_requested`, `served_model` and `served_model_source`. `model_requested` is the dispatched
+`CF_MODEL`, or JSON `null` if none was requested. The worker accepts an observation only from a
+captured stdout or stderr line `CF-HARNESS-SERVED-MODEL: <model>` emitted by the harness; this
+channel is outside the scrubbed `CF_*` environment and carries no credential. An explicit report
+sets `served_model` to that reported value and source to `harness_report`. Without one, including
+when duplicate report lines conflict, `served_model` is JSON `null` and source is `unobserved`.
+The worker never promotes the requested value, a route or a default to a served-model observation.
+These fields are present on completed, failed and refused results. The regression arm
+`tests/test_bus_result_delivery.py::BusResultDeliveryTest::test_a8_observed_different_model_is_not_misattributed`
+proves that a harness-reported model differing from `CF_MODEL` stays distinct; the adjacent A9 arm
+proves the explicit unobserved marker. The scheduler-side `correlateDispatchReply` implementation
+and its contract test remain outside this repository.
 
 ## 7. Verification
 
@@ -142,6 +149,7 @@ the run; this field must not be read as independent provider evidence. The sched
 |---|---|---|---|---|
 | python compile | `python3 -m py_compile scripts/add_family_lanes.py scripts/configure_family.py scripts/load_lane_config.py scripts/lane_target.py scripts/node-bus-worker.py` | exit 0 | 2026-11-06 | PASS |
 | lane target unit | `python3 tests/test_lane_target.py` | pass | 2026-11-06 | **PASS** (40 tests, rc 0) |
+| result model attribution | `python3 tests/test_bus_result_delivery.py` | requested and observed models stay distinct; absent observation is explicit | CF-521 | **PASS** — A8 detects misattribution; A9 verifies `unobserved`; A10 verifies refused shape |
 | bus worker ladder | `python3 ~/node-bus-worker.py --check` on cf-node | inbox GET → 200 with key+bearer | 2026-11-05, cf-node only | **UNVERIFIED** — a single-host 2026-11-05 run (FACT-04) is provenance, not a current measured result; not repeatable from this control host (`~/node-bus-worker.py` does not exist here) |
 
 ## 8. Metrics

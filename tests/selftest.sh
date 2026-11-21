@@ -8252,6 +8252,7 @@ fi
 rm -rf "$cf063"
 
 # ch:trace row=CF-133 spec=specs/ENVELOPE.md#result-node--reply_to-inbox test=tests/test_bus_result_delivery.py doc=docs/handbook/chapters/M2-dispatch.md#III.M2.S3 evidence=tests/test_bus_result_delivery.py::BusResultDeliveryTest::test_a1_completed_result_reaches_the_scheduler_inbox witness=none:local-fixture verdict=none:foreman-will-run-gitreins commit=none:worker-commit memory=none:foreman-close
+# ch:trace row=CF-521 spec=specs/ENVELOPE.md#result-node--reply_to-inbox test=tests/test_bus_result_delivery.py::BusResultDeliveryTest::test_a8_observed_different_model_is_not_misattributed doc=docs/handbook/chapters/M2-dispatch.md#III.M2.S3 evidence=tests/test_bus_result_delivery.py witness=none:local-fixture verdict=none:foreman-runs-judge commit=none:worker-commit memory=none:foreman-close
 # ch:trace row=CF-211 spec=specs/ENVELOPE.md#result-node--reply_to-inbox wave=none:serial-worker test=tests/test_bus_result_delivery.py doc=specs/ENVELOPE.md prompt=none:worker-brief evidence=tests/test_bus_result_delivery.py witness=none:local-fixture verdict=none:foreman-runs-judge commit=none:self-referential-hash memory=none:foreman-closeout
 say "63. a node result completes a tick, fails one, and a wrong corr_id completes nothing (CF-211)"
 # The scheduler always had the RECEIVING half: dispatch_leg.go polls its own inbox, correlates by
@@ -8307,6 +8308,31 @@ else
   selftest_fail
 fi
 rm -rf "$cf211"
+
+# CF-521 red control: the decisive attribution arm must reject the builder that promoted CF_MODEL
+# into served_model. A passing control means the old misattribution has returned.
+cf521=$(mktemp -d)
+if git -C "$HERE" show 9bccfae3:scripts/node-bus-worker.py > "$cf521/node-bus-worker.py" 2>/dev/null; then
+  if PYTHONPATH="$HERE/scripts/harness${PYTHONPATH:+:$PYTHONPATH}" \
+       CF_BUS_WORKER_SOURCE="$cf521/node-bus-worker.py" \
+       CF_BUS_RESULT_ONLY_ARM=test_a8_observed_different_model_is_not_misattributed \
+       PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_bus_result_delivery.py" \
+       >"$cf521/red" 2>&1; then
+    say "  FAIL  CF-521 red control: pre-fix builder passed the model-misattribution arm"
+    selftest_fail
+  elif grep -Fq 'misattribution:' "$cf521/red"; then
+    say "  PASS  CF-521 red control: pre-fix builder fails the decisive model-misattribution arm"
+    sed 's/^/    | /' "$cf521/red"
+  else
+    say "  FAIL  CF-521 red control failed for a reason other than model misattribution"
+    selftest_fail
+    sed 's/^/    | /' "$cf521/red"
+  fi
+else
+  say "  FAIL  CF-521 pre-fix source unavailable (git show 9bccfae3:scripts/node-bus-worker.py)"
+  selftest_fail
+fi
+rm -rf "$cf521"
 
 # ch:trace row=CF-226 spec=specs/HARNESS.md#the-verdict-line wave=none:serial test=tests/harness/dsh-install-test.sh doc=specs/HARNESS-MATRIX.md#5-the-variable-contract--what-an-installer-and-a-harness-are-given prompt=none:worker-brief evidence=tests/harness/dsh-install-test.sh witness=none:local-fixture verdict=none:foreman-runs-judge commit=none:self-referential-hash memory=none:foreman-closeout
 say "64. a credential-less --turn reaches the dsh adapter's documented SKIP before the §5 run set is required (CF-226)"

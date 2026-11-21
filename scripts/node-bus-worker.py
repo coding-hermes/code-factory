@@ -95,7 +95,11 @@ import urllib.parse
 import urllib.request
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "harness"))
-from harness_memory import DuckBrainClient, MemoryRecordError, export_records  # noqa: E402
+from harness_memory import (
+    DuckBrainClient,
+    MemoryRecordError,
+    export_records,
+)  # noqa: E402
 
 DEFAULT_INBOX_LIMIT = 10
 DEFAULT_LEASE_SECONDS = 30
@@ -1022,6 +1026,47 @@ def run_gate(clone, gate, timeout_s):
     return completed.returncode, time.time() - started, ""
 
 
+def requested_model(dispatch):
+    """Return the dispatched model only when present; never infer it from the environment."""
+    raw = dispatch.get("vars")
+    if raw is None and isinstance(dispatch.get("payload"), dict):
+        raw = dispatch["payload"].get("vars")
+    if not isinstance(raw, dict):
+        return None
+    model = raw.get("CF_MODEL")
+    if isinstance(model, bool) or not isinstance(model, (str, int)) or not str(model):
+        return None
+    return str(model)
+
+
+def observed_served_model(stdout="", stderr=""):
+    """Read an explicit harness report; requested values and arbitrary output are not evidence."""
+    prefix = "CF-HARNESS-SERVED-MODEL:"
+    observations = []
+    for output in (stdout or "", stderr or ""):
+        for line in output.splitlines():
+            if line.startswith(prefix):
+                value = line[len(prefix) :].strip()
+                if re.fullmatch(
+                    r"[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,255}", value
+                ) and not secret_shaped(value):
+                    observations.append(value)
+    if observations and all(value == observations[0] for value in observations):
+        return observations[0]
+    return None
+
+
+def harness_attribution(dispatch, served_model=None):
+    """Always distinguish the requested input from an explicitly reported observation."""
+    return {
+        "model_requested": requested_model(dispatch),
+        "served_model": served_model,
+        "served_model_source": (
+            "harness_report" if served_model is not None else "unobserved"
+        ),
+    }
+
+
 def refusal(ident, dispatch, reason, detail, in_reply_to=""):
     """Build a refusal result for a dispatch this node will not execute."""
     summary = f"refused by {reason}: {detail}"
@@ -1041,7 +1086,10 @@ def refusal(ident, dispatch, reason, detail, in_reply_to=""):
         "error": summary,
         "reply_b64": result_reply("refused", summary),
         "host_identity": socket.gethostname(),
-        "harness": {"name": ident.harness_name},
+        "harness": {
+            "name": ident.harness_name,
+            **harness_attribution(dispatch),
+        },
         "exit_codes": [],
         "branch": git_field(ident.repo_path, "rev-parse", "--abbrev-ref", "HEAD"),
         "commit": git_field(ident.repo_path, "rev-parse", "HEAD"),
@@ -1097,9 +1145,11 @@ def _task_image(dispatch):
         "ref": dispatch.get("ref"),
         "workdir": dispatch.get("workdir"),
         "gate": copy.deepcopy(dispatch.get("gate")),
-        "vars": copy.deepcopy(dispatch.get("vars"))
-        if isinstance(dispatch.get("vars"), dict)
-        else {},
+        "vars": (
+            copy.deepcopy(dispatch.get("vars"))
+            if isinstance(dispatch.get("vars"), dict)
+            else {}
+        ),
     }
 
 
@@ -1237,9 +1287,10 @@ def memory_record(ident, dispatch, values, result, outcome):
         "lane": str(values.get("CF_LANE") or ident.project or ""),
         "harness": ident.harness_name,
         "harness_version": ident.harness_version,
-        "model_requested": str(values.get("CF_MODEL") or "unreported"),
-        "model_served": str(
-            result.get("model_served") or values.get("CF_MODEL") or "unreported"
+        "model_requested": (result.get("harness") or {}).get("model_requested"),
+        "model_served": (result.get("harness") or {}).get("served_model"),
+        "model_served_source": (result.get("harness") or {}).get(
+            "served_model_source", "unobserved"
         ),
         "provider_binding": str(values.get("CF_PROVIDER") or "unreported"),
         "commit": str(result.get("commit") or "unreported"),
@@ -1418,6 +1469,7 @@ def process(dispatch, ident, signer, args, seen, in_reply_to=""):
 
     wall = dispatch_wall(dispatch, args)
     code, seconds, stdout, stderr, note = run_harness(ident, text, wall, values)
+    served_model = observed_served_model(stdout, stderr)
     if note:
         bad("harness", f"{label} {note}")
         result = refusal(ident, dispatch, "harness", note, in_reply_to=in_reply_to)
@@ -1502,12 +1554,11 @@ def process(dispatch, ident, signer, args, seen, in_reply_to=""):
             status, summary, one_line(stdout or stderr, REPLY_TAIL_CHARS)
         ),
         "host_identity": socket.gethostname(),
-        # This worker does not receive a trustworthy served-model report from every harness yet.
-        # In that case, record the requested model as the best available attribution; do not
-        # invent a served name. If no request was supplied, say that explicitly.
+        # The harness report is the only observation channel. Requested input is never promoted
+        # to evidence of which model served the run.
         "harness": {
             "name": ident.harness_name,
-            "served_model": str(values.get("CF_MODEL") or "unreported"),
+            **harness_attribution(dispatch, served_model),
         },
         # The §5 run receipt: name + set/unset + length, never a value, so two runs compare.
         "vars": section5_receipt(values),
