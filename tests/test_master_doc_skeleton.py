@@ -40,6 +40,17 @@ class MasterDocTest(unittest.TestCase):
         legacy.write_text(old, encoding="utf-8")
         self.legacy = load(legacy, "cf323_legacy")
         self.new = load(SCRIPT, "cf323_new")
+        pinned = subprocess.run(
+            ["git", "show", "8856deb0:scripts/master_doc_skeleton.py"],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+        pinned_path = self.root / "pinned.py"
+        pinned_path.write_text(pinned, encoding="utf-8")
+        self.pinned = load(pinned_path, "cf323_pinned_legacy")
+        self.pinned.MANIFEST = MANIFEST
         # This fixture reproduces the historic 40 numbered rows independently of discovery.
         index = subprocess.run(
             ["git", "show", "7e76d934:docs/master/00-INDEX.md"],
@@ -119,6 +130,41 @@ class MasterDocTest(unittest.TestCase):
             all((other / filename).is_file() for _, _, filename in self.rows)
         )
         self.assertFalse((other / "01-scripts-aaa-new-py.md").exists())
+
+    def test_unlisted_components_report_and_opt_in_strict(self):
+        for name in ("scripts/new-component.py", "specs/NEW.md"):
+            path = self.repo / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("# new\n", encoding="utf-8")
+        legacy_output = io.StringIO()
+        with (
+            contextlib.redirect_stdout(legacy_output),
+            contextlib.redirect_stderr(legacy_output),
+        ):
+            rc = self.pinned.main(
+                ["--repo-root", str(self.repo), "--output", str(self.out), "--apply"]
+            )
+        self.assertEqual(rc, 0, legacy_output.getvalue())
+        self.assertNotIn("new-component.py", legacy_output.getvalue())
+        self.assertNotIn("specs/NEW.md", legacy_output.getvalue())
+        self.assertNotIn("new-component.py", (self.out / "00-INDEX.md").read_text())
+        self.out = self.root / "default-out"
+        expected = "manifest drift: 2 discovered component(s) not pinned: scripts/new-component.py, specs/NEW.md"
+        for args in ((), ("--apply",)):
+            rc, output = self.run_new(*args)
+            self.assertEqual(rc, 0, output)
+            self.assertIn("WARN " + expected, output)
+        self.assertTrue((self.out / "00-INDEX.md").exists())
+        self.out = self.root / "refused-out"
+        rc, output = self.run_new("--apply", "--strict-unlisted")
+        self.assertNotEqual(rc, 0, output)
+        self.assertIn("FAIL " + expected, output)
+        self.assertFalse(self.out.exists())
+
+    def test_exact_manifest_has_no_drift(self):
+        rc, output = self.run_new()
+        self.assertEqual(rc, 0, output)
+        self.assertNotIn("manifest drift", output)
 
     def test_default_dry_run_and_idempotent_apply(self):
         self.old_run()

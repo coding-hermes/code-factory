@@ -234,6 +234,11 @@ def main(argv=None):
         action="store_true",
         help="allow replacing non-skeleton documents with --apply",
     )
+    parser.add_argument(
+        "--strict-unlisted",
+        action="store_true",
+        help="refuse when discovered components are absent from the manifest",
+    )
     args = parser.parse_args(argv)
     if args.force and not args.apply:
         parser.error("--force requires --apply")
@@ -256,6 +261,18 @@ def main(argv=None):
     except (OSError, ValueError, KeyError, TypeError) as exc:
         print(f"FAIL manifest: {exc}", file=sys.stderr)
         return 1
+
+    discovered = {path.relative_to(root).as_posix() for _, path in modules_for(root)}
+    unlisted = sorted(discovered - set(components))
+    if unlisted:
+        level = "FAIL" if args.strict_unlisted else "WARN"
+        print(
+            f"{level} manifest drift: {len(unlisted)} discovered component(s) not pinned: "
+            + ", ".join(unlisted),
+            file=sys.stderr,
+        )
+        if args.strict_unlisted:
+            return 1
 
     index = [
         "# CODE FACTORY — MASTER DOCUMENT SKELETON",
