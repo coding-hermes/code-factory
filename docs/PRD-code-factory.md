@@ -49,19 +49,25 @@ One project (crier), one node, one directive that travelled over crier and reach
 gateway, one commit produced there, one artifact digest verified back on the control host, and a
 recorded FAIL when the gate is made to fail.
 
-**Status 2026-11-21T10:57Z (board re-measured at `fc26da9b` — 604 task rows, 962 events: 209
-complete, 16 in_progress, 4 blocked, 375 pending): NOT MET, and the three legs are still absent —
+**Status 2026-11-21T11:43Z (board re-measured at `f49fb016` — 604 task rows, 963 events: 210
+complete, 16 in_progress, 4 blocked, 374 pending): NOT MET, and the three legs are still absent —
 re-scanned rather than re-asserted.** The scan behind the 2026-11-20 paragraph was re-run at
-`fc26da9b` over the title and acceptance criteria of all 209 `complete` rows for the three legs. It
-returned seven hits and each was read: `CF-013` and `CF-202` are absence findings that *name* the
+`fc26da9b` over the title and acceptance criteria of all 209 then-`complete` rows for the three legs.
+It returned seven hits and each was read: `CF-013` and `CF-202` are absence findings that *name* the
 missing digest recomputation, `CF-302` and `CF-315` are the commit-attribution rows, `CF-396` and
 `CF-443` match the word "broken" in an unrelated sense, and `P5G-12` is the release-manifest
 specification. None is a commit produced on a node, none recomputes an artifact digest from pulled
-bytes on the control host, and none records a FAIL from a gate deliberately made to fail. So the leg
-status is unchanged, and is now stated with the hits that were inspected and rejected rather than by
-absence of evidence. The thirteen blocker rows keep their 2026-11-20 statuses at `fc26da9b`:
-`CF-001`, `CF-002`, `CF-004`, `CF-136`, `CF-137`, `CF-138`, `CF-139` `in_progress`; `CF-080`,
-`CF-131`, `CF-132`, `CF-133` `pending`; `CF-110`, `CF-112` `blocked`.
+bytes on the control host, and none records a FAIL from a gate deliberately made to fail. At
+`f49fb016` the same seven rows were re-read by id and all seven are still `complete`; the one row
+that has closed since — `CF-507`, the `--check` agent row measuring a named agent id rather than an
+exit status — adds no hit, because it names no commit produced on a node, no digest recomputed from
+pulled bytes and no deliberate gate FAIL. So the leg status is unchanged, and is stated with the hits
+that were inspected and rejected rather than by absence of evidence. The open defects at `f49fb016`
+are the thirteen blocker rows at their 2026-11-20 statuses — `CF-001`, `CF-002`, `CF-004`, `CF-136`,
+`CF-137`, `CF-138`, `CF-139` `in_progress`; `CF-080`, `CF-131`, `CF-132`, `CF-133` `pending`;
+`CF-110`, `CF-112` `blocked` — plus the nine further `in_progress` rows `CF-003`, `CF-005`,
+`CF-053`, `CF-079`, `CF-204`, `CF-206`, `CF-249`, `CF-268`, `CF-483` and the two further `blocked`
+rows `P5G-05`, `P5G-09`. The 374 `pending` rows are open by definition and are not enumerated here.
 
 **`complete` does not mean gradable, and this paragraph measures the legs accordingly.** At
 `fc26da9b`, 41 of 209 `complete` rows (19%) and 136 of 375 `pending` rows (36%, 31 of them P0/P1)
