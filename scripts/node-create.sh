@@ -67,7 +67,7 @@ staged_ref_path() {
 }
 
 staged_files() {
-  local file line ref target base rest member import_name import_target
+  local file line ref target base rest member import_name import_leaf import_target import_branch
   # node_gateway_auth.py is staged because project-node.sh layer 20 runs it: the harness adapter
   # refuses a public bind without dashboard.basic_auth, and no other stage writes it (CF-150).
   # install-node.sh/node_hygiene.py/gomodcache.py are layer 10/00 dependencies of the runtime,
@@ -117,27 +117,37 @@ staged_files() {
         esac
       done
     done < "$HERE/$file"
-    # Python resolves a top-level import from the worker's sibling module directory. Treat an
-    # import whose corresponding .py file exists beside the staged member as a transitive staged
-    # reference; standard-library and third-party imports have no sibling file and are ignored.
+    # Python resolves a top-level import from the module directory the referring member itself
+    # sits in, so resolve the sibling RELATIVE TO THE MEMBER'S OWN DIRECTORY first — for a nested
+    # member too, not only for one at scripts/ root (CF-437). Only when that misses do we fall
+    # back to the harness/ root, which node-bus-worker.py puts on sys.path before importing its
+    # top-level harness_memory module. An import that exists in neither branch is standard-library
+    # or third-party and is ignored. Both branches are named on the trace and in the FAIL row.
     if [[ "$file" == *.py ]]; then
       while IFS= read -r line; do
         if [[ "$line" =~ $import_pattern ]]; then
           import_name="${BASH_REMATCH[2]:-${BASH_REMATCH[3]}}"
+          import_leaf="${import_name##*.}.py"
           if [ "$base" = "." ]; then
-            import_target="${import_name##*.}.py"
+            import_target="$import_leaf"
           else
-            import_target="$base/${import_name##*.}.py"
+            import_target="$base/$import_leaf"
           fi
-          # node-bus-worker.py adds scripts/harness to sys.path before importing its top-level
-          # harness_memory module, so resolve that runtime sibling as well as same-directory imports.
-          if [ ! -f "$HERE/$import_target" ] && [ "$base" = "." ]; then
-            import_target="harness/${import_name##*.}.py"
+          import_branch="member directory"
+          if [ ! -f "$HERE/$import_target" ]; then
+            import_branch="harness root"
+            import_target="harness/$import_leaf"
           fi
           if [ -f "$HERE/$import_target" ]; then
+            # STAGED_SET_TRACE names the branch that resolved each import; it goes to stderr so
+            # the printed manifest stays a pure file list its callers can stage from.
+            if [ -n "${STAGED_SET_TRACE:-}" ]; then
+              printf '  staged_set trace — %s imports %s -> %s (%s)\n' \
+                "$file" "$import_name" "$import_target" "$import_branch" >&2
+            fi
             case " ${declared[*]} " in
               *" $import_target "*) queue+=("$import_target") ;;
-              *) bad "staged_set" "$file imports unstaged $import_name ($import_target)" >&2; return 1 ;;
+              *) bad "staged_set" "$file imports unstaged $import_name ($import_target) [resolved from the $import_branch branch]" >&2; return 1 ;;
             esac
           fi
         fi

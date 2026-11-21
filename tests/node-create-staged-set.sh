@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # node-create-staged-set.sh — CF-087: the staged-set validator's bounded behavioural probe.
 #
-#   bash tests/node-create-staged-set.sh <spellings|members|derive|all>
+#   bash tests/node-create-staged-set.sh <spellings|members|derive|nested|all>
 #
 # The validator in scripts/node-create.sh answers one question: does the staging manifest carry
 # every file the runtime will reach for? It used to answer it from a single spelling of one
@@ -15,6 +15,8 @@
 #   derive     the printed set is the derived closure: a needed member dropped from the declared
 #              list, or a declared member nothing references, is a named staged_set row, and every
 #              reference a printed member holds resolves back into the printed set
+#   nested     a .py member that is not at scripts/ root resolves an import against its OWN
+#              directory first and then the harness/ root, and an unstaged sibling refuses
 #   all        every arm; prints STAGED_SET: PASS only when each one passed
 set -uo pipefail
 
@@ -47,6 +49,16 @@ new_copy() {
 run_manifest() {
   out="$(bash "$1/scripts/node-create.sh" --staged-files 2>&1)"
   rc=$?
+}
+
+# declare_nested <copy> <members> — add nested fixture members to that copy's declared manifest.
+# The nested arm has to declare them: the validator's bidirectional check compares the declared
+# list with the derived closure, so a member derived but undeclared is a different failure.
+declare_nested() {
+  local d="$1" members="$2"
+  sed "s|harness/harness_memory.py \"harness/install-|harness/harness_memory.py $members \"harness/install-|" \
+    "$d/scripts/node-create.sh" > "$d/scripts/node-create.pre" || return 1
+  mv "$d/scripts/node-create.pre" "$d/scripts/node-create.sh"
 }
 
 # expect_unstaged <label> <member> <line to append to the member>
@@ -191,12 +203,83 @@ arm_derive() {
   derive_closed
 }
 
+# nested_member — CF-437: a .py member that does not sit at scripts/ root must resolve its
+# imports against its OWN directory first, then the harness/ root. The fixture adds
+# scripts/harness/deep/{x,y}.py and removes the only scripts/-root referrer of
+# harness/harness_memory.py, so the nested member's `import harness_memory` is the single route
+# to that member: a validator that only falls back into harness/ for root-level members leaves
+# it unstaged, and the declared-vs-derived check names that here instead of passing quietly.
+# Both resolution branches are asserted from the validator's own trace, not from the exit code.
+nested_member() {
+  local d out rc
+  d="$(new_copy nested-member)" || { fail_arm "nested-member — cannot copy scripts/"; return; }
+  mkdir -p "$d/scripts/harness/deep" || { fail_arm "nested-member — cannot create the nested fixture directory"; return; }
+  printf 'PLACEHOLDER = 1\n' > "$d/scripts/harness/deep/y.py"
+  {
+    printf 'import y\n'
+    printf 'import harness_memory\n'
+    printf '\n\ndef probe():\n    return y.PLACEHOLDER, harness_memory.StoredMemory\n'
+  } > "$d/scripts/harness/deep/x.py"
+  if ! grep -q '^from harness_memory import ' "$d/scripts/node-bus-worker.py"; then
+    fail_arm "nested-member — cannot derive the mutation: node-bus-worker.py no longer carries the root-level harness_memory import"
+    return
+  fi
+  sed 's|^from harness_memory import .*|# CF-437 fixture: the scripts/ root referrer is removed|' \
+    "$d/scripts/node-bus-worker.py" > "$d/scripts/node-bus-worker.pre" \
+    && mv "$d/scripts/node-bus-worker.pre" "$d/scripts/node-bus-worker.py"
+  # A .py member only enters the closure through a reference a staged member makes, so seed the
+  # nested member from the entry point and declare it beside its sibling.
+  printf '%s\n' 'X="${HERE}/harness/deep/x.py"' >> "$d/scripts/project-node.sh"
+  declare_nested "$d" 'harness/deep/x.py harness/deep/y.py'
+  out="$(STAGED_SET_TRACE=1 bash "$d/scripts/node-create.sh" --staged-files 2>&1)"
+  rc=$?
+  if [ "$rc" -eq 0 ] \
+    && printf '%s\n' "$out" | grep -Fq 'harness/deep/x.py imports y -> harness/deep/y.py (member directory)' \
+    && printf '%s\n' "$out" | grep -Fq 'harness/deep/x.py imports harness_memory -> harness/harness_memory.py (harness root)' \
+    && printf '%s\n' "$out" | grep -Fxq 'harness/deep/x.py' \
+    && printf '%s\n' "$out" | grep -Fxq 'harness/deep/y.py' \
+    && printf '%s\n' "$out" | grep -Fxq 'harness/harness_memory.py'; then
+    pass_arm "nested-member — staged_set resolves the member directory (harness/deep/y.py) then the harness root (harness/harness_memory.py) and stages both (exit 0)"
+  else
+    fail_arm "nested-member — exit $rc, the nested member's sibling imports were not both resolved and staged"
+    printf '%s\n' "$out" | sed 's/^/    | /'
+  fi
+}
+
+# nested_member_absent — the same shape with an UNDECLARED sibling on disk: the validator must
+# refuse with a named staged_set row. A nested member that silently skips its own directory is
+# exactly how a node ships without a file it imports.
+nested_member_absent() {
+  local d out rc
+  d="$(new_copy nested-member-absent)" || { fail_arm "nested-member-absent — cannot copy scripts/"; return; }
+  mkdir -p "$d/scripts/harness/deep" || { fail_arm "nested-member-absent — cannot create the nested fixture directory"; return; }
+  printf 'PLACEHOLDER = 1\n' > "$d/scripts/harness/deep/z.py"
+  printf 'import z\n' > "$d/scripts/harness/deep/x.py"
+  printf '%s\n' 'X="${HERE}/harness/deep/x.py"' >> "$d/scripts/project-node.sh"
+  declare_nested "$d" 'harness/deep/x.py'
+  out="$(bash "$d/scripts/node-create.sh" --staged-files 2>&1)"
+  rc=$?
+  if [ "$rc" -ne 0 ] \
+    && printf '%s\n' "$out" | grep -Fq 'imports unstaged z (harness/deep/z.py) [resolved from the member directory branch]'; then
+    pass_arm "nested-member-absent — staged_set refuses the unstaged sibling harness/deep/z.py resolved from the member directory branch (exit $rc)"
+  else
+    fail_arm "nested-member-absent — exit $rc, the unstaged sibling of a nested member was not refused from the named member-directory branch"
+    printf '%s\n' "$out" | sed 's/^/    | /'
+  fi
+}
+
+arm_nested() {
+  nested_member
+  nested_member_absent
+}
+
 case "$ARM" in
   spellings) arm_spellings ;;
   members) arm_members ;;
   derive) arm_derive ;;
-  all) arm_spellings; arm_members; arm_derive ;;
-  *) printf 'usage: %s <spellings|members|derive|all>\n' "$0" >&2; exit 2 ;;
+  nested) arm_nested ;;
+  all) arm_spellings; arm_members; arm_derive; arm_nested ;;
+  *) printf 'usage: %s <spellings|members|derive|nested|all>\n' "$0" >&2; exit 2 ;;
 esac
 
 if [ "$ARM" = all ]; then

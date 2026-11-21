@@ -89,9 +89,12 @@ resolves `harness/harness_memory.py`, which is declared and staged at `~/harness
 does not name it still gets it). The derived closure is asserted equal to the declared manifest in
 both directions. A member the entry point needs therefore cannot be missing from the list, and a
 listed member nothing references cannot ride along. Verification:
-`bash tests/node-create-staged-set.sh all` (arms `spellings`, `members`, `derive`; each mutates a
-private copy of `scripts/` in a temporary directory and reads the mutated copy's `--staged-files`),
-wired into `bash tests/selftest.sh` §16.
+`bash tests/node-create-staged-set.sh all` (arms `spellings`, `members`, `derive`, `nested`; each
+mutates a private copy of `scripts/` in a temporary directory and reads the mutated copy's
+`--staged-files`), wired into `bash tests/selftest.sh` §16. A Python member that is not at
+`scripts/` root resolves its imports against its own directory first, then the `harness/` root
+(CF-437), and the `nested` arm proves both branches resolve and that an unstaged sibling is
+refused by name.
 
 **S3 identity-file contract (CF-289).** `$HOME/.node/node.json` has two writers and one shape, and
 **both merge** — neither may replace the document:

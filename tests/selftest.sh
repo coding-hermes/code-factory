@@ -1599,9 +1599,19 @@ fi
 # member, and the set it prints is the closure it derived — not a second list nobody checks.
 # tests/node-create-staged-set.sh mutates its own temporary copy of scripts/ (never this tree)
 # and prints one row per arm, each naming the staged_set row it measured; those rows are the
-# rows below, so one arm cannot go green by asserting nothing.
-for staged_arm in spellings members derive; do
+# rows below, so one arm cannot go green by asserting nothing. CF-437 added the `nested` group
+# (a .py member off scripts/ root resolves its imports against its own directory first, then the
+# harness/ root), so the per-arm row counts are asserted exactly here — a group that loses a row
+# is a named FAIL, not a shorter green run.
+for staged_arm in spellings members derive nested; do
   staged_out=$(bash "$HERE/tests/node-create-staged-set.sh" "$staged_arm" 2>&1); staged_rc=$?
+  case "$staged_arm" in
+    spellings) staged_expected=4 ;;
+    members)   staged_expected=3 ;;
+    derive)    staged_expected=4 ;;
+    nested)    staged_expected=2 ;;
+    *)         staged_expected=0 ;;
+  esac
   staged_rows=0
   while IFS= read -r staged_row; do
     [ -n "$staged_row" ] || continue
@@ -1614,8 +1624,8 @@ for staged_arm in spellings members derive; do
         selftest_fail ;;
     esac
   done <<< "$staged_out"
-  if [ "$staged_rc" -ne 0 ] || [ "$staged_rows" -eq 0 ]; then
-    say "  FAIL  staged_set:$staged_arm — probe exited $staged_rc with $staged_rows asserted rows"
+  if [ "$staged_rc" -ne 0 ] || [ "$staged_rows" -ne "$staged_expected" ]; then
+    say "  FAIL  staged_set:$staged_arm — probe exited $staged_rc with $staged_rows asserted rows, expected $staged_expected"
     selftest_fail
   fi
 done
