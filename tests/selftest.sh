@@ -3259,6 +3259,65 @@ else
 fi
 rm -rf "$tmpd"
 
+# ch:trace row=CF-515 spec=docs/handbook/chapters/VIII-5-tests.md wave=none:serial test=tests/selftest.sh::cf099-drift doc=docs/handbook/chapters/VIII-5-tests.md evidence=tests/selftest.sh::cf099-drift witness=none:local-hermetic-fixture verdict=none:foreman-runs-gitreins commit=none:worker-commit memory=none:foreman-writes-after-publication
+cf099_grade() {
+  local output="$1" rc="$2"
+  [ "$rc" -eq 0 ] && printf '%s\n' "$output" | grep -q '^OK:'
+}
+cf181_grade() {
+  local output="$1" rc="$2" count
+  [ "$rc" -eq 0 ] || return 1
+  count=$(printf '%s\n' "$output" | sed -n 's/^orphan_count=//p')
+  [[ "$count" =~ ^0+$ ]]
+}
+cf099_out=$(cd "$HERE" && bash "$HERE/docs/audits/cf099-prd-drift-probe.sh" 2>&1); cf099_rc=$?
+if cf099_grade "$cf099_out" "$cf099_rc"; then
+  say "  PASS  cf099-drift — $(printf '%s\n' "$cf099_out" | grep '^OK:' | tail -1)"
+else
+  say "  FAIL  cf099-drift — exit $cf099_rc: $(printf '%s\n' "$cf099_out" | tail -3 | tr '\n' ' ')"; selftest_fail cf099-drift
+fi
+cf181_out=$(cd "$HERE" && python3 docs/audits/cf181-verdict-binding-sweep.py . .coding-hermes/board/tasks.jsonl origin/main 2>&1); cf181_rc=$?
+say "  ..    cf181 diagnostics — $(printf '%s\n' "$cf181_out" | grep -E '^(unresolvable_pointers|non_verdict_records|malformed_evidence_entries)=' | tr '\n' ' ')"
+if cf181_grade "$cf181_out" "$cf181_rc"; then
+  say "  PASS  cf181-orphans — orphan_count=0 (exit $cf181_rc; other diagnostics are non-gating)"
+else
+  cf181_detail=$(printf '%s\n' "$cf181_out" | sed -n '/^=== ORPHANED ===/,$p')
+  [ -n "$cf181_detail" ] || cf181_detail=$(printf '%s\n' "$cf181_out" | tail -4)
+  say "  FAIL  cf181-orphans — exit $cf181_rc: $(printf '%s\n' "$cf181_detail" | tr '\n' ' ')"
+  selftest_fail cf181-orphans
+fi
+
+# Exercise the same graders with real probe output, not just assertions about their source.
+tmpd=$(mktemp -d)
+section_count=$(grep -cE '^say "[0-9]+\.' "$HERE/tests/selftest.sh")
+drift_count=$((section_count + 1))
+sed "s/$section_count numbered sections/$drift_count numbered sections/" "$HERE/docs/ACCEPTANCE-PLAN.md" > "$tmpd/plan"
+red=$(cd "$HERE" && CF099_PLAN="$tmpd/plan" bash "$HERE/docs/audits/cf099-prd-drift-probe.sh" 2>&1); red_rc=$?
+if ! cf099_grade "$red" "$red_rc" && printf '%s\n' "$red" | grep -q "^DRIFT: plan says $drift_count sections"; then
+  say "  PASS  cf099-drift-red — section drift refused (exit $red_rc)"
+else
+  say "  FAIL  cf099-drift-red — section drift was not refused (exit $red_rc)"; selftest_fail cf099-drift-red
+fi
+# The sweep reads git objects, not a filesystem board. Create a private git fixture with
+# an actually orphaned verdict; malformed evidence alone is deliberately non-gating (CF-514).
+mkdir -p "$tmpd/repo"
+git init -q "$tmpd/repo"
+printf '%s\n' '{"id":"CF-FIXTURE","status":"complete","detail":{"evidence":[{"run_id":"fixture","artifacts":["verdict.json"]}]}}' > "$tmpd/repo/board.jsonl"
+printf '%s\n' '{"commit":"0000000000000000000000000000000000000000","passed":true}' > "$tmpd/repo/verdict.json"
+git -C "$tmpd/repo" add board.jsonl verdict.json
+fixture_tree=$(git -C "$tmpd/repo" write-tree)
+fixture_commit=$(printf 'fixture\n' | GIT_AUTHOR_NAME=Fixture GIT_AUTHOR_EMAIL=fixture@example.invalid GIT_COMMITTER_NAME=Fixture GIT_COMMITTER_EMAIL=fixture@example.invalid git -C "$tmpd/repo" commit-tree "$fixture_tree")
+git -C "$tmpd/repo" update-ref refs/heads/fixture "$fixture_commit"
+red=$(python3 "$HERE/docs/audits/cf181-verdict-binding-sweep.py" "$tmpd/repo" board.jsonl refs/heads/fixture 2>&1); red_rc=$?
+if ! cf181_grade "$red" "$red_rc" && printf '%s\n' "$red" | grep -q '^CF-FIXTURE run=fixture ' \
+  && ! cf181_grade 'status=CLEAN' 0 && ! cf181_grade 'orphan_count=invalid' 0 \
+  && ! cf181_grade 'orphan_count=0' 2; then
+  say "  PASS  cf181-orphans-red — orphan CF-FIXTURE, missing/invalid count and probe error refused"
+else
+  say "  FAIL  cf181-orphans-red — orphan or invalid reading was accepted: $(printf '%s\n' "$red" | tail -4 | tr '\n' ' ')"; selftest_fail cf181-orphans-red
+fi
+rm -rf "$tmpd"
+
 say "40. the bunker provisioner fails closed, and its config file is data not code (CF-214)"
 bash -n "$HERE/scripts/bunker-provision.sh" && say "  PASS  bash -n scripts/bunker-provision.sh" || { say "  FAIL  provision syntax"; selftest_fail; }
 bash -n "$HERE/scripts/bunker-crier-connect.sh" && say "  PASS  bash -n scripts/bunker-crier-connect.sh" || { say "  FAIL  crier-connect syntax"; selftest_fail; }

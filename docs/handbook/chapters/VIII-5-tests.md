@@ -126,6 +126,14 @@ row-count artifact until proven otherwise: one failing assertion whose message e
 output is printed as several rows. Evidence, row-by-row attribution and the NOT PROVEN list:
 `docs/audits/cf-PERF-021-cold-cache-attribution.md` (VIII.5.4c).
 
+Section 39 of `tests/selftest.sh` runs `docs/audits/cf099-prd-drift-probe.sh` and
+`docs/audits/cf181-verdict-binding-sweep.py` as named arms. The cf181 arm gates only the
+measured orphan count; unresolvable pointers are owned by CF-513, and malformed evidence by
+CF-514, so both remain visible diagnostics rather than gate failures. The cf198 `arms_tree`
+census counts numbered section headings, so add checks for this family inside §39 rather than
+adding a new numbered section. The cf181 sweep reads its board from the named git ref, not an
+uncommitted filesystem copy; its orphan red fixture therefore uses a scratch git repository.
+
 ## 5. Verification
 
 | Check | Command | Expected | Recorded result |
