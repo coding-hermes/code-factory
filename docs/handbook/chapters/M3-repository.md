@@ -242,11 +242,21 @@ or delete branches.
 
 **Reap is dry-run by default.** `python3 scripts/worktree_census.py reap` prints WOULD-REAP for
 eligible trees and `REFUSED <path> — <reason>` for every skipped tree, without deleting anything.
-Only `python3 scripts/worktree_census.py reap --apply` removes eligible trees. There is no
-proc-scan bypass. Apply revalidates the registry entry, HEAD, status, ancestry and cwd owners
-immediately before removal, uses git without force, and reads back both path absence and registry
-absence before saying REAPED. Stop worker admission before apply: an external process can still
-start after the last scan, so this is not an atomic lock against uncooperative writers.
+Apply requires `python3 scripts/worktree_census.py reap --apply --quiesced-by "<who/what guarantees no worker admission>"`.
+An absent, empty or whitespace-only assertion is a hard REFUSED apply (exit 2), before any
+removal or WOULD-REAP. The operator must stop worker admission and name its guarantor in
+`--quiesced-by`; every apply refusal and REAPED line echoes that assertion. This records an
+operator claim, not tool-verified proof of quiescence and not an atomic lock. There is no
+proc-scan bypass. Apply revalidates registry, HEAD, status, ancestry and cwd owners immediately
+before git removal without force, then verifies path and registration absence. The scan → remove
+window remains: an uncooperative process can enter after the final scan. A post-removal cwd scan
+reports `REMOVED-WITH-RACE` with `POST-REMOVE-WRITER-DETECTED pid=...` for observed owners
+(including deleted cwd paths), or `POST-REMOVE-CWD-UNRESOLVED pid=...` for still-live same-uid
+pids whose cwd newly becomes unreadable. Already-inaccessible pids and exited/zombie processes
+are not evidence of a new race. Either detection exits 2 and stops further removals, never a bare
+REAPED success. Unresolved cwd is uncertainty, not proof that the pid owned this tree; processes
+that exit or leave before the post-scan and writers outside this uid/pid view can still evade
+observation. The required operator assertion remains the admission safety boundary.
 
 **Live registry disposition (CF-390).** The foreman's 197-entry registry, re-measured at worker
 start, has grown beyond the row's historical 150. Apply the four classes above per entry, not a

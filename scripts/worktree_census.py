@@ -50,17 +50,34 @@ def registry(repo):
     return records
 
 
-def process_cwds():
-    """Only this uid; disappearing/inaccessible per-pid entries are silent."""
+def process_cwds(include_unresolved=False):
+    """Only this uid; post-removal scans retain unresolved, still-present pids."""
     processes = []
     for entry in Path("/proc").iterdir():
         if not entry.name.isdecimal():
             continue
         try:
-            if entry.stat().st_uid == os.getuid():
-                processes.append((int(entry.name), os.readlink(entry / "cwd")))
+            if entry.stat().st_uid != os.getuid():
+                continue
         except OSError:
             continue
+        try:
+            cwd = os.readlink(entry / "cwd")
+        except OSError:
+            # A vanished pid is normal. A still-present pid with unreadable cwd
+            # cannot prove removal safe; report uncertainty rather than success.
+            if not include_unresolved or not entry.exists():
+                continue
+            try:
+                state = (entry / "stat").read_text().rsplit(") ", 1)[1].split()[0]
+                if state in ("Z", "X"):
+                    continue
+            except FileNotFoundError:
+                continue
+            except (OSError, IndexError):
+                pass
+            cwd = None
+        processes.append((int(entry.name), cwd))
     return processes
 
 
@@ -69,6 +86,8 @@ def live_writer(path, processes):
     root = os.path.realpath(path)
     pids = []
     for pid, cwd in processes:
+        if cwd is None:
+            continue
         # The suffix may be a kernel marker OR part of a real directory name.
         # Match both interpretations conservatively; never hide a live owner.
         candidates = (cwd, cwd.removesuffix(" (deleted)"))
@@ -160,9 +179,25 @@ def main(argv=None):
     parser.add_argument(
         "--apply", action="store_true", help="remove eligible trees in reap mode"
     )
+    parser.add_argument(
+        "--quiesced-by",
+        help="required for apply: name who guarantees no worker admission (operator claim)",
+    )
     args = parser.parse_args(argv)
     if args.apply and args.mode != "reap":
         parser.error("--apply requires reap mode")
+    if args.apply and not (args.quiesced_by or "").strip():
+        print(
+            "REFUSED apply — no quiescence assertion supplied "
+            "(pass --quiesced-by naming who guarantees no worker admission)"
+        )
+        return 2
+    # Escape control characters so operator-supplied text cannot forge log lines.
+    assertion = (
+        " (quiesced-by: " + json.dumps(args.quiesced_by, ensure_ascii=True)[1:-1] + ")"
+        if args.apply
+        else ""
+    )
 
     try:
         entries = registry(args.repo)
@@ -170,7 +205,7 @@ def main(argv=None):
         args.repo = Path(entries[0]["worktree"])
         processes = process_cwds()
     except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
-        print(f"FAIL census unavailable: {exc}", file=sys.stderr)
+        print(f"FAIL census unavailable: {exc}{assertion}", file=sys.stderr)
         return 2
     rows = []
     removed = 0
@@ -193,7 +228,8 @@ def main(argv=None):
             try:
                 fresh = registry(args.repo)
                 current = next(e for e in fresh if e["worktree"] == row["path"])
-                row = inspect(args.repo, current, process_cwds())
+                before_remove = process_cwds(include_unresolved=True)
+                row = inspect(args.repo, current, before_remove)
                 reasons = refusal(row, current, fresh[0]["worktree"])
                 if current != entry:
                     reasons.append("registry entry changed since census")
@@ -210,7 +246,7 @@ def main(argv=None):
             reasons = refusal(row, entry, entries[0]["worktree"])
         label = display_path(row["path"])
         if reasons:
-            print(f"REFUSED {label} — " + "; ".join(reasons))
+            print(f"REFUSED {label} — " + "; ".join(reasons) + assertion)
             failed |= bool(row["errors"])
         elif not args.apply:
             print(f"WOULD-REAP {label} — clean, merged, no-live-writer (dry-run)")
@@ -225,10 +261,35 @@ def main(argv=None):
                         "removal did not remove both path and registration"
                     )
                 removed += 1
-                print(f"REAPED {label} — clean, merged, no-live-writer")
+                # The assertion is not a lock. Detect an observable breach in the
+                # scan -> remove window, including Linux's deleted-cwd marker.
+                after = process_cwds(include_unresolved=True)
+                owner = live_writer(row["path"], after)
+                already_unresolved = {pid for pid, cwd in before_remove if cwd is None}
+                unresolved = ",".join(
+                    str(pid)
+                    for pid, cwd in sorted(after)
+                    if cwd is None and pid not in already_unresolved
+                )
+                detections = []
+                if owner:
+                    detections.append("POST-REMOVE-WRITER-DETECTED pid=" + owner)
+                if unresolved:
+                    detections.append("POST-REMOVE-CWD-UNRESOLVED pid=" + unresolved)
+                if detections:
+                    print(
+                        f"REMOVED-WITH-RACE {label} — "
+                        + "; ".join(detections)
+                        + assertion
+                    )
+                    failed = True
+                    # The admission claim failed: do not remove more trees.
+                    break
+                print(f"REAPED {label} — clean, merged, no-live-writer{assertion}")
             except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
-                print(f"REFUSED {label} — removal failed: {exc}")
+                print(f"REFUSED {label} — removal failed: {exc}{assertion}")
                 failed = True
+                break
     print(
         f"SUMMARY count={len(rows)}"
         f" merged={sum(r['merged'] == 'merged' for r in rows)}"

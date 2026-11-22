@@ -2,14 +2,21 @@
 """CF-390: real git fixtures, real cwd owners, and a deletion mutation control."""
 
 import ast
+from contextlib import redirect_stdout
+import io
 import json
 import os
 from pathlib import Path
+import runpy
 import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
+
+QUIESCED_BY = "fixture operator holds worker admission closed"
+APPLY = ("reap", "--apply", "--quiesced-by", QUIESCED_BY)
 
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = Path(
@@ -85,12 +92,12 @@ class WorktreeCensus(unittest.TestCase):
     def registered(self, path):
         return f"worktree {path}\0" in self.git("worktree", "list", "--porcelain", "-z")
 
-    def start_writer(self, path, nested=True):
+    def start_writer(self, path, nested=True, command=("sleep", "60")):
         cwd = path / "nested" if nested else path
         if nested:
             cwd.mkdir()
         # Empty directories are clean in git; this process is the ONLY blocker.
-        proc = subprocess.Popen(["sleep", "60"], cwd=cwd)
+        proc = subprocess.Popen(command, cwd=cwd)
 
         def stop():
             if proc.poll() is None:
@@ -109,7 +116,7 @@ class WorktreeCensus(unittest.TestCase):
 
     def test_clean_merged_removed_and_main_preserved(self):
         path = self.tree()
-        result = self.run_tool("reap", "--apply")
+        result = self.run_tool(*APPLY)
         self.assert_success(result)
         self.assertFalse(path.exists())
         self.assertFalse(self.registered(path))
@@ -119,7 +126,7 @@ class WorktreeCensus(unittest.TestCase):
             f"REFUSED {json.dumps(str(self.repo))} — main worktree", result.stdout
         )
         self.assertIn("removed=1", result.stdout)
-        self.assert_success(self.run_tool("reap", "--apply"))
+        self.assert_success(self.run_tool(*APPLY))
 
     def test_dirty_refused_with_owner_and_untracked_all(self):
         path = self.tree()
@@ -128,7 +135,7 @@ class WorktreeCensus(unittest.TestCase):
         nested.mkdir()
         for name in ("one", "two\nlines"):
             (nested / name).write_text("keep\n")
-        result = self.run_tool("reap", "--apply")
+        result = self.run_tool(*APPLY)
         self.assert_success(result)
         self.assert_preserved(path)
         self.assertIn(f"REFUSED {json.dumps(str(path))} — 3 dirty paths", result.stdout)
@@ -143,7 +150,7 @@ class WorktreeCensus(unittest.TestCase):
             with self.subTest(name=name):
                 path = self.tree(name)
                 proc = self.start_writer(path, nested=nested)
-                result = self.run_tool("reap", "--apply")
+                result = self.run_tool(*APPLY)
                 self.assert_success(result)
                 self.assert_preserved(path)
                 self.assertIn(
@@ -198,7 +205,7 @@ class WorktreeCensus(unittest.TestCase):
         weaponized.write_text(mutated)
         path = self.tree()
         proc = self.start_writer(path)
-        result = self.run_tool("reap", "--apply", script=weaponized)
+        result = self.run_tool(*APPLY, script=weaponized)
         self.assert_success(result)
         self.assertFalse(path.exists(), result.stdout)
         self.assertFalse(self.registered(path), result.stdout)
@@ -247,7 +254,7 @@ class WorktreeCensus(unittest.TestCase):
         path = self.tree()
         (path / "tracked.txt").write_text("unlanded\n")
         self.git("commit", "-qam", "unlanded", cwd=path)
-        result = self.run_tool("reap", "--apply")
+        result = self.run_tool(*APPLY)
         self.assert_success(result)
         self.assert_preserved(path)
         self.assertIn("HEAD unmerged against origin/main", result.stdout)
@@ -258,7 +265,7 @@ class WorktreeCensus(unittest.TestCase):
     def test_missing_origin_is_unknown_not_merged(self):
         path = self.tree()
         self.git("update-ref", "-d", "refs/remotes/origin/main")
-        result = self.run_tool("reap", "--apply")
+        result = self.run_tool(*APPLY)
         self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
         self.assert_preserved(path)
         self.assertIn("HEAD unknown against origin/main", result.stdout)
@@ -278,7 +285,7 @@ class WorktreeCensus(unittest.TestCase):
         path = self.tree("tree")
         sibling = self.tree("tree-other")
         proc = self.start_writer(sibling)
-        result = self.run_tool("reap", "--apply")
+        result = self.run_tool(*APPLY)
         self.assert_success(result)
         self.assertFalse(path.exists())
         self.assert_preserved(sibling)
@@ -287,14 +294,14 @@ class WorktreeCensus(unittest.TestCase):
     def test_locked_preserved(self):
         path = self.tree()
         self.git("worktree", "lock", str(path))
-        result = self.run_tool("reap", "--apply")
+        result = self.run_tool(*APPLY)
         self.assert_success(result)
         self.assert_preserved(path)
         self.assertIn("locked worktree", result.stdout)
 
     def test_main_protected_even_when_repo_is_linked_tree(self):
         path = self.tree()
-        result = self.run_tool("reap", "--apply", repo=path)
+        result = self.run_tool(*APPLY, repo=path)
         self.assert_success(result)
         self.assertTrue(self.repo.is_dir())
         self.assertTrue(self.registered(self.repo))
@@ -313,9 +320,148 @@ class WorktreeCensus(unittest.TestCase):
         self.assertNotIn("SUMMARY", result.stdout)
         self.assertNotIn("WORKTREE", result.stdout)
 
+    def test_apply_requires_quiescence_assertion_and_echoes_it(self):
+        path = self.tree()
+        before = self.git("worktree", "list", "--porcelain", "-z")
+        for assertion in (None, "", "   "):
+            with self.subTest(assertion=assertion):
+                args = ["reap", "--apply"]
+                if assertion is not None:
+                    args.extend(("--quiesced-by", assertion))
+                result = self.run_tool(*args)
+                self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+                self.assertIn(
+                    "REFUSED apply — no quiescence assertion supplied "
+                    "(pass --quiesced-by naming who guarantees no worker admission)",
+                    result.stdout,
+                )
+                self.assertNotIn("WOULD-REAP", result.stdout)
+                self.assertNotIn("REAPED", result.stdout)
+                self.assertEqual(
+                    before, self.git("worktree", "list", "--porcelain", "-z")
+                )
+                self.assert_preserved(path)
+                if assertion is None:
+                    print(result.stdout.strip())
+        result = self.run_tool(*APPLY)
+        self.assert_success(result)
+        allow = (
+            f"REAPED {json.dumps(str(path))} — clean, merged, no-live-writer "
+            f"(quiesced-by: {QUIESCED_BY})"
+        )
+        self.assertIn(allow, result.stdout.splitlines())
+        self.assertIn(
+            f"REFUSED {json.dumps(str(self.repo))} — main worktree "
+            f"(quiesced-by: {QUIESCED_BY})",
+            result.stdout.splitlines(),
+        )
+        self.assertFalse(path.exists())
+        self.assertFalse(self.registered(path))
+        print(allow)
+
+    def run_scan_remove_race(self, unresolved=False, preexisting_unresolved=False):
+        path = self.tree("a-tree")
+        spared = self.tree("z-tree")
+        unrelated = (
+            self.start_writer(self.repo, nested=False)
+            if preexisting_unresolved
+            else None
+        )
+        tool = runpy.run_path(str(SCRIPT))
+        main = tool["main"]
+        checked_git = tool["checked_git"]
+        readlink = os.readlink
+        writers = []
+
+        def enter_before_remove(repo, *args):
+            if args == ("worktree", "remove", "--", str(path)):
+                # Real final scan has returned: inject a shell at the removal
+                # boundary, without timing sleeps or a fake git removal.
+                writers.append(
+                    self.start_writer(
+                        path, nested=False, command=("sh", "-c", "exec sleep 60")
+                    )
+                )
+            return checked_git(repo, *args)
+
+        def disappearing_cwd(link):
+            if unrelated and str(link) == f"/proc/{unrelated.pid}/cwd":
+                raise PermissionError("fixture unrelated cwd was already inaccessible")
+            if (
+                unresolved
+                and writers
+                and not path.exists()
+                and str(link) == f"/proc/{writers[0].pid}/cwd"
+            ):
+                raise FileNotFoundError("fixture cwd resolution failed after removal")
+            return readlink(link)
+
+        # Bypass only argument parsing: the same oracle must exercise removal
+        # in the pre-fix script, not fail at its older CLI parser.
+        args = type(
+            "Args",
+            (),
+            dict(mode="reap", repo=self.repo, apply=True, quiesced_by=QUIESCED_BY),
+        )()
+        output = io.StringIO()
+        with (
+            mock.patch.dict(os.environ, self.env, clear=True),
+            mock.patch.dict(main.__globals__, checked_git=enter_before_remove),
+            mock.patch("argparse.ArgumentParser.parse_args", return_value=args),
+            mock.patch("os.readlink", side_effect=disappearing_cwd),
+            redirect_stdout(output),
+        ):
+            rc = main([])
+        self.assertEqual(len(writers), 1, "race must reach the real git removal")
+        self.assertIsNone(writers[0].poll(), "writer must survive through the oracle")
+        self.assertFalse(path.exists(), output.getvalue())
+        self.assertFalse(self.registered(path), output.getvalue())
+        self.assertEqual(
+            readlink(f"/proc/{writers[0].pid}/cwd"), str(path) + " (deleted)"
+        )
+        token = (
+            "POST-REMOVE-CWD-UNRESOLVED"
+            if unresolved
+            else "POST-REMOVE-WRITER-DETECTED"
+        )
+        expected = (
+            f"REMOVED-WITH-RACE {json.dumps(str(path))} — {token} "
+            f"pid={writers[0].pid} (quiesced-by: {QUIESCED_BY})"
+        )
+        self.assertIn(expected, output.getvalue().splitlines())
+        self.assertEqual(rc, 2, output.getvalue())
+        self.assertNotIn("REAPED ", output.getvalue())
+        self.assertIn("removed=1", output.getvalue())
+        self.assert_preserved(spared)
+        print(expected)
+
+    def test_writer_enters_between_scan_and_remove_is_detected(self):
+        self.run_scan_remove_race()
+
+    def test_unresolved_cwd_after_remove_is_reported(self):
+        self.run_scan_remove_race(unresolved=True)
+
+    def test_preexisting_unresolved_cwd_does_not_claim_new_race(self):
+        self.run_scan_remove_race(preexisting_unresolved=True)
+
+    def test_assertion_control_characters_cannot_forge_output(self):
+        path = self.tree()
+        assertion = "operator\nREAPED forged"
+        result = self.run_tool("reap", "--apply", "--quiesced-by", assertion)
+        self.assert_success(result)
+        self.assertIn(
+            f"REAPED {json.dumps(str(path))} — clean, merged, no-live-writer "
+            "(quiesced-by: operator\\nREAPED forged)",
+            result.stdout.splitlines(),
+        )
+        self.assertNotIn("REAPED forged", result.stdout.splitlines())
+
     def test_apply_requires_reap_and_no_proc_bypass(self):
         path = self.tree()
-        for args in (("--apply",), ("reap", "--apply", "--proc-scan", "off")):
+        for args in (
+            ("--apply", "--quiesced-by", QUIESCED_BY),
+            (*APPLY, "--proc-scan", "off"),
+        ):
             result = self.run_tool(*args)
             self.assertEqual(result.returncode, 2)
             self.assert_preserved(path)

@@ -4518,7 +4518,7 @@ rm -rf "$tmpd"
 # CF-390: only disposable registries; the mutation must really delete a live fixture.
 cf390_out=$(cd "$HERE" && python3 -m unittest tests.test_worktree_census 2>&1); cf390_rc=$?
 if [ "$cf390_rc" -eq 0 ]; then
-  say "  PASS  CF-390 worktree census/reaper — 15 fixture tests; clean merged reaped, dirty/live/unmerged/main preserved, live-guard deletion makes the same live-writer test FAIL"
+  say "  PASS  CF-390/CF-523 worktree census/reaper — fixture suite; quiescence assertion required and echoed, scan-to-remove writer detected, dirty/live/unmerged/main preserved, live-guard deletion makes the same live-writer test FAIL"
 else
   say "  FAIL  CF-390 worktree census/reaper — fixture suite exit $cf390_rc"
   printf '%s\n' "$cf390_out" | sed 's/^/    | /'
