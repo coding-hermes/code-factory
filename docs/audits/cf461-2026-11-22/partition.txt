@@ -1,0 +1,90 @@
+repo=~/cf-wt-cf461
+board=~/cf-wt-cf461/.coding-hermes/board/tasks.jsonl rows=615 complete=224 ignored_lines=0
+store events=~/cf-wt-cf461/.coding-hermes/board/events.jsonl
+store history=~/code-factory/.gitreins/history run_dirs=243
+
+CF-007                 artifact-lost  cited=222a8b0
+      candidate 2026-11-14/74cbc641 passed=True commit-differs commit=87b74b72
+CF-008                 never-judged  cited=963a3b3b
+CF-011                 never-judged  cited=code-factory-pm-20261031-114422-cf011,sync-20261103-cf011,CF-045-2026-11-14-selftest
+CF-012                 never-judged  cited=CF012-FOREMAN-20261031-1025
+CF-013                 never-judged  cited=code-factory-pm-20261031-114422-cf013,sync-20261103-cf013,CF-045-2026-11-14-selftest
+CF-034                 never-judged  cited=code-factory-readme-2026-10-31-20-00-26-cf034
+CF-037                 never-judged  cited=d701c539
+CF-038                 never-judged  cited=code-factory-readme-2026-10-30-23-28-00-cf038,25d05620
+CF-041                 never-judged  cited=code-factory-dogfood-2026-11-03-08-10-14,9a957be6
+CF-050                 artifact-lost  cited=code-factory-releng-2026-11-03-11-39-44,72863b1f
+      candidate 2026-11-11/82869669 passed=False commit-match commit=1d65602b
+CF-051                 never-judged  cited=code-factory-dogfood-2026-11-03-11-41-54,6fb779ad
+CF-052                 never-judged  cited=222a8b0
+CF-064                 never-judged  cited=cddf1a3d
+CF-082                 never-judged  cited=e2bd149d
+CF-089                 never-judged  cited=2566eeb5
+CF-090                 never-judged  cited=b99b7a52
+CF-092                 never-judged  cited=85a9f4c3
+CF-096                 never-judged  cited=7c2c8c8d
+CF-097                 never-judged  cited=b427397d
+CF-114                 never-judged  cited=5bf7e7d7
+CF-115                 never-judged  cited=c448bd9d
+CF-127                 never-judged  cited=54dce109
+CF-128                 never-judged  cited=46d622ac
+CF-141                 never-judged  cited=d1db81f0
+CF-150                 never-judged  cited=71cc322f
+CF-153                 never-judged  cited=code-factory-dogfood-2026-11-04-02-39-16,a516e16f
+CF-157                 never-judged  cited=c602b132
+CF-167                 never-judged  cited=a257fbd6
+CF-170                 never-judged  cited=1851f8e9
+CF-182                 never-judged  cited=360388a9
+CF-192                 never-judged  cited=a43b1573
+CF-197                 never-judged  cited=c884d5d4
+CF-198                 never-judged  cited=efce6b5c,393261da
+CF-219                 never-judged  cited=3f14d5b8
+CF-226                 artifact-lost  cited=d87850d4
+      candidate 2026-11-09/8569c2e5 passed=False commit-differs commit=f08bb4cf
+      candidate 2026-11-09/d4e31bf8 passed=False commit-differs commit=899bfe5c
+      candidate 2026-11-09/f92f631f passed=False commit-match commit=b8fb9920
+CF-230                 never-judged  cited=86c1c325
+CF-244                 never-judged  cited=210c8cb9
+CF-245                 never-judged  cited=a6e7120a
+CF-257                 never-judged  cited=bd8315a0
+CF-259                 never-judged  cited=0ae5eef6
+CF-270                 never-judged  cited=ce8bbfbc
+CF-275                 never-judged  cited=adbcd66a
+CF-277                 never-judged  cited=3b40fb2a
+CF-280                 never-judged  cited=c2c24292
+CF-289                 zero-evidence  (owned by CF-513)
+CF-291                 never-judged  cited=7af789d3
+CF-303                 never-judged  cited=1c00c57d
+CF-305                 zero-evidence  (owned by CF-513)
+CF-307                 never-judged  cited=21b706ef
+CF-320                 never-judged  cited=87ce8fa8
+CF-323                 never-judged  cited=b68e5407
+CF-354                 never-judged  cited=d18975d7
+CF-370                 never-judged  cited=08b7fa1f,08b7fa1f
+CF-378                 never-judged  cited=e060b303
+CF-379                 never-judged  cited=3d8734a9
+CF-382                 never-judged  cited=737c86d3
+CF-401                 artifact-lost  cited=0f9484e7
+      candidate 2026-11-09/599f1b59 passed=False commit-differs commit=b4bea63a
+      candidate 2026-11-09/c78d1397 passed=True commit-match commit=2bdcef9a
+CF-402                 artifact-lost  cited=2cecc44e,7266c435
+      candidate 2026-11-09/7266c435 passed=True commit-match commit=9bd994be
+CF-404                 artifact-lost  cited=907d6d89
+      candidate 2026-11-10/3bf4b96a passed=True commit-match commit=cd431e52
+CF-411                 artifact-lost  cited=602295a9
+      candidate 2026-11-10/5673492b passed=False commit-match commit=f81e1201
+CF-422                 zero-evidence  (owned by CF-513)
+CF-470                 never-judged  cited=43936119176
+CF-504                 never-judged  cited=9c314d90
+CF-517                 never-judged  cited=96c7dd52,69a1f953
+P5G-16                 never-judged  cited=d51510f2
+P5G-34                 zero-evidence  (owned by CF-513)
+PERF-012               never-judged  cited=code-factory-perf-2026-11-03-10-56-35-selftest-board-30row
+PERF-014               never-judged  cited=code-factory-perf-2026-11-03-14-51-11,code-factory-perf-2026-11-03-16-08-21
+PERF-018               artifact-lost  cited=code-factory-perf-2026-11-17-02-40-53,24b65cde
+      candidate 2026-11-17/24b65cde passed=True commit-match commit=e24d2e97
+QA-CODE-FACTORY-2      never-judged  cited=3251e0c5
+
+resolvable=154 artifact_lost=8 never_judged=58 zero_evidence=4
+findings=66 (artifact_lost + never_judged); board_evidence_check.py must report the same finding count for this history store
+population note: the history store is git-untracked, so a checkout with 0 run dirs reports a larger finding population by construction; pass the store you mean to grade.
