@@ -7411,6 +7411,12 @@ say "58. per-repo deploy key, node runtime, shared module cache, footprint, orph
 # ambient PATH node, layer 40 must use the declared key for the clone and refuse a readable
 # key instead of cloning without one, and layer 00 must print a footprint row.
 cf003=$(mktemp -d)
+if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_node_credential_law.py" >"$cf003/law-out" 2>&1; then
+  say "  PASS  CF-347 target law and registry refusal boundary (not node admission)"
+else
+  say "  FAIL  CF-347 target law or registry refusal boundary"; selftest_fail
+  sed 's/^/    | /' "$cf003/law-out"
+fi
 if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_node_provisioning.py" >"$cf003/out" 2>&1; then
   say "  PASS  five mechanisms with their refusal arms (deploy key, node pin, sealed GOMODCACHE, footprint, reap)"
   if grep -q 'MEASURED shared GOMODCACHE' "$cf003/out"; then

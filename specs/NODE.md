@@ -132,6 +132,36 @@ result is retried with the dispatch-derived key and the harness is not run twice
 
 ## Credentials — per-repo deploy keys
 
+**Credential law (CF-347; `.coding-hermes/board/tasks.jsonl:321`).** Only the owner
+mints node credentials; agents and nodes must not mint them. The owner decides how to
+perform minting when the necessary authority is not available. The owner's requirement
+was: “I don't know if the keys you already have will let you mint new separate keys or
+if you need me to physically get home”.
+
+A node may hold and use only credentials scoped to its one bound project, including
+credentials for a local DuckBrain if it runs one; it must refuse a credential for
+another project before use, and refuse unknown or unproven scope rather than infer it.
+This implements the owner's “with the correct one they need for that project and not
+the others” (`.coding-hermes/board/tasks.jsonl:321`; node binding `specs/NODE.md:3`).
+Credential files must have a stable, documented path outside the checkout, accessible
+when a node receives a binary without the repository; deploy keys use
+`$HOME/.node/keys/<project>.key` (`scripts/node-create.sh:19–25`).
+
+On suspected compromise, stop use of the affected credential, notify the owner, revoke
+or deny it and rotate it on the affected node with an owner-minted replacement. Do not
+resume use until replacement scope and activation and old-credential denial are
+verified; an unknown revocation remains blocked. This implements the owner's “you
+should roate the token on that box that lieask” (`.coding-hermes/board/tasks.jsonl:321`;
+`docs/THREAT-MODEL.md:103`; lifecycle `docs/handbook/chapters/M7-github.md:303–318`).
+
+**Implementation boundary:** these are target laws, not a claim of shipped enforcement.
+`project-node.sh:1018–1045` checks key readability, mode and SSH config, not project
+scope. `scripts/deploy_key.py:311–334` checks a registry name and host/port, not the
+full repository identity or actual provider grant; a same-name, same-host mismatch can
+pass. A missing registry name is refused, but that is not proof that a node rejects
+all foreign credentials. `tests/test_node_credential_law.py` pins this limitation and
+the required policy; a real project-binding admission check remains unimplemented.
+
 A private repo is cloned with a key that belongs to **that repo**, never with an account key and
 never with an identity the agent happens to have. The whole path is `scripts/deploy_key.py`:
 
