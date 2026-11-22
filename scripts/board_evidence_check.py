@@ -65,6 +65,12 @@ import sys
 # new finding the same day and needed no entry: it had no pointer at all, so its
 # closeout was repaired by recording the commit that implemented it.  The
 # systemic fix (harvest run dirs out of worker worktrees) is a separate row.
+# 2026-11-22 (pruned, no new acceptance): CF-289, CF-305, P5G-34 and CF-422 were the
+# four zero-evidence findings.  They are findings no longer: each now carries a dict
+# detail.evidence bundle naming the commit that implemented it plus a GitReins artifact
+# that exists in the canonical checkout, bound by tick code-factory-foreman-2026-11-22-03-32-06
+# under CF-513.  Accepted ids 70 -> 66, so a later run that sees one of them fail again
+# reports it as new instead of silently inheriting an old acceptance.
 # ACCEPTED_UNRESOLVED_DATE is the date of the newest acceptance, not of the
 # original 2026-11-16 baseline that the paragraph above measures.
 ACCEPTED_UNRESOLVED_DATE = "2026-11-22"
@@ -74,10 +80,9 @@ ACCEPTED_UNRESOLVED = frozenset(
     CF-052 CF-064 CF-082 CF-089 CF-090 CF-092 CF-096 CF-097 CF-114 CF-115
     CF-127 CF-128 CF-141 CF-150 CF-153 CF-157 CF-167 CF-170 CF-182 CF-192
     CF-197 CF-198 CF-219 CF-226 CF-230 CF-244 CF-245 CF-257 CF-259 CF-270
-    CF-275 CF-277 CF-280 CF-289 CF-291 CF-303 CF-305 CF-307 CF-320 CF-323
-    CF-354 CF-370 CF-378 CF-379 CF-382 CF-401 CF-402 CF-404 CF-411 CF-422
-    CF-470 CF-504 CF-517 P5G-16 P5G-34 PERF-012 PERF-014 PERF-018
-    QA-CODE-FACTORY-2
+    CF-275 CF-277 CF-280 CF-291 CF-303 CF-307 CF-320 CF-323 CF-354 CF-370
+    CF-378 CF-379 CF-382 CF-401 CF-402 CF-404 CF-411 CF-470 CF-504 CF-517
+    P5G-16 PERF-012 PERF-014 PERF-018 QA-CODE-FACTORY-2
     """.split()
 )
 
