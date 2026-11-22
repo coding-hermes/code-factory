@@ -204,8 +204,7 @@ likewise both a requirement row and a `blocked` board row, never `complete`), on
 a leg and was missing from this list before 2026-11-04 — `CF-002` (P0: a node turn dies at
 `agent init failed: No inference provider configured`, so the "commit produced on a node" leg cannot
 be reached) — plus the dispatch
-defects the live runs exposed: `CF-131` (a completion reply that echoes the task body is refused
-`403 GUARD_BLOCKED`), `CF-132` (no receive-side idempotency key), `CF-136` (a dispatch row never reaches a terminal state when its
+defects the live runs exposed: `CF-132` (no receive-side idempotency key), `CF-136` (a dispatch row never reaches a terminal state when its
 tick times out), `CF-137` (a failed dispatch is never acked, so it redelivers the same failure
 forever) and `CF-138` (the dispatcher still kills a real task on a caller-derived timeout — 32.1 s in
 the 02:35Z runs; the old 243 s constant the row's title names is in no shipped file, `grep -rn '243'
@@ -218,7 +217,13 @@ rejects a citation of it): `CF-133` — the node emitted a result dialect `specs
 define; the completed/failed envelope now carries `harness.served_model` as `specs/ENVELOPE.md:96`
 defines it (code `b9d60860`, close `09ca606a`, verdict `839c3bb6`), with the requested-vs-served
 gap it cannot close by itself left open as `CF-521`. It left this list 2026-11-21, the day the row
-closed. Then `CF-150` — the documented create path staged no `dashboard.basic_auth`, so
+closed. Then `CF-131` — a completion reply that echoes the task body was refused `403
+GUARD_BLOCKED`, so the tick never settled; the node now carries dispatch-controlled text only as
+bounded identity in plain members (verbatim text stays in base64 `reply_b64`), `deliver()` declines
+a guard-shaped body with a named `guard` row before any POST, and the guard transcription is
+pinned byte-for-byte to crier's shipped seed table with a completeness check (code `e3794bfa`,
+merge `f4f9f39f`, coverage completion `16f99fd1`, verdicts `dd1b39f9`/`257da803`). It left this
+list 2026-11-22, the day the row closed. Then `CF-150` — the documented create path staged no `dashboard.basic_auth`, so
 `install-hermes.sh` refused the public bind and a node created by the documented path never started
 the gateway the directive leg has to reach (reproduced 2026-11-04T06:13Z:
 `installer_basic_auth=3 create_path_basic_auth=scripts/node-create.sh:0,scripts/project-node.sh:0,`
