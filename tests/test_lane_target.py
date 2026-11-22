@@ -61,7 +61,9 @@ def hermetic(root: str) -> str:
     if root not in _CEILINGS:
         _CEILINGS.append(root)
         inherited = [
-            d for d in os.environ.get("GIT_CEILING_DIRECTORIES", "").split(os.pathsep) if d
+            d
+            for d in os.environ.get("GIT_CEILING_DIRECTORIES", "").split(os.pathsep)
+            if d
         ]
         os.environ["GIT_CEILING_DIRECTORIES"] = os.pathsep.join(inherited + _CEILINGS)
     return root
@@ -285,7 +287,9 @@ class RepoURL(unittest.TestCase):
             env=unceiled,
         )
         self.assertEqual(escaped.returncode, 0, escaped.stderr)
-        self.assertEqual(os.path.realpath(escaped.stdout.strip()), os.path.realpath(outer))
+        self.assertEqual(
+            os.path.realpath(escaped.stdout.strip()), os.path.realpath(outer)
+        )
         ceiled = {**unceiled, "GIT_CEILING_DIRECTORIES": os.path.realpath(outer)}
         stopped = subprocess.run(
             [GIT_BIN, "-C", nested, "rev-parse", "--show-toplevel"],
