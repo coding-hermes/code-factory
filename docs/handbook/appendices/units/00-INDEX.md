@@ -3,6 +3,12 @@
 Generated mechanically. Every **RED** is a claim that has no evidence yet,
 not a section that is merely unwritten. A section turns green by running a command, never by editing prose.
 
+Rows 1–44 are generated from the module files by the doc pipeline and were
+never hand-edited. **Rows 45–63 are the exception**: hand-added CF-360 unit
+records (2026-11-22), cross-checked by `scripts/master_doc_check.py`, which
+recomputes every row's status below against its page and fails the gate on a
+mismatch — a hand-added row cannot drift from its record silently.
+
 | # | Module | Repo | Status |
 |---|---|---|---|
 | 1 | [`scripts/add_family_lanes.py`](01-scripts-add-family-lanes-py.md) | code-factory | UNVERIFIED |
@@ -49,32 +55,73 @@ not a section that is merely unwritten. A section turns green by running a comma
 | 42 | [`specs/TRACE.md`](42-specs-trace-md.md) | code-factory | RED |
 | 43 | [`specs/HARNESS-MEMORY.md`](43-specs-harness-memory-md.md) | code-factory | RED |
 | 44 | [`scripts/master_doc_*.py`](44-doc-pipeline.md) | code-factory | VERIFIED |
+| 45 | [`tests/selftest.sh`](45-tests-selftest-sh.md) | code-factory | VERIFIED |
+| 46 | [`prompts/foreman.md`](46-prompts-foreman-md.md) | code-factory | VERIFIED |
+| 47 | [`skills/code-factory-bunker/SKILL.md`](47-skills-code-factory-bunker-skill-md.md) | code-factory | VERIFIED |
+| 48 | [`skills/code-factory-foreman/SKILL.md`](48-skills-code-factory-foreman-skill-md.md) | code-factory | VERIFIED |
+| 49 | [`config/bunker.example.conf`](49-config-bunker-example-conf.md) | code-factory | VERIFIED |
+| 50 | [`config/github-app.example.env`](50-config-github-app-example-env.md) | code-factory | VERIFIED |
+| 51 | [`config/harness-matrix.json`](51-config-harness-matrix-json.md) | code-factory | VERIFIED |
+| 52 | [`config/node.env.example`](52-config-node-env-example.md) | code-factory | VERIFIED |
+| 53 | [`config/node-seed.txt`](53-config-node-seed-txt.md) | code-factory | VERIFIED |
+| 54 | [`docs/OPERATIONS.md`](54-docs-operations-md.md) | code-factory | VERIFIED |
+| 55 | [`docs/BOARD.md`](55-docs-board-md.md) | code-factory | VERIFIED |
+| 56 | [`docs/DESIGN.md`](56-docs-design-md.md) | code-factory | VERIFIED |
+| 57 | [`docs/PRD-code-factory.md`](57-docs-prd-code-factory-md.md) | code-factory | VERIFIED |
+| 58 | [`docs/THREAT-MODEL.md`](58-docs-threat-model-md.md) | code-factory | VERIFIED |
+| 59 | [`docs/ACCEPTANCE-PLAN.md`](59-docs-acceptance-plan-md.md) | code-factory | VERIFIED |
+| 60 | [`docs/MVP-PLAN.md`](60-docs-mvp-plan-md.md) | code-factory | VERIFIED |
+| 61 | [`docs/SCHEDULER-ADMISSION.md`](61-docs-scheduler-admission-md.md) | code-factory | VERIFIED |
+| 62 | [`docs/MASTER-DOC-SCHEMA.md`](62-docs-master-doc-schema-md.md) | code-factory | VERIFIED |
+| 63 | [`docs/LOOP-CODEX.md`](63-docs-loop-codex-md.md) | code-factory | VERIFIED |
 
 ## Counts
 
-Regenerated from the module files by `scripts/gen_nasa_handbook.py`'s census — never hand-edited.
+Recomputed at this tip by `scripts/master_doc_check.py` — the gate recomputes each row's
+status from its page, so a row that disagrees with its record fails the gate. The census
+figures below were generated for rows 1–44 by `scripts/gen_nasa_handbook.py`; rows 45–63
+are the hand-added CF-360 records (see the note above).
 
-- Modules: **44** (35 VERIFIED, 9 not)
-- Modules with a verification section: **33**
-- Modules that emit metrics or state why not: **40** (the rest say `none` with a reason)
-- Modules whose §2 names both sides of a service contract: see each §2c
+- Modules: **63** (54 VERIFIED, 9 not — the gate's count at this tip)
+- Modules with a verification section: all 63 carry a `§3 Verification` section; whether
+  the verification is *earned* is what the status column states
+- Modules that emit metrics or state why not: all 63 carry a `§4 Metrics emitted` section
+- Modules whose §2 names both sides of a service contract: see each §2
 
-## What this census does NOT cover — read this before trusting the count
+## What this census covers — and what it does not (read this before trusting the count)
 
-The module set is **file-shaped, not system-shaped**: the skeleton indexes `scripts/*.{py,sh}` and
-`specs/*.md`. Everything else in the repository — and every service the scripts talk to — is outside it.
+The module set is now **system-shaped**: 63 unit records cover the repo's own scripts and
+specs, the ten top-level documents, the five config examples, the foreman lane prompt, the
+selftest battery and the two node-ops skills. It is still partial, and the remainder is
+named, not hidden. Measured at HEAD `7299a127` (2026-11-22): tracked files per area, lines
+= newline counts, with the 19 CF-360 record files themselves excluded from the denominator
+— they are the census's output, not system surface (records 01–44 stay counted, as in the
+first measurement at `8f77667b`).
 
-Measured on the tracked tree (2026-11-05), by area:
+| area | files | lines | under module records | uncovered remainder — named reason |
+|---|---|---|---|---|
+| `scripts/` | 80 | 32,648 | 40 files / 18,978 lines | 40 scripts / 13,670 lines — post-manifest additions not yet under a record: the handbook toolchain (`book_style.py`, `build_book.py`, `handbook_lint.py`, `handbook_spine.py`, `gen_*`), harness installers beyond the four pinned ones, board/panel utilities (`board_read.py`, `board_evidence_check.py`, `boardctl`, `panel_loop.py`), node-side supervisors and one-off probes |
+| `specs/` | 9 | 1,911 | 7 / 1,680 | 2 — `GOALS.md`, `NODE-PHYSICAL.md` |
+| `docs/` | 354 | 82,823 | 10 / 2,083 | 344 files — the four named classes below |
+| `tests/` | 71 | 27,952 | 1 (`selftest.sh`) / 9,383 | 70 — the battery's own arms and fixtures: each is exercised as a numbered section or named arm of `tests/selftest.sh` (record 45), not documented per file |
+| `prompts/` | 12 | 396 | 1 (`foreman.md`) / 110 | the 11 per-lane prompt files: `docs.md`, `dogfood.md`, `duckbrain.md`, `perf.md`, `pm.md`, `qa.md`, `readme.md`, `releng.md`, `review.md`, `sync.md`, `unblock.md` |
+| `skills/` | 2 | 482 | 2 / 482 | none |
+| `config/` | 5 | 150 | 5 / 150 | none |
+| **total** | **533** | **146,362** | **66 files — 12.4%** | **32,866 lines — 22.5%** |
 
-| area | files | lines | modules |
-|---|---|---|---|
-| `scripts/` | 43 | 13,965 | 36 — five scripts still have none (`master_doc_fill.py`, `master_doc_panel.py`, `master_doc_check.py`, `install-go.sh`, `extract_owner_decisions.py`) |
-| `specs/` | 7 | 949 | 7 — complete |
-| `docs/` | 165 | 27,807 | **0** — including `OPERATIONS.md`, `BOARD.md`, `DESIGN.md`, `PRD-code-factory.md`, `THREAT-MODEL.md`, `ACCEPTANCE-PLAN.md`, `MVP-PLAN.md`, `SCHEDULER-ADMISSION.md`, `MASTER-DOC-SCHEMA.md`, `LOOP-CODEX.md` |
-| `tests/` | 7 | 5,507 | **0** — `selftest.sh` is 55 arms and gates every commit |
-| `prompts/` | 11 | 260 | **0** — the foreman's actual operating instruction |
-| `skills/` | 2 | 406 | **0** — the onboarding document agents read |
-| `config/` | 4 | 127 | **0** — the contracts a user must fill in |
+Named classes inside the `docs/` remainder:
+
+- `docs/audits/` — 178 files / 21,335 lines. Quoted dated evidence: each file records what
+  one run measured at one named tip. An audit's job is to quote, not to document; promoting
+  a transcript to a module page would freeze a measurement into prose.
+- `docs/handbook/` — 153 files / 55,462 lines. The module layer itself: the M-chapters are
+  the descriptions this census indexes and `appendices/units/` is the evidence layer this
+  file belongs to. A census does not cover its own substrate.
+- `docs/dogfood/` — 3 files / 392 lines. Dated run records, same class as audits.
+- top-level `docs/` — 8 pages + 2 registries / 3,551 lines: `00-INDEX.md`,
+  `HARDWARE-PLAN.md`, `HARNESS-CONFORMANCE.md`, `PROVIDERS-AND-COST.md`, `REPOSITORIES.md`,
+  `RUMSFELD.md`, `SECURITY-TRIAGE.md`, `traceability-doctrine.md`, plus the
+  `SYSTEM-MODEL.yaml` / `UNIT-MAP.yaml` registries — real module candidates, still uncovered.
 
 Six systems the docs describe only from the client side, with no page of their own: **scheduler**
 (admission modes, cooldowns, weights, its DB), **crier** (routes, guard, leases, service auth),
@@ -84,6 +131,6 @@ gateway** (sessions, `/api/status`, dashboard auth), **bunker daemon** (create/e
 Five flows have no end-to-end description: dispatch round-trip, node provisioning, memory export,
 onboarding a new project, and disaster recovery (node loss, key rotation, board or git corruption).
 
-Consequence for the count: 44 modules is **36 scripts + 7 specs + the pipeline page**, which is roughly
-30% of the tracked lines in the areas above. A reader must not read "44 VERIFIED" as "the system is
-documented".
+Consequence for the count: 63 modules now cover 66 of 533 tracked files (12.4%) and 32,866 of
+146,362 lines (22.5%) in the areas above. A reader must not read "54 VERIFIED" as "the system is
+documented" — but the uncovered remainder is now a named list, not a shrug.

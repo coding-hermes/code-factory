@@ -23,9 +23,9 @@ of its exit test — the exact failure the plan's own vocabulary refuses.
 | Dependency | Provider | Contract relied on | If it changes |
 |---|---|---|---|
 | the board | tasks.jsonl rows named per table cell (`docs/MVP-PLAN.md:11-22`) | each gap has exactly one owning row | two rows claim the same gap |
-| `scripts/land-node-branch.sh` | this repo | the landing proof (ancestry + file-in-tree) the finish line requires (row 1, `docs/MVP-PLAN.md:13`) | a landing is claimed on merge success alone |
+| `scripts/land-node-branch.sh` | this repo | the landing proof (ancestry + file-in-tree) the finish line requires (row 1, `docs/MVP-PLAN.md:15`) | a landing is claimed on merge success alone |
 | `scripts/node-bus-worker.py` | this repo | the result producer (row 3: `ok`/`error`/`reply_b64`/`in_reply_to` under an idempotency key, `docs/MVP-PLAN.md:17`) | the result shape drifts from the envelope |
-| `scripts/bunker-provision.sh` | this repo | row 4: provisioning as declared inputs (`docs/MVP-PLAN.md:19`) | the provisioned node stops matching the contract |
+| `scripts/bunker-provision.sh` | this repo | row 4: provisioning as declared inputs (`docs/MVP-PLAN.md:18`) | the provisioned node stops matching the contract |
 
 ## 3. Verification
 
@@ -53,7 +53,7 @@ shipped (`docs/MVP-PLAN.md:11-22`), and the phases that turn those rows into an 
 |---|---|---|---|
 | A phase declared done on narrative | "P0 complete" with no command | the exit-test rule (`docs/MVP-PLAN.md:5`) | run the phase's exit test; quote its output |
 | Two rows owning one gap | duplicated work, one stale | the table names one row per gap (`docs/MVP-PLAN.md:11-22`) | supersede one row explicitly |
-| "shipped" read as "measured on a live node" | row 4's hazard | the cell states shipped-and-unmeasured explicitly (`docs/MVP-PLAN.md:19`) | keep the distinction in the cell until measured |
+| "shipped" read as "measured on a live node" | row 4's hazard | the cell states shipped-and-unmeasured explicitly (`docs/MVP-PLAN.md:18`) | keep the distinction in the cell until measured |
 
 ## 7. Environment and settings it reads
 

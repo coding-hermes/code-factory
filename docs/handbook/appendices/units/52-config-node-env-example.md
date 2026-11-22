@@ -67,7 +67,7 @@ applied) and its named refusals; the file itself is inert data.
 ## 8. Evidence of record
 
 - The example: header + grammar `config/node.env.example:1-13`, secret rule `:14-20`,
-  the restricted key line `:33-37`, closed CONFIG_SET list `:24-31`.
+  the restricted key line `:18-22`, closed CONFIG_SET list `:24-31`.
 - The applier: grammar `scripts/node_env.py:52`, resolve contract `:178`, match sites
   `:294,304`, pointer refusals `:189,201`.
 - The credential discipline implemented here: fact: FACT-05.

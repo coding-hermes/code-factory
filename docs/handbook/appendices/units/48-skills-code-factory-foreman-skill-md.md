@@ -71,5 +71,5 @@ prompt (row id, change, proof command, blockers) and the pacing state it names:
   gate `:17-19`, family table `:21-36`, pacing `:37-39`.
 - The enforcing pair: the admission contract (record 61) and the scheduler-side allowlist
   constants [fact: FACT-12]; the lane prompt binds the foreman to this skill
-  (`prompts/foreman.md:103-104`).
+  (`prompts/foreman.md:76`).
 - Closure law shared with the board record: fact: FACT-10.

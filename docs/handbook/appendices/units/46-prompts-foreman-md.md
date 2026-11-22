@@ -24,9 +24,9 @@ explicitly (`prompts/foreman.md:47-70`).
 | Dependency | Provider | Contract relied on | If it changes |
 |---|---|---|---|
 | `scripts/board_read.py` | this repo | reads the canonical ref, falls back to the working copy only without a remote, and prints which source it used (`prompts/foreman.md:42-67`) | the "board source" report line loses its meaning |
-| `scripts/ownership.py` + `prompts/unblock.md` | this repo | classify before blocking: `held-by-live-worker` → stand down; `residue` → dispose (`prompts/foreman.md:71-81`) | a dirty checkout becomes a spurious blocked receipt |
-| `skills/code-factory-foreman/SKILL.md` | this repo | the admission/cooldown contract the prompt defers to (`prompts/foreman.md:103-104`) | two authorities disagree on lane creation |
-| `skills/code-factory-bunker/SKILL.md` | this repo | provisioning/destroying is that skill's job, never ad hoc (`prompts/foreman.md:105-107`) | a foreman hand-edits a node |
+| `scripts/ownership.py` + `prompts/unblock.md` | this repo | classify before blocking: `held-by-live-worker` → stand down; `residue` → dispose (`prompts/foreman.md:59-70`) | a dirty checkout becomes a spurious blocked receipt |
+| `skills/code-factory-foreman/SKILL.md` | this repo | the admission/cooldown contract the prompt defers to (`prompts/foreman.md:76`) | two authorities disagree on lane creation |
+| `skills/code-factory-bunker/SKILL.md` | this repo | provisioning/destroying is that skill's job, never ad hoc (`prompts/foreman.md:79`) | a foreman hand-edits a node |
 
 ## 3. Verification
 
@@ -39,16 +39,16 @@ explicitly (`prompts/foreman.md:47-70`).
 ## 4. Metrics emitted
 
 None — a prompt emits nothing. Its compliance surface is the tick reports it requires:
-row id, what changed, the proving command, what is still open (`prompts/foreman.md:9`),
+row id, what changed, the proving command, what is still open (`prompts/foreman.md:13`),
 plus the board-source line the board protocol adds.
 
 ## 5. Log lines it can generate
 
 - `board source: origin/main (N rows)` — the reading instruction's report line; a tick
-  that cannot name which copy it read has not followed the prompt (`prompts/foreman.md:59-61`).
+  that cannot name which copy it read has not followed the prompt (`prompts/foreman.md:52`).
 - `STOOD DOWN` with the owner pid — the held-by-live-worker outcome, explicitly NOT a
-  blocked receipt (`prompts/foreman.md:73-74`).
-- The four-line report at `prompts/foreman.md:9` is the tick's own output contract.
+  blocked receipt (`prompts/foreman.md:64-65`).
+- The four-line report at `prompts/foreman.md:13` is the tick's own output contract.
 
 ## 6. Failure modes
 
@@ -69,7 +69,7 @@ plus the board-source line the board protocol adds.
 ## 8. Evidence of record
 
 - The prompt itself: unit-of-progress `prompts/foreman.md:5`, handbook mandate `:15-23`,
-  board protocol `:42-67`, classify-before-block `:71-81`, closure law `:84-85`,
+  board protocol `:42-67`, classify-before-block `:59-70`, closure law `:84-85`,
   backlog carry rule `:89-110`.
 - The contract it enforces is the board's own: fact: FACT-09 names the store, fact:
   FACT-10 the closure rule; docs/BOARD.md record (55) carries the enforcing side.

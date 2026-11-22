@@ -64,14 +64,14 @@ was measured at (`docs/ACCEPTANCE-PLAN.md:19-30`).
 
 | setting | source | requirement |
 |---|---|---|
-| requirement ids | CF-101–CF-112 as board rows (the CF-421 mapping, `docs/ACCEPTANCE-PLAN.md:7-9`) | a requirement id is a requirement, never a task |
+| requirement ids | CF-101–CF-112 as board rows (the CF-421 mapping, `docs/ACCEPTANCE-PLAN.md:5`) | a requirement id is a requirement, never a task |
 | the suite | `tests/selftest.sh` [fact: FACT-11] | the arms the census counts |
-| host environment | `~/.local/bin` on PATH etc. | some legs need a configured host; the plan records both legs' measurements (`:17-19`) |
+| host environment | `~/.local/bin` on PATH etc. | some legs need a configured host; the plan records both legs' measurements (`:7-9`) |
 
 ## 8. Evidence of record
 
-- The plan: scope + honesty rule `docs/ACCEPTANCE-PLAN.md:3-5`, id mapping `:7-9`,
-  instrumented census claim `:15`, unconfigured-host leg `:17-19`, evidence snapshots
+- The plan: scope + honesty rule `docs/ACCEPTANCE-PLAN.md:3-5`, id mapping `:5`,
+  instrumented census claim `:15`, unconfigured-host leg `:7-9`, evidence snapshots
   `:19-30`, requirement-to-test matrix `:90`, exact evidence commands `:255`.
 - The instruments: `docs/audits/cf198-section-mapping.sh` (run 2026-11-22:
   `arms_plan=80 arms_tree=80`, `RESULT: OK`) and `docs/audits/cf099-prd-drift-probe.sh`.

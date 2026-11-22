@@ -72,6 +72,6 @@ and the connect ladder vocabulary already carry.
   `:52-55`, fleet-copy note `:33-35`.
 - The enforcing units it drives: provisioner record 05, connect script, and the config
   contract record 49; the foreman prompt binds provisioning to this skill
-  (`prompts/foreman.md:105-107`).
+  (`prompts/foreman.md:79`).
 - Topology facts this skill operationalizes: fact: FACT-02 (one bunker serves one
   project), fact: FACT-05 (credentials as file paths).

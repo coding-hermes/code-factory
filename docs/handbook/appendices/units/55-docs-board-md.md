@@ -63,7 +63,7 @@ tells the reader which instrument produced any quoted figure (`docs/BOARD.md:110
 | setting | source | requirement |
 |---|---|---|
 | the board store | `.coding-hermes/board/tasks.jsonl` + `events.jsonl` (`docs/BOARD.md:3-6`) [fact: FACT-09] | append-only, one JSON object per line |
-| the boardctl executable | on `PATH`; absence fails closed with exit 127 (`docs/BOARD.md:20-23`) | never a second, weaker parser in this repo |
+| the boardctl executable | on `PATH`; absence fails closed with exit 127 (`docs/BOARD.md:25`) | never a second, weaker parser in this repo |
 | the measured-state section | newest snapshot names the tip it was measured at (`docs/BOARD.md:148`) | numbers are pinned to a tip; re-measure rather than quote |
 
 ## 8. Evidence of record

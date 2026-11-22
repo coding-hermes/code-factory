@@ -22,7 +22,7 @@ the runbook's labels exist to make that distinction impossible to skip.
 
 | Dependency | Provider | Contract relied on | If it changes |
 |---|---|---|---|
-| `scripts/node-create.sh` | this repo | refuses before any bunker call when `CRIER_URL` is unset, naming the row (`docs/OPERATIONS.md:31-33`) | the preflight contract loses its name |
+| `scripts/node-create.sh` | this repo | refuses before any bunker call when `CRIER_URL` is unset, naming the row (`docs/OPERATIONS.md:24`) | the preflight contract loses its name |
 | `scripts/bunker-crier-connect.sh` | this repo | the identity ladder: route check first, signed read as additional evidence (`docs/OPERATIONS.md:50`) | the runbook and the connect script disagree on proof |
 | `scripts/verify-node.sh` | this repo | the control-host ladder: agent, gateway, auth, artifact, tree, seed (`docs/OPERATIONS.md:148`) | verification steps stop matching the ladder |
 | `scripts/node-bus-worker.py` | this repo | the brief digest is the dispatch's trust boundary; the node must not execute a brief field the digest does not bind (`docs/OPERATIONS.md:167`) | an executed member escapes the digest |
@@ -45,7 +45,7 @@ current health (`docs/OPERATIONS.md:15`).
 ## 5. Log lines it can generate
 
 - Nothing by itself. The lines an operator following it sees are the scripts': the
-  `FAIL crier_url` preflight row (`docs/OPERATIONS.md:31-33`), the connect ladder's
+  `FAIL crier_url` preflight row (`docs/OPERATIONS.md:24`), the connect ladder's
   distinct 401/403/404/000 rows and optional `signed_read` PASS (`:50`), the gateway
   auth row naming the config path and measured mode (`:92`), and the verify ladder's
   `FAIL seed_drift — the record declares no files` refusal (`:148`).
@@ -62,14 +62,14 @@ current health (`docs/OPERATIONS.md:15`).
 
 | setting | source | requirement |
 |---|---|---|
-| `BUNKER_SERVER`, `CRIER_URL` | operator environment | environment-specific, never committed or pasted into tickets (`docs/OPERATIONS.md:25-28`) |
+| `BUNKER_SERVER`, `CRIER_URL` | operator environment | environment-specific, never committed or pasted into tickets (`docs/OPERATIONS.md:24`) |
 | node credentials | mode-600 files the scripts stage; passwords generated on the node, never printed or passed in argv (`docs/OPERATIONS.md:92`) [fact: FACT-05] | the runbook names paths, never values |
 | bus proof | route 200 + optional signed read (`docs/OPERATIONS.md:50`) [fact: FACT-04] | an unsigned answer is not proof of delivery |
 
 ## 8. Evidence of record
 
 - The runbook: status boundary `docs/OPERATIONS.md:3`, model `:5`, lifecycle `:7`,
-  implementation boundary `:11`, labels `:13-18`, preflight `:31-33`, connect ladder
+  implementation boundary `:11`, labels `:13-18`, preflight `:24`, connect ladder
   `:50`, gateway auth `:92-94`, verify ladder `:148`, digest boundary `:167`.
 - The measured controls it cites: the bus signature+bearer rule [fact: FACT-03] via the
   connect record (04), the credential discipline [fact: FACT-05], and the inbox-200

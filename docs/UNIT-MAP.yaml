@@ -47,6 +47,8 @@ modules:
             effect: the older single-shot create path; does not run the auth gate the provisioner does (CF-192)
           - unit: bunker-crier-connect.sh
             effect: exchanges an agent token with crier, writes auth/crier.token at 0600
+          - unit: bunker.example.conf
+            effect: the provisioner config contract — KEY=VALUE data, parsed never sourced; every non-comment line is data (record 49)
       - id: M1.S3
         name: identity and bus membership
         units:
@@ -66,6 +68,10 @@ modules:
             condition: read-only; needs the node's seed-applied.json or a reachable node
           - unit: node_env.py
             effect: writes the node's .env and config.yaml at mode 600, refusing a credential-shaped value
+          - unit: node.env.example
+            effect: the declared environment of one node — ENV_ lines, @<path> secrets, the closed CONFIG_SET list; applied by node_env.py (record 52)
+          - unit: node-seed.txt
+            effect: declares which prompts and skills ship onto a node; consumed by node_seed.py (record 53)
       - id: M1.S5
         name: prove the node works
         units:
@@ -100,6 +106,11 @@ modules:
           - unit: node-bus-worker.py
             effect: fetch → verify → run harness → reply with corr_id → ack; the node half of the bus
             condition: needs agent.key + crier.json at 0600; --check is the same ladder without side effects
+      - id: M2.S4
+        name: lane prompt
+        units:
+          - unit: foreman.md
+            effect: the foreman lane's operating prompt — one row per tick, classify-before-block, the closure law, the backlog carry rule (record 46)
 
   - id: M3
     name: REPOSITORY
@@ -166,6 +177,11 @@ modules:
           - unit: project-node.sh
             effect: the node's entry point — layers base, harness, bus, repo; --check / --apply
             condition: reads $FAILED from lib.sh under set -u; a missing lib.sh aborts rather than reporting
+      - id: M5.S4
+        name: harness matrix data
+        units:
+          - unit: harness-matrix.json
+            effect: the family→harness map the conformance work grades — default hermes, per-family pins, host allowlists (record 51)
 
   - id: M6
     name: DOCUMENTATION
@@ -204,6 +220,33 @@ modules:
         units:
           - unit: extract_owner_decisions.py
             effect: extracts operator-voice messages by session title to find requirements the docs missed
+      - id: M6.S7
+        name: the described system
+        units:
+          - unit: OPERATIONS.md
+            effect: operator-side runbook for the node lifecycle — status boundary, readiness labels, preflight and the verify ladder (record 54)
+          - unit: BOARD.md
+            effect: the board contract — store paths, write rules, closure-evidence shapes, lock adjudication, drift census (record 55)
+          - unit: DESIGN.md
+            effect: the node design authority (record 56)
+          - unit: PRD-code-factory.md
+            effect: the product requirements record (record 57)
+          - unit: THREAT-MODEL.md
+            effect: the threat model (record 58)
+          - unit: ACCEPTANCE-PLAN.md
+            effect: the acceptance and test plan — scope, honesty rule, instrumented census, evidence commands (record 59)
+          - unit: MVP-PLAN.md
+            effect: the MVP plan — finish line, backwards table, phases (record 60)
+          - unit: SCHEDULER-ADMISSION.md
+            effect: the scheduler admission contract (record 61)
+          - unit: MASTER-DOC-SCHEMA.md
+            effect: the master document schema (record 62)
+          - unit: LOOP-CODEX.md
+            effect: the loop codex (record 63)
+          - unit: code-factory-bunker/SKILL.md
+            effect: provisioning and destroying a bunker node — isolation law, config grammar, connect ladder (record 47)
+          - unit: code-factory-foreman/SKILL.md
+            effect: the foreman's operating skill — run contract, admission gate, pacing (record 48)
 
   - id: M7
     name: GITHUB
@@ -218,6 +261,8 @@ modules:
             effect: mints an installation token, cached and refreshed; never prints the value
           - unit: github-app-refresh.sh
             effect: refreshes the cached installation token on a schedule
+          - unit: github-app.example.env
+            effect: the example app env the setup script writes from — placeholder keys, never a real credential (record 50)
 
   - id: M8
     name: SAFETY
@@ -234,3 +279,8 @@ modules:
         units:
           - unit: check_scan_scope.py
             effect: fails any repo line that states a gitleaks claim without --log-opts
+      - id: M8.S3
+        name: the battery
+        units:
+          - unit: selftest.sh
+            effect: runs every gate as a numbered section whose output is the proof; a SELFTEST PASS line is the tree's green light (record 45)

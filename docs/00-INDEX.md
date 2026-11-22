@@ -49,3 +49,12 @@ a tracked document may read as configuration that only works on one machine.
 | `dogfood/` | dated dogfood run records |
 | top-level plan/threat/trace documents | `ACCEPTANCE-PLAN`, `HARDWARE-PLAN`, `HARNESS-CONFORMANCE`, `LOOP-CODEX`, `MASTER-DOC-SCHEMA`, `MVP-PLAN`, `REPOSITORIES`, `RUMSFELD`, `SECURITY-TRIAGE`, `THREAT-MODEL`, `BOARD`, `traceability-doctrine` |
 | registries | `SYSTEM-MODEL.yaml`, `UNIT-MAP.yaml` |
+| config examples + node seed + harness matrix | `config/bunker.example.conf`, `github-app.example.env`, `harness-matrix.json`, `node.env.example`, `node-seed.txt` — unit records 49–53 |
+| `prompts/foreman.md` | the foreman lane prompt — unit record 46 |
+| `tests/selftest.sh` | the gate battery — unit record 45 |
+| `skills/code-factory-bunker/`, `skills/code-factory-foreman/` | node-ops skills — unit records 47–48 |
+
+Module-record coverage (CF-360 AC3): 66 of 533 tracked files (12.4%) and 32,866 of
+146,362 lines (22.5%) across `scripts/ specs/ docs/ tests/ prompts/ skills/ config/`
+sit under a unit record in `handbook/appendices/units/`; the uncovered remainder is
+named per class in that index's census.
