@@ -56,16 +56,28 @@ import sys
 # a new zero-evidence or unresolvable row is reported as new, not absorbed by a
 # baseline that was computed from the very findings it grades.  Adding an id here
 # is a dated act of acceptance; removing one is what closing a row looks like.
-ACCEPTED_UNRESOLVED_DATE = "2026-11-16"
+#
+# 2026-11-22 (+8, accepted on this date): CF-007 CF-170 CF-323 CF-470 CF-504
+# CF-517 P5G-16 PERF-018 — each names a run id whose directory is not in the
+# canonical .gitreins/history, i.e. the closeout cited a store that was never
+# harvested into the one a fresh clone sees (worktree-local runs).  These are the
+# store-dependent "unresolved" class, not empty pointers.  CF-247 was the ninth
+# new finding the same day and needed no entry: it had no pointer at all, so its
+# closeout was repaired by recording the commit that implemented it.  The
+# systemic fix (harvest run dirs out of worker worktrees) is a separate row.
+# ACCEPTED_UNRESOLVED_DATE is the date of the newest acceptance, not of the
+# original 2026-11-16 baseline that the paragraph above measures.
+ACCEPTED_UNRESOLVED_DATE = "2026-11-22"
 ACCEPTED_UNRESOLVED = frozenset(
     """
-    CF-008 CF-011 CF-012 CF-013 CF-034 CF-037 CF-038 CF-041 CF-050 CF-051
+    CF-007 CF-008 CF-011 CF-012 CF-013 CF-034 CF-037 CF-038 CF-041 CF-050 CF-051
     CF-052 CF-064 CF-082 CF-089 CF-090 CF-092 CF-096 CF-097 CF-114 CF-115
-    CF-127 CF-128 CF-141 CF-150 CF-153 CF-157 CF-167 CF-182 CF-192 CF-197
-    CF-198 CF-219 CF-226 CF-230 CF-244 CF-245 CF-257 CF-259 CF-270 CF-275
-    CF-277 CF-280 CF-289 CF-291 CF-303 CF-305 CF-307 CF-320 CF-354 CF-370
-    CF-378 CF-379 CF-382 CF-401 CF-402 CF-404 CF-411 CF-422 P5G-34 PERF-012
-    PERF-014 QA-CODE-FACTORY-2
+    CF-127 CF-128 CF-141 CF-150 CF-153 CF-157 CF-167 CF-170 CF-182 CF-192
+    CF-197 CF-198 CF-219 CF-226 CF-230 CF-244 CF-245 CF-257 CF-259 CF-270
+    CF-275 CF-277 CF-280 CF-289 CF-291 CF-303 CF-305 CF-307 CF-320 CF-323
+    CF-354 CF-370 CF-378 CF-379 CF-382 CF-401 CF-402 CF-404 CF-411 CF-422
+    CF-470 CF-504 CF-517 P5G-16 P5G-34 PERF-012 PERF-014 PERF-018
+    QA-CODE-FACTORY-2
     """.split()
 )
 
