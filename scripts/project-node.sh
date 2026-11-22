@@ -1037,6 +1037,15 @@ if in_scope 40; then
         KEY_BLOCKED=1
       fi
       if [ "$KEY_BLOCKED" -eq 0 ]; then
+        if [ "$NODE_DEPLOY_KEY" != "$HOME/.node/keys/$PROJECT.key" ] || [ "$ssh_cfg" != "$HOME/.node/keys/ssh_config" ]; then
+          bad "repo_key" "unproven key or SSH config path for project $PROJECT"
+          KEY_BLOCKED=1
+        elif ! python3 "$HERE/deploy_key.py" check --home "$HOME" --repo "$REPO" --name "$PROJECT"; then
+          bad "repo_key" "credential binding refused for project $PROJECT"
+          KEY_BLOCKED=1
+        fi
+      fi
+      if [ "$KEY_BLOCKED" -eq 0 ]; then
         export GIT_SSH_COMMAND="ssh -F $ssh_cfg"
         export GIT_TERMINAL_PROMPT=0
         ok "repo_key:ssh" "GIT_SSH_COMMAND='ssh -F $ssh_cfg' (this process only)"
@@ -1045,11 +1054,11 @@ if in_scope 40; then
   fi
   # $RP was resolved once at the top (layer 10 reads it for kind evidence before the
   # clone exists); the clone target is the same path layer 40 has always used.
-  if [ -d "$RP/.git" ]; then
+  if [ "$KEY_BLOCKED" -eq 1 ]; then
+    bad "repo_clone" "not attempted — the declared deploy key is unusable (see repo_key)"
+  elif [ -d "$RP/.git" ]; then
     ok "repo" "$RP @ $(git -C "$RP" rev-parse --short HEAD)"
     REPO_READY=1
-  elif [ "$KEY_BLOCKED" -eq 1 ]; then
-    bad "repo_clone" "not attempted — the declared deploy key is unusable (see repo_key)"
   else
     if [ "$MODE" = apply ] && [ -n "$REPO" ]; then
       say "  ..    cloning $REPO @ $REF"

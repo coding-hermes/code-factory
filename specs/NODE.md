@@ -132,6 +132,35 @@ result is retried with the dispatch-derived key and the harness is not run twice
 
 ## Credentials — per-repo deploy keys
 
+**Credential law (CF-347; `.coding-hermes/board/tasks.jsonl:321`).** Only the owner
+mints node credentials; agents and nodes must not mint them. The owner decides how to
+perform minting when the necessary authority is not available. The owner's requirement
+was: “I don't know if the keys you already have will let you mint new separate keys or
+if you need me to physically get home”.
+
+A node may hold and use only credentials scoped to its one bound project, including
+credentials for a local DuckBrain if it runs one; it must refuse a credential for
+another project before use, and refuse unknown or unproven scope rather than infer it.
+This implements the owner's “with the correct one they need for that project and not
+the others” (`.coding-hermes/board/tasks.jsonl:321`; node binding `specs/NODE.md:3`).
+Credential files must have a stable, documented path outside the checkout, accessible
+when a node receives a binary without the repository; deploy keys use
+`$HOME/.node/keys/<project>.key` (`scripts/node-create.sh:19–25`).
+
+On suspected compromise, stop use of the affected credential, notify the owner, revoke
+or deny it and rotate it on the affected node with an owner-minted replacement. Do not
+resume use until replacement scope and activation and old-credential denial are
+verified; an unknown revocation remains blocked. This implements the owner's “you
+should roate the token on that box that lieask” (`.coding-hermes/board/tasks.jsonl:321`;
+`docs/THREAT-MODEL.md:103`; lifecycle `docs/handbook/chapters/M7-github.md:303–318`).
+
+**Implementation boundary:** `scripts/deploy_key.py` records the supplied repository and key digest
+in the local registry at installation. `project-node.sh` checks the project name, repository,
+key path and digest before using the key; missing or mismatched local binding is refused. This
+is an operator-recorded binding, not independent proof of the provider's actual grant: the owner
+must verify the key is restricted to that repository before installation. Other credential types,
+including local DuckBrain credentials, are not enforced by this deploy-key check.
+
 A private repo is cloned with a key that belongs to **that repo**, never with an account key and
 never with an identity the agent happens to have. The whole path is `scripts/deploy_key.py`:
 

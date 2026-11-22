@@ -167,7 +167,7 @@ latency are answerable only by reading the refresh log.
 | No command selected | usage, exit 2 | a real mint | pass `check`/`token` with the required file-path args |
 | Mode not 600 after mint | `bad "mode" … expected 600` (`:127-128`), exit 1 before rewriting the store | a secure token file | `chmod 600` the token file, re-run |
 | Key file not 0600 | `… is mode %04o; a private key must be 0600` (`github-app-token.py:344-348`) | a valid key | `chmod 600` the `.pem` |
-| Node credential law incomplete | rotation-on-compromise, owner-only minting, per-project scoping unstated | a written law | **OPEN** — CF-347 |
+| Node credential law enforcement incomplete | project-scope admission and compromise response lack proven runtime enforcement | the target law | **OPEN** — target in `specs/NODE.md:133`; current key checks `scripts/project-node.sh:1018–1045` and `scripts/deploy_key.py:311–334` |
 
 ## 11. Limits and margins
 
@@ -178,6 +178,15 @@ latency are answerable only by reading the refresh log.
 
 ## 12. Cross-references
 
+- **Node credential law (CF-347).** Only the owner mints node credentials; a node
+  holds only its project's credential, including for a local DuckBrain, and must
+  refuse foreign or unproven scope. Use a stable path outside the checkout. On
+  suspected compromise deny or revoke and rotate the affected credential; do not
+  resume until denial and replacement are verified (`specs/NODE.md:133`). The owner
+  said “you should roate the token on that box that lieask” and “with the correct one
+  they need for that project and not the others” (`.coding-hermes/board/tasks.jsonl:321`).
+  These are target laws, not proof the current node admission path enforces them
+  (`scripts/project-node.sh:1018–1045`; `scripts/deploy_key.py:311–334`).
 - **Credential domains are separate (B16).** M7's `github-app-token.py`
   mints **installation tokens**. The per-dispatch scoped token M11 injects is minted by a
   *different* tool: `dispatcher.py:68` loads `fleet-gh-scope.py`, whose `mint_scoped`
