@@ -1000,3 +1000,6 @@
 {"id": 997, "timestamp": "2026-11-22T14:12:48Z", "event_type": "task_completed", "task_id": "CF-330", "actor": "foreman", "detail": "{\"status\":\"complete\"}"}
 {"id": 998, "timestamp": "2026-11-22T14:12:48Z", "event_type": "task_created", "task_id": "CF-525", "actor": "foreman", "detail": "{\"id\":\"CF-525\",\"status\":\"pending\"}"}
 {"id": 999, "timestamp": "2026-11-22T14:21:17Z", "event_type": "task_completed", "task_id": "CF-433", "actor": "foreman", "detail": "{\"status\":\"complete\"}"}
+{"id": 1000, "timestamp": "2026-11-22T15:05:48Z", "event_type": "task_updated", "task_id": "CF-346", "actor": "foreman", "detail": "{\"status\":\"in_progress\"}"}
+{"id": 1001, "timestamp": "2026-11-22T15:11:54Z", "event_type": "task_completed", "task_id": "CF-344", "actor": "foreman", "detail": "{\"status\":\"complete\"}"}
+{"id": 1002, "timestamp": "2026-11-22T15:22:35Z", "event_type": "task_created", "task_id": "CF-526", "actor": "foreman", "detail": "{\"id\":\"CF-526\",\"status\":\"pending\"}"}
