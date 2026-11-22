@@ -4515,6 +4515,16 @@ unset -f cf213
 rm -rf "$tmpd"
 # END cf213-land-node-branch
 
+# CF-390: only disposable registries; the mutation must really delete a live fixture.
+cf390_out=$(cd "$HERE" && python3 -m unittest tests.test_worktree_census 2>&1); cf390_rc=$?
+if [ "$cf390_rc" -eq 0 ]; then
+  say "  PASS  CF-390 worktree census/reaper — 15 fixture tests; clean merged reaped, dirty/live/unmerged/main preserved, live-guard deletion makes the same live-writer test FAIL"
+else
+  say "  FAIL  CF-390 worktree census/reaper — fixture suite exit $cf390_rc"
+  printf '%s\n' "$cf390_out" | sed 's/^/    | /'
+  selftest_fail
+fi
+
 # A node's environment is declared data — the applier must refuse what cannot be
 # declared, diff what drifted, write nothing on --check, and be a no-op on the second run.
 say "43. the node environment profile applies idempotently and refuses what cannot be declared"
