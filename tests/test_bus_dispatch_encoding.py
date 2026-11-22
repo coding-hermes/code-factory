@@ -36,6 +36,7 @@ import base64
 import contextlib
 import hashlib
 import importlib.util
+import inspect
 import io
 import os
 import shutil
@@ -59,6 +60,15 @@ def load_worker():
 
 
 WORKER_MOD = load_worker()
+
+# The red control loads a PRE-FIX worker (5b11bdc) whose process() has no in_reply_to formal, so
+# the reply identity must be offered only when the loaded revision accepts it. Passing it blind
+# raises TypeError inside the control and the control stops discriminating the defect it exists for.
+REPLY_KWARGS = (
+    {"in_reply_to": "fixture-message"}
+    if "in_reply_to" in inspect.signature(WORKER_MOD.process).parameters
+    else {}
+)
 
 # A directive with the shapes that made the encoding necessary: newlines, quotes, `$`-signs and
 # a JSON body the relay's control-key guard would otherwise refuse.
@@ -129,7 +139,9 @@ class BusDispatchEncodingTest(unittest.TestCase):
         """Run one dispatch through process(), capturing the worker's rows as text."""
         buffer = io.StringIO()
         with contextlib.redirect_stdout(buffer):
-            outcome = WORKER_MOD.process(dispatch, self.ident, None, self.args, {})
+            outcome = WORKER_MOD.process(
+                dispatch, self.ident, None, self.args, {}, **REPLY_KWARGS
+            )
         self.output = buffer.getvalue()
         return outcome
 
@@ -145,6 +157,7 @@ class BusDispatchEncodingTest(unittest.TestCase):
         dispatch = {
             "dispatch_id": "cf354-a1",
             "corr_id": "lane-cf354-a1",
+            "vars": {"CF_RUN_ID": "fixture-run"},
             "lane": "code-factory",
             "project_id": "code-factory",
             "round_id": "round-a1",
@@ -189,6 +202,7 @@ class BusDispatchEncodingTest(unittest.TestCase):
         dispatch = {
             "dispatch_id": "cf354-a2",
             "corr_id": "lane-cf354-a2",
+            "vars": {"CF_RUN_ID": "fixture-run"},
             "project_id": "code-factory",
             "round_id": "round-a2",
             "task_id": "task-a2",
@@ -215,6 +229,7 @@ class BusDispatchEncodingTest(unittest.TestCase):
         dispatch = {
             "dispatch_id": "cf354-a3",
             "corr_id": "lane-cf354-a3",
+            "vars": {"CF_RUN_ID": "fixture-run"},
             # `*` and `!` are outside the base64 alphabet, and a valid `text` sits beside it.
             "text_b64": "not*base64!!",
             "text": DIRECTIVE,
@@ -260,6 +275,7 @@ class BusDispatchEncodingTest(unittest.TestCase):
         dispatch = {
             "dispatch_id": "cf354-a4",
             "corr_id": "lane-cf354-a4",
+            "vars": {"CF_RUN_ID": "fixture-run"},
             "lane": "code-factory",
         }
         rows_ok, result, ack = self.run_dispatch(dispatch)
@@ -289,6 +305,7 @@ class BusDispatchEncodingTest(unittest.TestCase):
         dispatch = {
             "dispatch_id": "cf354-a5",
             "corr_id": "lane-cf354-a5",
+            "vars": {"CF_RUN_ID": "fixture-run"},
             "text_b64": encoded,
             "brief": {
                 "digest": hashlib.sha256(encoded.encode("utf-8")).hexdigest(),
@@ -322,6 +339,7 @@ class BusDispatchEncodingTest(unittest.TestCase):
         dispatch = {
             "dispatch_id": "cf354-p0",
             "corr_id": "lane-cf354-p0",
+            "vars": {"CF_RUN_ID": "fixture-run"},
             "text_b64": b64(DIRECTIVE),
             "brief": {
                 "digest": hashlib.sha256(DIRECTIVE.encode("utf-8")).hexdigest(),

@@ -117,10 +117,12 @@ cross-system contracts carry their CT id; an interface with no canonical entry i
 | CT-09 | duckbrain | out | **missing** — no in-repo producer: `grep -nE 'duckbrain|/api/memories' scripts/node-bus-worker.py` → 0 matches; the node's R1/R2 duckbrain sync is not implemented in the node worker | **external** — the duckbrain service (out of scope) | **missing** — OUTLINE Part IV marks `node → duckbrain` missing; no in-repo file on either side |
 | CT-11 | sessionstore | out | **external** — the Hermes agent runtime records turns to its own `state.db` (out of scope; not a code-factory script) | **external** — the Hermes session store (out of scope) | **UNVERIFIED (boundary)** — neither side has an in-repo `file:function`, and the wire was not measured; "works" is not asserted without a measured observation |
 
-The real reply fields are `env_version, dispatch_id, corr_id, status, host_identity, harness,
-vars, exit_codes, gate_exit, branch, commit, artifacts, wall_s, finished_at`
-(`node-bus-worker.py:1176-1192`) — there is no `run_id`/`outcome` field (the OUTLINE §IV reply
-shape is stale). CT-09 and CT-11 are boundary contracts: their far side is a service outside
+Result replies carry `env_version, dispatch_id, corr_id, in_reply_to, run_id, missing, status,
+ok, reply_b64, host_identity, harness, vars, exit_codes, gate_exit, branch, commit, artifacts,
+wall_s, finished_at`, with `error` when failed. Refusals carry the available identity, `ok=false`,
+`error`, `refused_by`, `refusal` and a `missing` array; a missing identity triggers the named
+`envelope` refusal. `in_reply_to` is the scheduler's PRIMARY key. CT-09 and CT-11 are boundary
+contracts: their far side is a service outside
 the five covered systems, so the covered side is named and the far side is honestly marked
 external. The state for a boundary contract with no measured wire is **UNVERIFIED** — an outline
 "works" annotation is not implementation evidence (B03).

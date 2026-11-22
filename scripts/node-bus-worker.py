@@ -1067,6 +1067,28 @@ def harness_attribution(dispatch, served_model=None):
     }
 
 
+def run_identity(dispatch):
+    """Resolve the supplied run identity without substituting correlation identity."""
+    variables = dispatch.get("vars")
+    return str(
+        dispatch.get("run_id")
+        or (variables.get("CF_RUN_ID") if isinstance(variables, dict) else "")
+        or ""
+    )
+
+
+def missing_identity(in_reply_to, corr_id, run_id):
+    return [
+        name
+        for name, value in (
+            ("in_reply_to", in_reply_to),
+            ("corr_id", corr_id),
+            ("run_id", run_id),
+        )
+        if not value
+    ]
+
+
 def refusal(ident, dispatch, reason, detail, in_reply_to=""):
     """Build a refusal result for a dispatch this node will not execute."""
     summary = f"refused by {reason}: {detail}"
@@ -1077,6 +1099,10 @@ def refusal(ident, dispatch, reason, detail, in_reply_to=""):
         # The scheduler's PRIMARY correlation key: the relay message id this dispatch arrived
         # under. corr_id is the join key the scheduler mints; both are echoed verbatim.
         "in_reply_to": str(in_reply_to or ""),
+        "run_id": run_identity(dispatch),
+        "missing": missing_identity(
+            in_reply_to, dispatch.get("corr_id"), run_identity(dispatch)
+        ),
         "status": "refused",
         # `ok` is the SCHEDULER'S verdict field, not a restatement of this envelope's status:
         # dispatchReplyVerdict() reads `ok` and treats its ABSENCE as success, so a refusal that
@@ -1322,6 +1348,12 @@ def process(dispatch, ident, signer, args, seen, in_reply_to=""):
     """
     dispatch_id = str(dispatch.get("dispatch_id") or "")
     corr_id = str(dispatch.get("corr_id") or "")
+    run_id = run_identity(dispatch)
+    missing = missing_identity(in_reply_to, corr_id, run_id)
+    if missing:
+        detail = "envelope: missing " + ", ".join(missing)
+        bad("envelope", detail)
+        return False, refusal(ident, dispatch, "envelope", detail, in_reply_to), True
     key = dispatch_key(dispatch)
     label = f"{dispatch_id or corr_id or 'dispatch'} (corr {corr_id or '?'})"
 
@@ -1545,6 +1577,8 @@ def process(dispatch, ident, signer, args, seen, in_reply_to=""):
         # key. corr_id is the join key it mints; both travel verbatim so a result that names
         # either one is an answer to this hand-out and nothing else is.
         "in_reply_to": str(in_reply_to or ""),
+        "run_id": run_id,
+        "missing": [],
         "status": status,
         # `ok` is the scheduler's verdict (`dispatchReplyVerdict`). Its ABSENCE reads as success,
         # so a failed run must say so HERE and not only in `status` — a status-only failure would
@@ -1615,6 +1649,15 @@ def deliver(signer, ident, target, result, args, in_reply_to="", idempotency_key
     envelope = dict(result)
     if in_reply_to and not envelope.get("in_reply_to"):
         envelope["in_reply_to"] = str(in_reply_to)
+    envelope.setdefault("run_id", "")
+    missing = missing_identity(
+        envelope.get("in_reply_to"), envelope.get("corr_id"), envelope.get("run_id")
+    )
+    if envelope.get("status") == "refused":
+        envelope.setdefault("missing", missing)
+    elif missing:
+        bad("envelope", "cannot emit result: missing " + ", ".join(missing))
+        return False
     key = (idempotency_key or delivery_key({}, envelope))[:IDEMPOTENCY_KEY_MAX]
     body = json.dumps(
         {

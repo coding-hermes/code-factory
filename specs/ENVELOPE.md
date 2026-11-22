@@ -227,7 +227,14 @@ here, and any new field is added to this spec first.
 
 ## Correlation and idempotency
 
-- `corr_id` is the scheduler's join key; `dispatch_id` is the node's.
+- `corr_id` is the scheduler's join key; `dispatch_id` is the node's. The relay message ID
+  `in_reply_to` remains the scheduler's PRIMARY correlation key.
+- Every result carries nonempty `in_reply_to`, `corr_id`, and `run_id`. The run identity is
+  `dispatch.run_id` or, if absent, `dispatch.vars.CF_RUN_ID`, never `corr_id`.
+  A missing member triggers a named `envelope` refusal with `ok: false` and a `missing` array
+  naming each absent member. Refusals retain received identity values, leaving absent values empty;
+  delivery supplies the relay message ID when available. A non-refusal missing any member must
+  not be emitted.
 - Every dispatch carries an `idempotency_key`; a redelivered message must be recognised and the
   previous result returned rather than the work being done twice.
 - A node acks a dispatch **only after** the result message is delivered. A crash between

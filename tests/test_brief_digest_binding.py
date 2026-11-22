@@ -13,6 +13,7 @@ import contextlib
 import copy
 import hashlib
 import importlib.util
+import inspect
 import io
 import json
 import os
@@ -39,6 +40,14 @@ def load_worker():
 
 
 WORKER_MOD = load_worker()
+# The red control loads a PRE-FIX worker whose process() has no in_reply_to formal, so the reply
+# identity is offered only when the loaded revision accepts it; passing it blind raises TypeError
+# inside the control and the control stops discriminating the defect it exists for.
+REPLY_KWARGS = (
+    {"in_reply_to": "fixture-message"}
+    if "in_reply_to" in inspect.signature(WORKER_MOD.process).parameters
+    else {}
+)
 DIRECTIVE = "Complete the admitted board tasks and return evidence.\n"
 STUB = """\
 import sys
@@ -111,7 +120,7 @@ class BriefDigestBindingTest(unittest.TestCase):
             "repo": "https://example.invalid/code-factory.git",
             "ref": "main",
             "workdir": self.repo,
-            "vars": {"CF_LANE": "code-factory"},
+            "vars": {"CF_LANE": "code-factory", "CF_RUN_ID": "fixture-run"},
             "text_b64": b64(DIRECTIVE),
             "gate": self.gate() if gate is None else gate,
             "criteria": [{"id": "AC-1", "argv": ["verify", "--fixture"], "cwd": "."}],
@@ -127,7 +136,9 @@ class BriefDigestBindingTest(unittest.TestCase):
     def run_dispatch(self, dispatch):
         buffer = io.StringIO()
         with contextlib.redirect_stdout(buffer):
-            outcome = WORKER_MOD.process(dispatch, self.ident, None, self.args, {})
+            outcome = WORKER_MOD.process(
+                dispatch, self.ident, None, self.args, {}, **REPLY_KWARGS
+            )
         self.output = buffer.getvalue()
         return outcome
 

@@ -83,6 +83,7 @@ def dispatch():
     message = {
         "dispatch_id": "cf132-dispatch-1",
         "corr_id": "cf132-correlation-1",
+        "vars": {"CF_RUN_ID": "run-cf132"},
         "project_id": "code-factory",
         "round_id": "round-1",
         "task_id": "task-1",
@@ -186,7 +187,12 @@ def test_empty_or_non_string_text_is_refused_and_ackable(tmp_path, monkeypatch, 
     fake_harness = FakeHarness()
     monkeypatch.setattr(WORKER_MOD, "run_harness", fake_harness)
 
-    message = {"dispatch_id": "cf132-malformed", "text": text}
+    message = {
+        "dispatch_id": "cf132-malformed",
+        "corr_id": "corr-malformed",
+        "vars": {"CF_RUN_ID": "run-malformed"},
+        "text": text,
+    }
     output = io.StringIO()
     rows_ok, result, should_ack = run_process(
         message, identity(tmp_path), {}, monkeypatch, output

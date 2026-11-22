@@ -171,8 +171,7 @@ def dispatch_envelope(
     }
     if gate is not None:
         dispatch["gate"] = gate
-    if dispatch_vars is not None:
-        dispatch["vars"] = dispatch_vars
+    dispatch["vars"] = {"CF_RUN_ID": "fixture-run", **(dispatch_vars or {})}
     # The digest covers text+gate+repo+ref+workdir+vars, and `brief` itself is not hashed, so it
     # can be attached after the rest of the envelope exists.
     dispatch["brief"] = {
