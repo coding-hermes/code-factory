@@ -53,8 +53,10 @@ OMH is an operating layer over Hermes and has no independent exporter. These sta
 not changed by a fixture PASS; live capture, DuckBrain transport and F3 R1/R2 remain unverified.
 
 **I4 — Nothing is supported because it is installed.** Support requires `check`, `apply`, `vars`,
-`smoke`, and `memory` to pass on a real node for a real turn. The battery emits those five families,
-but its fixture memory rows do not establish the real-node requirement. `--check` alone is not support.
+`smoke`, and `memory` to pass on a real node for a real turn: five per-harness support families.
+The battery has six leg families: `apply` runs only under `--install`, and `node` is dispatched
+only for `codex`. Its fixture memory rows do not establish the real-node requirement. `--check`
+alone is not support.
 
 **I5 — The node refuses what it cannot run, and says which kind of "cannot".** An unknown or
 uninstallable harness is `harness_unsupported: <name>; node has: <set>`. A harness that exists but
@@ -74,7 +76,7 @@ both refusal kinds, so I5 remains unmeasured by it.
 | **opencode** | `opencode-ai` (npm) / `opencode` | host runs 1.18.29 | general coding agent, OSS-model friendly | adapter in crier; installer check-only. **No v2 artefact exists** (`opencode2` is a squatted `0.0.1-security`; `opencode-ai@latest` is 1.19.5) |
 | **oh-my-pi (omp)** | `@oh-my-pi/pi-coding-agent` (npm) / `pi` adapter alias | **18.16.0**; engine **bun ≥1.4.4**; ~82 MB; repo `can1357/oh-my-pi` | pi's coding agent with session management | `scripts/harness/install-pi-agent.sh` now has a deterministic fixture-backed, user-space ladder; live upstream install and live turn remain **UNVERIFIED** |
 | **codex** | codex CLI / `codex` | **0.166.0** pin, read back as `codex-cli 0.166.0` | OpenAI's coding agent; **`exec` is the measured surface** (`codex exec --json -s <mode> -c model_provider="openai" -m <model> -- <text>`), app-server is `[experimental]` and unused in crier | **MEASURED install** (`scripts/harness/install-codex.sh`: musl tarball, sha256-pinned, user-space under `$HOME/.local/codex/<pin>`, idempotent; the same ladder installs the sha256-pinned `codex-code-mode-host` sidecar beside the binary — without it every exec tool call fails closed and a turn exits 0 having written no artifact, CF-006); adapter in crier (`internal/harness/codex/`). The conformance smoke turn **pins `-c model_provider="openai" -m <model>` on argv**: an ambient `~/.codex/config.toml` may name a router this repo never installed, and a turn that inherits it measures that router, not codex |
-| **claude-code** | `@anthropic-ai/claude-code` (npm) | **2.1.318 pin**, read back as `2.1.318 (Claude Code)` | Anthropic's coding agent | **MEASURED install ladder** (`scripts/harness/install-claude-code.sh`, CF-225: registry integrity + shasum pinned, user-space npm prefix under `$HOME`, idempotent second `--apply`); **absent from crier entirely** (`CRIER-HARNESS-11`), so it is not a *supported* harness — I4 needs `check`, `apply`, `vars`, `smoke`, and `memory` on a real node |
+| **claude-code** | `@anthropic-ai/claude-code` (npm) | **2.1.318 pin**, read back as `2.1.318 (Claude Code)` | Anthropic's coding agent | **MEASURED install ladder** (`scripts/harness/install-claude-code.sh`, CF-225: registry integrity + shasum pinned, user-space npm prefix under `$HOME`, idempotent second `--apply`); **absent from crier entirely** (`CRIER-HARNESS-11`), so it is not a *supported* harness — I4 needs five per-harness support families (`check`, `apply`, `vars`, `smoke`, `memory`) on a real node; the battery has six leg families, with `apply` only under `--install` and `node` only for `codex` |
 | **deepseek-harness (dsh)** | `@deepseek-ai/dsh` (npm) / `dsh` | **0.2.1-rc.5** pinned; `latest` on the registry is `0.2.2-rc.1`; repo `deepseek-ai/deepseek-harness` | DeepSeek's own open-source harness: "everything is a plugin" (Cordis); non-interactive surface `dsh headless "<task>"` (`--json` for NDJSON run events) | **MEASURED install ladder** (`scripts/harness/install-dsh.sh`, CF-226: `npm --prefix` under `$HOME/.local/harness/dsh`, registry integrity + shasum pinned, 618 packages / 858 MB, idempotent second `--apply`, version read back `0.2.1-rc.5`) **and one measured turn** (`dsh-turn.txt` carrying a fixed token, `model` read from dsh's own session record, 25 tools registered, `permission/preset=workspace-write`). No crier adapter: the decision is recorded in `specs/HARNESS.md` §"dsh — the adapter decision" |
 
 **Correction recorded, not quietly edited.** The previous revision of this file said "there is no
@@ -196,7 +198,7 @@ Management surfaces: `install-<harness>.sh --check` (installed? which pin), `har
 ## 7. What "wired up" means, per harness
 
 Six leg families, two of them conditional (`apply` only under `--install`, `node` only for
-`codex`). Support requires the five per-harness families to pass on a real node, and `codex`
+`codex`). Support requires five per-harness support families to pass on a real node, and `codex`
 additionally requires `node`; a `SKIP` names what is missing but is not a pass or support evidence.
 
 | Leg | Required evidence; battery coverage |

@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 # harness-conformance.sh — one battery, one matrix.
 #
-# For every harness the factory names, prove or refute four legs:
+# For every harness the factory names, prove or refute the families declared in
+# LEG_FAMILIES below; --list-legs prints them and their count is derived from that list:
 #
 #   check  the adapter's own --check, quoted with the value it measured
 #   apply  the adapter's --apply in a throwaway HOME (only with --install)
 #   vars   the §5 variable contract: --help documents the declared set, the full set is accepted,
 #          a credential VALUE and an ambient provider key are each refused by name, and no
 #          declared variable is accepted and then silently dropped (row CF-229)
+#   node   the node-creation fixture (dispatched only for codex)
 #   memory  the shared I3 record writer writes and reads back identical bytes in an explicit
 #           hermetic backend; missing/wrong namespaces fail closed (CF-231)
 #   smoke  a REAL turn in a scratch directory that must leave a file containing a
@@ -28,6 +30,7 @@
 #   tests/harness-conformance.sh --write-doc         # regenerate docs/HARNESS-CONFORMANCE.md
 #   tests/harness-conformance.sh --only hermes,codex # subset by id
 #   tests/harness-conformance.sh --adapter-dir DIR   # fixture hook (tests/selftest.sh §45)
+#   tests/harness-conformance.sh --list-legs         # print the declared families
 #
 # Knobs (environment):
 #   HC_TIMEOUT        seconds one smoke turn may take (default 300)
@@ -48,6 +51,13 @@
 # never reads a credential value (existence and validity only), and never invents a
 # turn for a harness whose non-interactive surface this repo has not measured.
 set -uo pipefail
+LEG_FAMILIES=(check apply vars node smoke memory)
+LEG_COUNT=${#LEG_FAMILIES[@]}
+if [ "${1:-}" = --list-legs ]; then
+  [ "$#" -eq 1 ] || { printf 'FAIL battery: --list-legs takes no other arguments\n' >&2; exit 2; }
+  printf '%s\n' "${LEG_FAMILIES[@]}"
+  exit 0
+fi
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 . "$HERE/scripts/lib.sh"
 
@@ -907,6 +917,7 @@ TEXT
 say "harness conformance — $(date -u +%Y-%m-%dT%H:%M:%SZ), adapters from ${ADAPTER_DIR#"$HERE"/}"
 say "  work: $WORK"
 say "  installs: $([ "$MODE_INSTALL" -eq 1 ] && echo 'enabled (scratch HOME)' || echo 'disabled (--install to enable)')"
+say "  leg families: $LEG_COUNT"
 say ""
 say "the §5 variable contract (specs/HARNESS-MATRIX.md §5)"
 declared_count="$(spec_declared 2>/dev/null | grep -c . || true)"
@@ -924,18 +935,17 @@ while IFS='|' read -r id adapter bin gen smoke measured <&3; do
   [ -n "$id" ] || continue
   selected "$id" || continue
   say "$id"
-  if [ "$MEMORY_ONLY" -eq 0 ]; then
-    if [ "$VARS_ONLY" -eq 0 ]; then
-      leg_check "$id" "$adapter" "$bin" "$gen"
-      leg_apply "$id" "$adapter"
-    fi
-    leg_vars "$id" "$adapter"
-    if [ "$VARS_ONLY" -eq 0 ] && [ "$id" = codex ]; then
-      leg_node "$id"
-    fi
-    [ "$VARS_ONLY" -eq 0 ] && leg_smoke "$id" "$bin" "$gen" "$measured"
-  fi
-  [ "$VARS_ONLY" -eq 0 ] && leg_memory "$id"
+  for family in "${LEG_FAMILIES[@]}"; do
+    case "$family" in
+      check)  if [ "$MEMORY_ONLY" -eq 0 ] && [ "$VARS_ONLY" -eq 0 ]; then leg_check "$id" "$adapter" "$bin" "$gen"; fi ;;
+      apply)  if [ "$MEMORY_ONLY" -eq 0 ] && [ "$VARS_ONLY" -eq 0 ]; then leg_apply "$id" "$adapter"; fi ;;
+      vars)   if [ "$MEMORY_ONLY" -eq 0 ]; then leg_vars "$id" "$adapter"; fi ;;
+      node)   if [ "$MEMORY_ONLY" -eq 0 ] && [ "$VARS_ONLY" -eq 0 ] && [ "$id" = codex ]; then leg_node "$id"; fi ;;
+      smoke)  if [ "$MEMORY_ONLY" -eq 0 ] && [ "$VARS_ONLY" -eq 0 ]; then leg_smoke "$id" "$bin" "$gen" "$measured"; fi ;;
+      memory) if [ "$VARS_ONLY" -eq 0 ]; then leg_memory "$id"; fi ;;
+      *) printf 'FAIL battery: no dispatch for declared family %s\n' "$family" >&2; exit 2 ;;
+    esac
+  done
   say ""
 done 3< <(printf '%s\n' "$HARNESSES")
 
