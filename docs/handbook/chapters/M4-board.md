@@ -16,7 +16,9 @@
 The fleet's durable record of what it decided and what it proved. It decides whether a row may
 close (a completion REQUIRES `--evidence-run-id` — `boardctl update --help`), whether a re-detected
 finding is refused, and whether two board copies have drifted. It may not decide the law itself:
-nine board rules exist only as chat, not in any module (CF-344).
+the board's law is written in the repository's pages, not decided in-band — `docs/BOARD.md`
+§Write rules and the board-law record in §3 below carry it (CF-344 wrote down the rules that had
+existed only as chat; the row's covered-versus-gap tally stays on the board).
 
 **What breaks if this module is absent.** The fleet forgets its decisions and proofs: a row is
 the only durable record of a defect, a decision, and the re-runnable command that closes it
@@ -75,6 +77,78 @@ produce ERROR. Operator actions by outcome: ABSENT → proceed (no barrier); HEL
 is live, do not force); ERROR → the lock state is UNKNOWN — stop and diagnose the path
 (permissions, filesystem) instead of writing the board on an unproven negative; RESIDUE → the
 file is a stale artifact, not a barrier — proceed and file a row to have it removed deliberately.
+
+**`scripts/boardctl` write path, validation and read-back (CF-344, AC1).** The write path is the
+wrapper plus the external binary, and it is the only sanctioned writer of the two JSONL files.
+No unit appendix page exists for `scripts/boardctl` and none is owed: the page census is
+generated from `scripts/` files with a `.sh`/`.py` suffix (`master_doc_skeleton.py::modules_for`),
+and the entrypoint has no suffix, so the generator's expected set never contains it; the module
+home for its behaviour is this chapter (OUTLINE M4.S1 "write and validate rows (`boardctl`,
+`board_lock.py`)").
+
+- **Write path.** `scripts/boardctl` pins `-C "$ROOT"` and `exec`s the external binary
+  (`scripts/boardctl:21`); with the executable absent it fails closed — `FAIL boardctl:
+  coding-hermes boardctl executable not found on PATH`, exit 127 (`scripts/boardctl:15-19`).
+  Writes take the exclusive `flock` on `.coding-hermes/board/.lock` (the UNIT-MAP M4.S1
+  condition; this repository's own scripts never open the lock — `docs/BOARD.md`
+  §Board lock adjudication), append the row/event pair, and refuse a duplicate id or a duplicate
+  finding fingerprint (`task id "…" already exists in tasks.jsonl — create aborted`, §9).
+- **Validation.** `boardctl validate` is the semantic gate: warnings are distinct from failures,
+  `--strict-keys` tightens key uniformity and `--fail-on dangling-dep` promotes a dangling
+  dependency to a failure (§4b, §11). The rule is validate before and after a batch of edits
+  (`docs/BOARD.md` §Write rules 1).
+- **Read-back.** A write is not done when the command exits 0; it is done when the board has
+  been read back: assert the expected line-count delta on both files, re-read the affected row
+  (`scripts/boardctl show <id>`), and re-run `validate` (`docs/BOARD.md` §Write rules 6, added
+  by CF-344). The file-level form of the same rule is older: "Append only. Never rewrite the
+  file wholesale; after any write, assert the line count." (AGENTS.md:55, `The board`). The read
+  side resolves the canonical ref first (`board_read.py`, above), and `board_drift.py` proves
+  the local copy equals the published ref at commit time (§7 drift row).
+
+**Board law (CF-344, AC3).** The owner's board rules existed only as chat when the mapping seats
+counted this slice: 23 distinct requirements, 9 covered, 14 gaps (CF-344 reasoning; filed by
+`d1b97a6`, "board: the requirement map — 79 stated requirements, 48 with no document, filed as
+CF-344..CF-353"). They are written here, and every quote cites text that exists in this
+repository:
+
+1. **Every write goes through `boardctl`, with a read-back.** Written as §Write rules 2 and 6 of
+   `docs/BOARD.md` and as the boardctl block above (AC1/AC2). Owner-authored written form:
+   "Append only. Never rewrite the file wholesale; after any write, assert the line count."
+   (AGENTS.md:55).
+2. **A disproved premise is superseded or named — it never stays closed silently.** When a
+   measurement disproves a row's premise, the row is updated with the contradiction named, and a
+   pass that stops reproducing keeps the row open. Owner-authored written form (AGENTS.md:82–83,
+   `Conventions`): "When a measurement contradicts a document, the document is corrected in the
+   same commit and the contradiction is named in the message." Demonstrated in this repository's
+   history: `d389fb7a` measured a PASS and closed against it, and `c91baf1d` re-opened the row
+   when the same documented command stopped reproducing ("the las-02 PASS did not reproduce,
+   CF-489 stays open"); `2f085d5f` re-opened CF-049 as "(premise disproved)".
+3. **File, then execute.** The durable record — the row, with its falsifiable acceptance
+   criteria — is filed before the work it describes is executed, so the work has a written
+   premise to be graded against and the board, not chat, is the work queue. This rule's owner
+   quote is not findable in this repository's published surfaces; it lives in the board row
+   CF-344, and the rule is stated here citing that row's reasoning rather than invented.
+4. **An empty board is intake, not an answer.** A lane that reads an empty or unworkable board
+   has not been told "nothing to do": it goes and asks the owner, and never mints filler work or
+   reports an empty run as a healthy answer. The scheduler-side sibling of the distinction is
+   already written: "An unreadable or stale board is `UNKNOWN`/`DEFERRED`, never an empty board"
+   (`docs/handbook/chapters/M9-scheduler.md:400`). Like rule 3, the owner quote is not findable
+   in-repo; it lives in the board row CF-344.
+5. **Completed rows have a delivery target.** A row is not finished when `boardctl update
+   --status complete` succeeds; the closeout — the verdict, the evidence pointers and what the
+   completion means — is delivered to the owner's channel, so a completion is announced, not
+   merely stored. The owner quote is not findable in-repo; it lives in the board row CF-344. The
+   closeout chain itself is normative in §15.4: the settlement order ends at a read-back
+   receipt, not at the verdict.
+6. **Kanban is absent from the written corpus — and stays so.** Measured 2026-11-22:
+   `git grep -in kanban HEAD -- specs docs/BOARD.md AGENTS.md docs/UNIT-MAP.yaml
+   docs/MASTER-DOC-SCHEMA.md` → 0 hits, and the chapter corpus names it once —
+   `Guard.KanbanQueueSize` (`docs/handbook/chapters/M10-crier.md:158`), crier's guard queue
+   depth, the `internal/guard/kanban.go` side-effect surface the quorum seats named. No page
+   defines a kanban board or board law for one. (The row's census said "zero times in
+   docs/master or specs"; `docs/master` is the skeleton's output directory and this tree does
+   not carry it, so `specs/` — which alone measures zero — is the live half of that claim.)
+   The absence is the finding; kanban is not designed here (CF-344).
 
 ## 4. Dependencies
 
@@ -261,7 +335,7 @@ carried from an earlier capture (N9):
 | Probe error (ERROR, degraded observation) | `board_lock.py` reports `ERROR lock=… probe=open-failed …`, exit 3 (CF-259) | a successfully probed RESIDUE | do not write; repair permissions/filesystem and rerun. The older error-discarding RESIDUE behavior is superseded, not the current diagnostic. A partial process scan remains unproven until a complete probe succeeds |
 | Live holder (HELD) | `board_lock.py` → `HELD holder=pid-N` or `HELD holder=flock-eagain` | a residue | wait; the holder is live, do not force the lock |
 | Duplicate id / fingerprint | refused on append (`already exists … create aborted`) | a valid new row | use a new id or resolve the duplicate finding |
-| Rule set only in chat | nine board rules have no module home | a written law | **OPEN** — CF-344 |
+| Rule set only in chat | nine board rules have no module home | a written law | written in tree (CF-344): the board-law record in §3 and `docs/BOARD.md` §Write rules; the row's closure and evidence binding stay with the foreman |
 | Rows duplicating a module's defect table | same defect in two places | a single source of truth | **OPEN** — CF-363 |
 | Sibling reversion | a staged stale row copy reverts a closeout | a real change | normalize the sibling's stale copy after a supersession |
 
@@ -276,6 +350,8 @@ carried from an earlier capture (N9):
 
 ## 12. Cross-references
 
+- The board's written law: `docs/BOARD.md` §Write rules (boardctl-only writes, read-back after
+  write) and §3's board-law record (CF-344).
 - F5 LANDING writes the board row a landing closes (M3).
 - **M9 SCHEDULER reads board rows as admission gates** — `internal/scheduler/admission_mode.go:230-242`
   is the board-ownership/workability admission decision. **M10 CRIER does not** (B04): a source

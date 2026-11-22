@@ -29,14 +29,22 @@ public repo.
 ## Write rules
 
 1. Validate before and after a batch of board edits: `scripts/boardctl validate`.
-2. Use `create` to add a row and `update` to change a row's status; do not rewrite either JSONL
-   file wholesale or edit them with ad-hoc scripts.
+2. Use `create` to add a row and `update` to change a row's status. Every write goes through
+   `scripts/boardctl`, which takes the exclusive board lock and runs the canonical validator;
+   neither JSONL file is rewritten wholesale, and hand edits or ad-hoc scripts are not a
+   sanctioned write path (CF-344). The append-only and line-count rules in AGENTS.md (`The board`)
+   are the properties this write path enforces on your behalf, not a licence to write the files
+   by hand.
 3. A `complete` status requires a bound run/evidence artifact accepted by the CLI. A commit message
    is not completion evidence.
 4. Record meaningful transitions with `event`; do not include credentials, private endpoints or
    raw sensitive logs in a public board.
 5. Keep task IDs unique and acceptance criteria falsifiable. `tests/selftest.sh` checks row parsing;
    the boardctl validator is the schema/consistency gate.
+6. Read the board back after any write. A zero exit from `create`, `update` or `event` is the
+   tool's claim, not the proof: assert the expected line-count delta on both JSONL files, re-read
+   the affected row (`scripts/boardctl show <id>`), and run `scripts/boardctl validate` before the
+   write counts as done (CF-344).
 
 ## Closure evidence shapes
 
