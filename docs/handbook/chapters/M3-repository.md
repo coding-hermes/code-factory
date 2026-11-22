@@ -146,6 +146,10 @@ count (re-pinned after `tests/selftest.sh` grew +150 lines in `08a2c8a..fbc19cb`
 verdict in the repository whatever lint, tests and tier-2 say, so the secrets gate's *scope* is a
 verdict-wide fact, not a detail.
 
+The guard budget must nest `hook_timeout > test_timeout > suite runtime`.
+The repo-owned `scripts/check_guard_budget.py` checks the first relation; a truncated hook can
+report a fail-open PASS (CF-217). Suite runtime must be measured separately.
+
 **The defect (measured 2026-11-21 on `cfe075c9`).** The `secrets` step runs
 `gitleaks detect --no-git`, which grades the WORKING TREE: artifact content git can never commit is
 graded as if it were source. That tree carried **38 findings — 28 under `.node/`, 10 under `.tmp/`,
@@ -309,6 +313,8 @@ are answerable only by reading the `LANDED:` / `LAND: REFUSED` rows.
   behaviour and the bypass disclosure. One unit, two chapters, this is the arbitration.
 
 ## 13. Evidence of record
+
+The guard budget rule and its repo-owned checker are recorded in §III.M3.S3 (CF-217/CF-522).
 
 - CF-390: `python3 scripts/worktree_census.py` reconciled 197 WORKTREE rows with 197 entries from `git worktree list --porcelain` on 2026-11-21 during implementation: merged=87, unmerged=110, dirty=42, live-writer=1, unknown=0, removed=0. `python3 scripts/worktree_census.py reap` named all 197 entries (129 REFUSED with reasons, 68 WOULD-REAP); registry bytes and every path were unchanged, and `git worktree list` line count stayed 197 before/after. An unclaimed dirty checkout was explicitly reported with dirty=3 and owner=`no-live-writer`, not treated as residue. `python3 -m unittest tests.test_worktree_census` exercises 15 fixture tests; its scratch guard-deletion control actually removes the live fixture's path and registration while its process lives, then the same live-writer preservation test exits 1. No live-registry apply was run.
 

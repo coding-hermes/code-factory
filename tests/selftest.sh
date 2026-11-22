@@ -9212,5 +9212,33 @@ else
 fi
 rm -rf "$cf510_fix"
 
+# --- CF-522: guard budget invariant ---
+say "79. guard hook budget strictly exceeds the test budget (CF-522)"
+cf522_dir=$(mktemp -d)
+cf522_green=$(python3 "$HERE/scripts/check_guard_budget.py" --config "$HERE/.gitreins/config.yaml" 2>&1); cf522_green_rc=$?
+if [ "$cf522_green_rc" -eq 0 ]; then
+  say "  PASS  a. live guard budget: $cf522_green"
+else
+  say "  FAIL  a. live guard budget (exit $cf522_green_rc): $cf522_green"; selftest_fail
+fi
+printf 'guards:\n  test_timeout: 1200\n  hook_timeout: 300\n' > "$cf522_dir/inverted.yaml"
+cf522_red=$(python3 "$HERE/scripts/check_guard_budget.py" --config "$cf522_dir/inverted.yaml" 2>&1); cf522_red_rc=$?
+if [ "$cf522_red_rc" -eq 1 ] && [[ "$cf522_red" == *'FAIL guard budget: hook_timeout=300s <= test_timeout=1200s'* ]]; then
+  say "  PASS  b. inverted budgets rejected: $cf522_red"
+else
+  say "  FAIL  b. inverted budgets not rejected with both values (exit $cf522_red_rc): $cf522_red"; selftest_fail
+fi
+printf 'guards:\n  test_timeout: 1200\n  hook_timeout: 1200\n' > "$cf522_dir/equal.yaml"
+printf 'guards:\n  test_timeout: 1200\n' > "$cf522_dir/missing.yaml"
+cf522_equal=$(python3 "$HERE/scripts/check_guard_budget.py" --config "$cf522_dir/equal.yaml" 2>&1); cf522_equal_rc=$?
+cf522_missing=$(python3 "$HERE/scripts/check_guard_budget.py" --config "$cf522_dir/missing.yaml" 2>&1); cf522_missing_rc=$?
+if [ "$cf522_equal_rc" -eq 1 ] && [[ "$cf522_equal" == *'hook_timeout=1200s <= test_timeout=1200s'* ]] \
+  && [ "$cf522_missing_rc" -eq 2 ] && [[ "$cf522_missing" == *'missing guards.hook_timeout'* ]]; then
+  say "  PASS  c. equal budgets rejected (exit 1); missing hook_timeout named (exit 2)"
+else
+  say "  FAIL  c. equal or missing control (equal exit $cf522_equal_rc: $cf522_equal; missing exit $cf522_missing_rc: $cf522_missing)"; selftest_fail
+fi
+rm -rf "$cf522_dir"
+
 say ""
 [ "$fails" -eq 0 ] && finish 0 || finish 1
