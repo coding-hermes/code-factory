@@ -134,6 +134,29 @@ GUARD_SYSTEM_ROLE_RE = re.compile(r'"role"\s*:\s*"system"')
 # The escaped-value shape of the same class (`\"prompt\":` inside a JSON string), transcribed from
 # crier's seed table (internal/guard/patterns.go, stringified_json — high confidence, blocks).
 GUARD_ESCAPED_VALUE_RE = re.compile(r'"(\\u00[0-9a-f]{2}|\\")?[^"]*\\"\s*[:{]')
+# Full high-confidence subset of crier's SeedPatterns (internal/guard/patterns.go), transcribed
+# verbatim (judge ed187b69/CF-131 coverage gap: a body matching an untranscribed pattern would
+# pass the tripwire, POST, be refused 403 by the real relay, and loop unacked). crier hard-blocks
+# only the HIGH-confidence subset (guard.go HighConfidence; DF-CRIER-31: a low-confidence match
+# never hard-blocks on its own), so `b64_blob` (ConfidenceLow) is deliberately NOT in this table —
+# its transcription lives in the probe's pin table so a future crier table change still fails the
+# pin loudly.
+GUARD_INSTRUCTION_INJECTION_RE = re.compile(
+    r"(?i)ignore\s+(all\s+)?(previous|prior|above)\s+instructions?"
+)
+GUARD_IGNORE_ABOVE_RE = re.compile(r"(?i)ignore\s+everything\s+above")
+GUARD_SYSTEM_OVERRIDE_RE = re.compile(
+    r"(?i)(you\s+are\s+now|from\s+now\s+on|act\s+as)\s+(dan|gpt[-\s]?\w*|an?\s+unrestricted|a\s+new\s+system)"
+)
+GUARD_NO_RESTRICTIONS_RE = re.compile(
+    r"(?i)(no\s+(rules|restrictions|filter)|unrestricted\s+mode|without\s+(any\s+)?(rules|limits))"
+)
+GUARD_HIDDEN_COT_RE = re.compile(
+    r"(?i)(show\s+(your\s+)?(chain|steps?|reasoning)|think\s+step\s+by\s+step)"
+)
+GUARD_DISGUISED_PROMPT_RE = re.compile(
+    r"(?i)(this\s+is\s+(not\s+)?(a\s+)?(prompt|instruction)|treat\s+as\s+(data|text))\s*:"
+)
 
 
 def guard_match(body):
@@ -143,6 +166,12 @@ def guard_match(body):
         ("control_keys", GUARD_CONTROL_KEY_RE),
         ("system_role", GUARD_SYSTEM_ROLE_RE),
         ("stringified_json", GUARD_ESCAPED_VALUE_RE),
+        ("ignore_previous", GUARD_INSTRUCTION_INJECTION_RE),
+        ("ignore_above", GUARD_IGNORE_ABOVE_RE),
+        ("system_override", GUARD_SYSTEM_OVERRIDE_RE),
+        ("no_restrictions", GUARD_NO_RESTRICTIONS_RE),
+        ("hidden_cot", GUARD_HIDDEN_COT_RE),
+        ("disguised_prompt", GUARD_DISGUISED_PROMPT_RE),
     ):
         if pattern.search(text):
             return name
