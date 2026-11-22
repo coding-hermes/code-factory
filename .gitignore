@@ -16,6 +16,11 @@ key*
 .gitreins/disposable.json
 .gitreins/disposable.lock
 .gitreins/tasks.yaml.lock
+# gitreins writes a repair snapshot next to the store whenever it rewrites
+# tasks.yaml (concurrent writers / quoting normalisation); these are producer
+# output, not state of record, and must never be committed.
+.gitreins/tasks.yaml.corrupt-*.bak
+.gitreins/tasks.yaml.corrupt-*
 .gitreins/verdicts/
 .gitreins/quality.json
 # gitreins review state: per-machine cursor + finding fingerprints (a checkout that carried it
