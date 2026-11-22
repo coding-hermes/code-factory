@@ -40,10 +40,35 @@ CRIER_PATTERNS = os.environ.get("CF_CRIER_PATTERNS_SRC") or os.path.expanduser(
 
 # crier's seed table, transcribed byte-for-byte (internal/guard/patterns.go).
 GUARD_PATTERN_TABLE = (
-    ("control_keys", r'"(system|instructions|prompt|tools|schema)"\s*:'),
+    (
+        "ignore_previous",
+        r"(?i)ignore\s+(all\s+)?(previous|prior|above)\s+instructions?",
+    ),
+    (
+        "system_override",
+        r"(?i)(you\s+are\s+now|from\s+now\s+on|act\s+as)\s+(dan|gpt[-\s]?\w*|an?\s+unrestricted|a\s+new\s+system)",
+    ),
+    (
+        "no_restrictions",
+        r"(?i)(no\s+(rules|restrictions|filter)|unrestricted\s+mode|without\s+(any\s+)?(rules|limits))",
+    ),
+    (
+        "hidden_cot",
+        r"(?i)(show\s+(your\s+)?(chain|steps?|reasoning)|think\s+step\s+by\s+step)",
+    ),
     ("system_role", r'"role"\s*:\s*"system"'),
+    ("control_keys", r'"(system|instructions|prompt|tools|schema)"\s*:'),
     ("stringified_json", r'"(\\u00[0-9a-f]{2}|\\")?[^"]*\\"\s*[:{]'),
+    (
+        "disguised_prompt",
+        r"(?i)(this\s+is\s+(not\s+)?(a\s+)?(prompt|instruction)|treat\s+as\s+(data|text))\s*:",
+    ),
+    ("ignore_above", r"(?i)ignore\s+everything\s+above"),
 )
+# b64_blob ships ConfidenceLow: crier never hard-blocks on a low-confidence match alone
+# (DF-CRIER-31), so it is pinned but deliberately absent from the blocking table above.
+LOW_CONFIDENCE_TABLE = (("b64_blob", r"[A-Za-z0-9+/]{80,}={0,2}"),)
+GUARD_PATTERNS = [(name, re.compile(pattern)) for name, pattern in GUARD_PATTERN_TABLE]
 GUARD_PATTERNS = [(name, re.compile(pattern)) for name, pattern in GUARD_PATTERN_TABLE]
 
 
@@ -61,6 +86,23 @@ def pin_or_complain():
             return (
                 f"PIN BROKEN: the stub's {name} pattern is not crier's shipped pattern"
             )
+    for name, pattern in LOW_CONFIDENCE_TABLE:
+        entry = f'{{Name: "{name}", Pattern: `{pattern}`'
+        idx = source.find(entry)
+        if idx < 0:
+            return f"PIN BROKEN: the pin's low-confidence {name} pattern is not crier's shipped pattern"
+        tail = source[idx : idx + 300]
+        if "Confidence: ConfidenceLow" not in tail:
+            return f"PIN BROKEN: crier's {name} is no longer ConfidenceLow — re-derive the blocking set"
+    # completeness: every shipped pattern name must be accounted for (high blocks, low does not)
+    shipped = set(re.findall(r'Name: "([a-z_0-9]+)"', source))
+    known = {n for n, _ in GUARD_PATTERN_TABLE} | {n for n, _ in LOW_CONFIDENCE_TABLE}
+    missing = sorted(shipped - known)
+    if missing:
+        return (
+            "PIN BROKEN: crier ships patterns this probe does not transcribe — "
+            f"{', '.join(missing)}; derive their confidence and extend the tables"
+        )
     return None
 
 
