@@ -983,3 +983,6 @@
 {"id": 980, "timestamp": "2026-11-22T04:43:59Z", "event_type": "task_completed", "task_id": "CF-390", "actor": "foreman", "detail": "{\"status\":\"complete\"}"}
 {"id": 981, "timestamp": "2026-11-22T05:16:26Z", "event_type": "task_created", "task_id": "CF-523", "actor": "foreman", "detail": "{\"id\":\"CF-523\",\"status\":\"pending\"}"}
 {"id": 982, "timestamp": "2026-11-22T05:57:36Z", "event_type": "task_completed", "task_id": "CF-522", "actor": "foreman", "detail": "{\"status\":\"complete\"}"}
+{"id": 983, "timestamp": "2026-11-22T06:24:00Z", "event_type": "task_updated", "task_id": "CF-312", "actor": "foreman", "detail": "{\"status\":\"pending\"}"}
+{"id": 984, "timestamp": "2026-11-22T06:24:01Z", "event_type": "task_updated", "task_id": "CF-314", "actor": "foreman", "detail": "{\"status\":\"pending\"}"}
+{"id": 985, "timestamp": "2026-11-22T06:44:09Z", "event_type": "task_completed", "task_id": "CF-523", "actor": "foreman", "detail": "{\"status\":\"complete\"}"}
