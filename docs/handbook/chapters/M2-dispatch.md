@@ -122,7 +122,13 @@ Result replies carry `env_version, dispatch_id, corr_id, in_reply_to, run_id, mi
 ok, reply_b64, host_identity, harness, vars, exit_codes, gate_exit, branch, commit, artifacts,
 wall_s, finished_at`, with `error` when failed. Refusals carry the available identity, `ok=false`,
 `error`, `refused_by`, `refusal` and a `missing` array; a missing identity triggers the named
-`envelope` refusal. `in_reply_to` is the scheduler's PRIMARY key. CT-09 and CT-11 are boundary
+`envelope` refusal. `in_reply_to` is the scheduler's PRIMARY key. No plain member carries
+dispatch text: a verbatim echo — a failing gate's `cmd`, a rejected `vars` value — matches the
+relay's control-key pre-match and the reply refuses itself (`403 GUARD_BLOCKED`, dispatch unacked,
+the tick never settles, CF-131), so the plain `error`/`refusal` members name dispatch-controlled
+input by bounded identity (length + sha256 prefix, `specs/ENVELOPE.md` §Reserved field names),
+the verbatim text rides in base64 `reply_b64`, and `deliver()` declines to POST a body carrying
+the guard's shapes (named `guard` row). CT-09 and CT-11 are boundary
 contracts: their far side is a service outside
 the five covered systems, so the covered side is named and the far side is honestly marked
 external. The state for a boundary contract with no measured wire is **UNVERIFIED** — an outline
