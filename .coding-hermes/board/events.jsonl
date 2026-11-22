@@ -1006,3 +1006,4 @@
 {"id": 1003, "timestamp": "2026-11-22T15:59:29Z", "event_type": "task_created", "task_id": "CF-527", "actor": "foreman", "detail": "{\"id\":\"CF-527\",\"status\":\"pending\"}"}
 {"id": 1004, "timestamp": "2026-11-22T16:14:42Z", "event_type": "task_completed", "task_id": "CF-131", "actor": "foreman", "detail": "{\"status\":\"complete\"}"}
 {"id": 1005, "timestamp": "2026-11-22T16:48:58Z", "event_type": "task_completed", "task_id": "CF-346", "actor": "foreman", "detail": "{\"status\":\"complete\"}"}
+{"id": 1006, "timestamp": "2026-11-22T17:20:29Z", "event_type": "task_completed", "task_id": "CF-240", "actor": "foreman", "detail": "{\"status\":\"complete\"}"}
