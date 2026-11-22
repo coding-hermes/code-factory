@@ -1013,3 +1013,4 @@
 {"id": 1010, "timestamp": "2026-11-22T18:48:00Z", "event_type": "task_completed", "task_id": "CF-345", "actor": "foreman", "detail": "{\"status\":\"complete\"}"}
 {"id": 1011, "timestamp": "2026-11-22T20:07:18Z", "event_type": "task_updated", "task_id": "CF-347", "actor": "foreman", "detail": "{\"status\":\"pending\"}"}
 {"id": 1012, "timestamp": "2026-11-22T20:21:30Z", "event_type": "audit", "task_id": "CF-528", "actor": "ops", "detail": "ops tick 2026-11-22-20-12-17: parity repair pushed e0981f5f+03daef90 to origin/gh/worker (ff); master_doc_check PASS re-proven in detached scratch worktree at e0981f5f. Close deferred to a dedicated judge run — live sibling tick 19-33-17 owns an in-flight suite in this checkout."}
+{"id": 1013, "timestamp": "2026-11-22T20:59:50Z", "event_type": "task_completed", "task_id": "CF-528", "actor": "foreman", "detail": "{\"status\":\"complete\"}"}
