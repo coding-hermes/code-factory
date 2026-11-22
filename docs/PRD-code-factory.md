@@ -49,6 +49,21 @@ One project (crier), one node, one directive that travelled over crier and reach
 gateway, one commit produced there, one artifact digest verified back on the control host, and a
 recorded FAIL when the gate is made to fail.
 
+**Status 2026-11-22T14:00Z (board re-measured at `e6b23a80` — 616 task rows, 998 events: 228
+complete, 16 in_progress, 4 blocked, 368 pending; 0 duplicate ids): NOT MET, no membership change
+in the blocker list and no leg change.** Two rows closed `complete` since the `12:40Z` paragraph
+(`CF-316` — the fleet-memory index writer, and `CF-336` — the public-template boundary in the
+tracked docs); neither title nor acceptance criteria names a commit produced on a node, a digest
+recomputed from pulled bytes on the control host, or a FAIL from a deliberately broken gate, so the
+three absent legs and the three documented false-positive keyword hits stand. `CF-131` reads
+`pending` in the committed board at this tip; the working-copy line that flips it to `in_progress`
+with a `wt/CF-131` worktree stamp is an uncommitted live-writer claim from
+2026-11-22T13:40:02Z and is deliberately not counted here. The open defects remain the same
+twelve at their committed-tree statuses: `CF-001`, `CF-002`, `CF-004`, `CF-136`, `CF-137`,
+`CF-138`, `CF-139` (`in_progress`); `CF-080`, `CF-131`, `CF-132` (`pending`); `CF-110`, `CF-112`
+(`blocked`). This paragraph certifies the membership scan only; the three-leg row-by-row reading
+is still the one the `2026-11-20T07:12Z` block describes.
+
 **Status 2026-11-22T12:40Z (board re-measured at `854441a7` — 616 task rows, 994 events: 226
 complete, 18 in_progress, 4 blocked, 368 pending): NOT MET, no membership change and no leg change.**
 The census at this tip parses with no malformed line and no duplicate id. Eight rows closed
