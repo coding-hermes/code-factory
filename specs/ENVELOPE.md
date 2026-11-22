@@ -142,7 +142,9 @@ So, for every result:
 - `status: "failed"` or `"refused"` ⇒ `"ok": false`, **plus a reason** the scheduler can record:
   `error` (a short string; the scheduler's verdict reads it before anything else) and `reply_b64`
   (the node's own words, which become the tick's text). A failing gate must name the gate and its
-  exit code, not just its own exit status.
+  exit code, not just its own exit status. The gate's `cmd` is dispatch text, so the plain
+  `error` field names it by bounded identity (length + sha256 prefix, §Reserved field names);
+  the verbatim `cmd` rides in `reply_b64`.
 - A gate that could **not run** (no `cmd`, or a command the node could not start) is a FAILED
   result too: the node's own row for it is a FAIL, and a result may not claim `ok: true` for a
   brief whose gate never produced an exit code.
@@ -221,6 +223,17 @@ crier's prompt-injection guard rejects any JSON whose keys match
 `"(system|instructions|prompt|tools|schema)"\s*:` — `403 GUARD_BLOCKED`, `matched_pattern=control_keys`.
 That is why this envelope says `env_version`, never `schema`, and why a field carrying a tool list
 must be named something else (e.g. `capabilities`).
+
+The pre-match runs over the **whole deliver body**, string values included (crier
+`internal/guard/patterns.go`, `PreScanner.Scan`): control-key-shaped text inside a value reaches
+the wire escaped (backslash-quoted, e.g. `\"prompt\":` inside a JSON string) and matches the `stringified_json` pattern, which blocks the same
+way. That is the CF-131 failure mode a result envelope must not create: echoing dispatch text — a
+failing gate's `cmd`, a rejected `vars` value, a mismatched `workdir` or `project` — makes the
+reply refuse **itself** (`403 GUARD_BLOCKED`), the dispatch stays unacked, and every redelivery
+re-sends the same refused body, so the tick never settles. A result envelope therefore never
+carries dispatch-controlled text in a plain (non-base64) member: verbatim prose travels only in
+`reply_b64`, and a plain member names dispatch-controlled input by bounded identity (length plus
+sha256 prefix), the way the `vars` receipt already names variable values.
 
 Authors must not work around this by renaming to opaque keys; the envelope vocabulary is fixed
 here, and any new field is added to this spec first.

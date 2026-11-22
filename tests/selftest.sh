@@ -9299,5 +9299,69 @@ else
 fi
 rm -rf "$cf522_dir"
 
+# --- CF-131: a completion that echoes dispatch text refuses itself at the relay's guard ---
+# crier's control-key pre-match scans the WHOLE deliver body, string values included (escaped
+# `\"prompt\":` inside a value matches `stringified_json`), so one dispatch-controlled string
+# quoted verbatim into a plaintext envelope field — a failing gate's `cmd`, a rejected `vars`
+# value, a mismatched `workdir` — refuses the reply's own delivery: 403 GUARD_BLOCKED, the
+# dispatch stays unacked, the same body is re-sent on every redelivery, the tick never settles.
+# The node now names dispatch-controlled input by bounded identity in plain members, carries the
+# verbatim text only in base64 `reply_b64`, and declines to POST a body carrying the guard's
+# shapes. specs/ENVELOPE.md §Reserved field names states the rule (CF-131).
+say "80. a completion reply never carries dispatch text in a plain member (CF-131)"
+cf131=$(mktemp -d)
+if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_bus_completion_guard.py" \
+     >"$cf131/out" 2>&1; then
+  say "  PASS  poisoned-gate/poisoned-vars completions deliver bounded and close the tick FAILED; a completed run echoes no task text; the deliver tripwire declines a poisoned body; the dispatcher completion payload pins the bounded field set (tests/test_bus_completion_guard.py)"
+else
+  say "  FAIL  the completion guard on the producing side (tests/test_bus_completion_guard.py)"
+  selftest_fail
+  sed 's/^/    | /' "$cf131/out"
+fi
+# ARM (red control): the SAME fixture against the revision this row was raised on. It must show
+# the guard refusing the poisoned completion 403 GUARD_BLOCKED with nothing stored and nothing
+# acked — pointed at the fixed worker the control fails, so it discriminates.
+if git -C "$HERE" show e6b23a80:scripts/node-bus-worker.py > "$cf131/node-bus-worker.py" 2>/dev/null; then
+  if CF_BUS_WORKER_SOURCE="$cf131/node-bus-worker.py" \
+       CF_COMPLETION_GUARD_PREFIX_CONTROL=1 \
+       PYTHONPATH="$HERE/scripts/harness" \
+       PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_bus_completion_guard.py" \
+       >"$cf131/prefix" 2>&1; then
+    say "  PASS  pre-fix e6b23a80 refuses the poisoned completion 403 GUARD_BLOCKED and never acks it (fixture detects CF-131)"
+  else
+    say "  FAIL  pre-fix control did not reproduce the completion-guard defect"
+    selftest_fail
+    sed 's/^/    | /' "$cf131/prefix"
+  fi
+else
+  say "  FAIL  pre-fix source unavailable (git show e6b23a80:scripts/node-bus-worker.py)"
+  selftest_fail
+fi
+# AC2's repeatable live probe: the same reply refused with the task body present (403
+# GUARD_BLOCKED), accepted with it stripped (201), against a fresh relay every run.
+if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/probe_cf131_guard_roundtrip.py" \
+     >"$cf131/probe" 2>&1; then
+  say "  PASS  live probe: task body present refused 403 GUARD_BLOCKED, stripped accepted 201, pinned to crier's seed table (tests/probe_cf131_guard_roundtrip.py)"
+else
+  say "  FAIL  the CF-131 guard round-trip probe (tests/probe_cf131_guard_roundtrip.py)"
+  selftest_fail
+  sed 's/^/    | /' "$cf131/probe"
+fi
+# The contract the arms assert is only the contract if the spec states it.
+cf131_doc_missing=""
+for cf131_anchor in \
+  'A result envelope therefore never' \
+  'carries dispatch-controlled text in a plain (non-base64) member' \
+  'the tick never settles' ; do
+  grep -Fq -- "$cf131_anchor" "$HERE/specs/ENVELOPE.md" || cf131_doc_missing="$cf131_doc_missing [$cf131_anchor]"
+done
+if [ -z "$cf131_doc_missing" ]; then
+  say "  PASS  specs/ENVELOPE.md §Reserved field names names the CF-131 failure mode and the no-dispatch-text rule"
+else
+  say "  FAIL  specs/ENVELOPE.md no longer documents:$cf131_doc_missing"
+  selftest_fail
+fi
+rm -rf "$cf131"
+
 say ""
 [ "$fails" -eq 0 ] && finish 0 || finish 1

@@ -118,6 +118,50 @@ REPLY_TAIL_CHARS = 1500
 # crier caps a delivery's `idempotency_key` at 128 characters (docs/openapi.yaml, inboxDeliver); a
 # key the relay would refuse is not a retry key, so the key is built to fit.
 IDEMPOTENCY_KEY_MAX = 128
+# specs/ENVELOPE.md §Reserved field names (crier guard): crier's prompt-injection pre-match
+# rejects any deliver body matching `"(system|instructions|prompt|tools|schema)"\s*:` with
+# `403 GUARD_BLOCKED`, and it scans the WHOLE body — string values included (crier
+# internal/guard/patterns.go, PreScanner.Scan). A control-key shape inside a string value reaches
+# the wire escaped and matches `stringified_json`, which blocks the same way. One
+# dispatch-controlled string quoted verbatim into a plaintext envelope field therefore refuses
+# the very reply that reports the run: the delivery is refused, the dispatch stays unacked, and
+# every redelivery re-sends the same refused body — the tick never settles (CF-131). Plain
+# envelope fields carry dispatch-controlled prose only as a bounded identity (bounded_text); the
+# verbatim text still reaches the tick row through `reply_b64`, which travels base64 for exactly
+# this reason.
+GUARD_CONTROL_KEY_RE = re.compile(r'"(system|instructions|prompt|tools|schema)"\s*:')
+GUARD_SYSTEM_ROLE_RE = re.compile(r'"role"\s*:\s*"system"')
+# The escaped-value shape of the same class (`\"prompt\":` inside a JSON string), transcribed from
+# crier's seed table (internal/guard/patterns.go, stringified_json — high confidence, blocks).
+GUARD_ESCAPED_VALUE_RE = re.compile(r'"(\\u00[0-9a-f]{2}|\\")?[^"]*\\"\s*[:{]')
+
+
+def guard_match(body):
+    """The guard pattern a serialized deliver body carries, or None (`body`: str or bytes)."""
+    text = body.decode("utf-8", "replace") if isinstance(body, bytes) else body
+    for name, pattern in (
+        ("control_keys", GUARD_CONTROL_KEY_RE),
+        ("system_role", GUARD_SYSTEM_ROLE_RE),
+        ("stringified_json", GUARD_ESCAPED_VALUE_RE),
+    ):
+        if pattern.search(text):
+            return name
+    return None
+
+
+def bounded_text(text):
+    """Dispatch-controlled prose for a PLAINTEXT envelope field: bounded identity, never verbatim.
+
+    The relay's control-key pre-match scans the whole deliver body, so a verbatim echo of
+    dispatch text in `error`/`refusal` refuses the reply's own delivery and loops the dispatch
+    unacked forever (CF-131). Length + sha256 prefix identifies the value against the dispatch
+    without carrying its shape; the tick still sees the verbatim text through the base64
+    `reply_b64` report.
+    """
+    raw = str(text or "")
+    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+    return f"{len(raw)} chars, sha256:{digest}"
+
 
 # specs/HARNESS-MATRIX.md §5 — the one set a node passes to a harness. Names are stable; the
 # directive is the only source, and nothing here is ever read from the worker's own environment.
@@ -542,7 +586,9 @@ def directive_vars(dispatch, home):
 
     The directive is the ONLY source: this reads `dispatch["vars"]`, or the same object inside
     `dispatch["payload"]`, and nothing else. A problem becomes a named refusal, and no value is
-    ever copied into a message — only its name and its length.
+    ever copied into a message — only its name and its length (bounded identity: a verbatim value
+    in the refusal detail would refuse the refusal's own delivery at the relay's control-key
+    guard, CF-131).
     """
     raw = dispatch.get("vars")
     if raw is None and isinstance(dispatch.get("payload"), dict):
@@ -567,7 +613,9 @@ def directive_vars(dispatch, home):
         if key in SECTION5_INTS:
             low, high, _default = SECTION5_INTS[key]
             if not text.isdigit() or not low <= int(text) <= high:
-                problems.append(f"{key} is not an integer in {low}..{high}: {text!r}")
+                problems.append(
+                    f"{key} is not an integer in {low}..{high} ({bounded_text(text)})"
+                )
         elif key == "CF_API_KEY_FILE":
             if secret_shaped(text):
                 problems.append(
@@ -581,10 +629,12 @@ def directive_vars(dispatch, home):
         elif key == "CF_WORKDIR":
             real = os.path.realpath(os.path.expanduser(text))
             if not os.path.isdir(real):
-                problems.append(f"CF_WORKDIR is not an existing directory: {text}")
+                problems.append(
+                    f"CF_WORKDIR is not an existing directory ({bounded_text(text)})"
+                )
             elif not inside_clone(real, home):
                 problems.append(
-                    f"CF_WORKDIR {real} is outside this node's $HOME ({home})"
+                    f"CF_WORKDIR ({bounded_text(real)}) is outside this node's $HOME ({home})"
                 )
         elif key == "CF_HARNESS_OPTS":
             if re.search(
@@ -599,7 +649,9 @@ def directive_vars(dispatch, home):
                 problems.append("CF_HARNESS_OPTS is not a key=value[,key=value] bag")
         elif key == "CF_BASE_URL":
             if not re.match(r"^https?://", text):
-                problems.append(f"CF_BASE_URL is not an http(s) URL: {text}")
+                problems.append(
+                    f"CF_BASE_URL is not an http(s) URL ({bounded_text(text)})"
+                )
             elif "@" in text.split("://", 1)[1]:
                 problems.append(
                     "CF_BASE_URL carries userinfo; a credential in a URL is a credential as a value"
@@ -1529,7 +1581,10 @@ def process(dispatch, ident, signer, args, seen, in_reply_to=""):
             ident,
             dispatch,
             "brief_project",
-            f"dispatch project {claimed_project!r} != node project {ident.project!r}",
+            # The project name is dispatch text: bounded identity on the wire (the verbatim
+            # form is in the local row above), never in the envelope (CF-131).
+            f"dispatch project ({bounded_text(claimed_project)}) != node project "
+            f"{ident.project!r}",
             in_reply_to=in_reply_to,
         )
         return False, result, True
@@ -1547,7 +1602,8 @@ def process(dispatch, ident, signer, args, seen, in_reply_to=""):
                 ident,
                 dispatch,
                 "brief_workdir",
-                f"workdir {workdir!r} is not inside {ident.repo_path!r}",
+                # Dispatch text again: bounded identity on the wire, verbatim row above (CF-131).
+                f"workdir ({bounded_text(workdir)}) is not inside {ident.repo_path!r}",
                 in_reply_to=in_reply_to,
             )
             return False, result, True
@@ -1653,17 +1709,30 @@ def process(dispatch, ident, signer, args, seen, in_reply_to=""):
     # tick's failure text when `ok` is false, and what an operator reads instead of guessing at an
     # exit code. A gate that could NOT run is one of them: the row above already says FAIL, and a
     # result that called that "completed" would complete a tick on work nobody gated.
+    # Two spellings on purpose: `detail_reasons` (verbatim, may quote the gate's dispatch-supplied
+    # cmd) feeds `summary`, which reaches the tick row only through base64 `reply_b64`; `reasons`
+    # feeds the plaintext `error` field, where a verbatim cmd quoting control-key JSON would make
+    # the relay refuse the reply's own delivery — 403 GUARD_BLOCKED, dispatch unacked, the same
+    # refused body re-sent on every redelivery, the tick never settles (CF-131,
+    # specs/ENVELOPE.md §Reserved field names).
     reasons = []
+    detail_reasons = []
     if code != 0:
         reasons.append(f"harness exit {code}")
+        detail_reasons.append(f"harness exit {code}")
     if gate_note:
         reasons.append(f"gate did not run: {gate_note}")
+        detail_reasons.append(f"gate did not run: {gate_note}")
     elif gate_exit is not None and gate_exit != gate_expect:
         reasons.append(
+            f"gate cmd ({bounded_text(gate.get('cmd'))}) exit {gate_exit}, expected {gate_expect}"
+        )
+        detail_reasons.append(
             f"gate `{gate.get('cmd')}` exit {gate_exit}, expected {gate_expect}"
         )
     failed_status = bool(reasons)
-    reason_text = "; ".join(reasons)
+    reason_text = "; ".join(detail_reasons)
+    wire_reason = "; ".join(reasons)
     status = "failed" if failed_status else "completed"
 
     branch = git_field(ident.repo_path, "rev-parse", "--abbrev-ref", "HEAD")
@@ -1711,10 +1780,11 @@ def process(dispatch, ident, signer, args, seen, in_reply_to=""):
         "wall_s": round(seconds, 1),
         "finished_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
-    if reason_text:
+    if wire_reason:
         # Read by the scheduler's verdict BEFORE `reply_b64`, so the reason is the short one
-        # rather than the whole transcript.
-        result["error"] = reason_text
+        # rather than the whole transcript — and the bounded one, so the delivery cannot be
+        # refused by the relay's control-key guard (CF-131).
+        result["error"] = wire_reason
     memory_error = memory_record(
         ident, dispatch, values, result, "FAIL" if failed_status else "PASS"
     )
@@ -1776,6 +1846,21 @@ def deliver(signer, ident, target, result, args, in_reply_to="", idempotency_key
         separators=(",", ":"),
     ).encode()
     path = f"/agents/{urllib.parse.quote(target, safe='')}/inbox"
+    # The tripwire: a body the relay's own guard would refuse is not posted at all. Shipping it
+    # would start the loop this row exists to prevent — refused 403, dispatch unacked, the same
+    # body re-sent on every redelivery, the tick never settling (CF-131). The sources above keep
+    # dispatch text out of the plaintext members; this is the last check that a future echo path
+    # cannot reintroduce the defect silently.
+    matched = guard_match(body)
+    if matched:
+        bad(
+            "guard",
+            f"POST {path} not attempted — the result body carries the {matched} shape the "
+            f"relay's prompt-injection guard refuses 403 GUARD_BLOCKED (specs/ENVELOPE.md "
+            f"§Reserved field names); the envelope is not delivered and the dispatch stays "
+            f"unacked (CF-131)",
+        )
+        return False
     status, answer = request(
         "POST",
         f"{ident.url}{path}",
