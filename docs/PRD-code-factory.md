@@ -49,6 +49,20 @@ One project (crier), one node, one directive that travelled over crier and reach
 gateway, one commit produced there, one artifact digest verified back on the control host, and a
 recorded FAIL when the gate is made to fail.
 
+**Status 2026-11-22T14:25Z (board re-measured at `cfb65bc7` — 617 task rows, 1001 events: 229
+complete, 17 in_progress, 4 blocked, 367 pending; 0 duplicate ids): NOT MET, one claim corrected and
+no leg change.** Supersedes exactly one sentence of the `14:00Z` paragraph below: `CF-131` no longer
+reads `pending` in the committed board. Commit `5661e3b3` landed both the `in_progress` flip and its
+`wt/CF-131` worktree stamp, so the working-copy claim that paragraph deliberately excluded is now
+committed board state — the census is corrected here rather than re-derived, and the paragraph is
+left in place as the trail. The other figures in it moved by the same sibling commits (`CF-330`
+closed `complete` against commit `d773480e`, which `git merge-base --is-ancestor` confirms is in
+this history, and `CF-525` filed `pending`), so the twelve open defects keep their membership and read
+`CF-001`, `CF-002`, `CF-004`, `CF-136`, `CF-137`, `CF-138`, `CF-139`, `CF-131` (`in_progress`);
+`CF-080`, `CF-132` (`pending`); `CF-110`, `CF-112` (`blocked`). The three absent legs stand
+unchanged: no `complete` row is a commit produced on a node, none recomputes an artifact digest from
+pulled bytes on the control host, and none records a FAIL from a deliberately broken gate.
+
 **Status 2026-11-22T14:00Z (board re-measured at `e6b23a80` — 616 task rows, 998 events: 228
 complete, 16 in_progress, 4 blocked, 368 pending; 0 duplicate ids): NOT MET, no membership change
 in the blocker list and no leg change.** Two rows closed `complete` since the `12:40Z` paragraph
