@@ -49,6 +49,23 @@ One project (crier), one node, one directive that travelled over crier and reach
 gateway, one commit produced there, one artifact digest verified back on the control host, and a
 recorded FAIL when the gate is made to fail.
 
+**Status 2026-11-22T12:40Z (board re-measured at `854441a7` — 616 task rows, 994 events: 226
+complete, 18 in_progress, 4 blocked, 368 pending): NOT MET, no membership change and no leg change.**
+The census at this tip parses with no malformed line and no duplicate id. Eight rows closed
+`complete` between `878e8c71` and `854441a7` (`CF-253`, `CF-313`, `CF-321`, `CF-322`, `CF-390`,
+`CF-513`, `CF-515`, `CF-522`, plus the newly created `CF-523`); none of the nine is a commit produced
+on a node, none recomputes an artifact digest from pulled bytes on the control host, and none
+records a FAIL from a deliberately broken gate — the same keyword scan over the 226 `complete`
+rows' titles and acceptance criteria reproduces only the three documented false-positive hits
+(`CF-202`, `CF-396`, `CF-443`) and gives none of the new closes. Two further rows (`CF-316`,
+`CF-336`) moved `pending` → `in_progress`, and `CF-524` arrived `pending`; `CF-512` (the tier-1
+`hook_timeout` fail-open guard) is still `pending` at this tip, and `CF-133` remains `complete`.
+The open defects at this tip are therefore the same twelve the paragraph below re-read at
+`878e8c71`: `CF-001`, `CF-002`, `CF-004`, `CF-136`, `CF-137`, `CF-138`, `CF-139` (`in_progress`);
+`CF-080`, `CF-131`, `CF-132` (`pending`); `CF-110`, `CF-112` (`blocked`). This paragraph certifies
+the membership scan only; the three-leg row-by-row reading is still the one the
+`2026-11-20T07:12Z` block describes.
+
 **Status 2026-11-22T00:48Z (board re-measured at `878e8c71` — 614 task rows, 980 events: 217
 complete, 16 in_progress, 4 blocked, 377 pending): NOT MET, and one membership correction.** This
 paragraph supersedes the membership of the blocker list in the status blocks below, not the
