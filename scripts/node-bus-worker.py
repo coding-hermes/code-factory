@@ -50,7 +50,9 @@ id the dispatch arrived under) and the node's own words in `reply_b64`; `specs/E
 §Result is the authority. The delivery body carries an `idempotency_key` derived from the dispatch
 alone, so a retry after a lost answer is answered with the FIRST accept instead of storing a
 second result — and the seen-cache is written at EXECUTION, so a redelivery re-delivers the
-recorded result rather than running the work twice.
+recorded result rather than running the work twice. The reply ladder crier enforces on that
+delivery (sender, idempotency_key, audience, signature) is cited from crier's own source in
+`docs/contracts/crier.md`; this script implements it, it does not restate it.
 
 --check is read-only: it measures and prints, never runs the harness, never posts, never acks,
 and its inbox row reads `/agents/<id>/inbox/stats` (a signed read that leases nothing, so a
