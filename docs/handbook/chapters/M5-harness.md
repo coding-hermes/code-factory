@@ -238,6 +238,13 @@ worker is the only current driver and the memory leg remains unwritten. The sepa
 | `CF_HARNESS_OPTS` | unset | `key=value[,key=value]`, no secret (`:268-271`) | harness-specific options | a secret-shaped value refused |
 | `--contract` mode | — | requires all 6 `CFV_REQUIRED` (`:31`, `:313-315`) | acceptance check | a missing required var refused (`dropped:$missing`) |
 
+The local-provider harness stream read timeout has been observed at 1800 s. The node-side
+`--stall-s` default is 300 s (M2 §5): for a continuously silent and CPU-idle harness the
+operational invariant is that this bound fires first, so a dead upstream is identified before
+the 1800 s read timeout. This is conditional: output or CPU resets the timer, a shorter wall
+wins, and `--stall-s 0` or a bound at least 1800 s disables or defeats that ordering. It is a
+node-worker option, not a new `CF_*` variable.
+
 **Per-adapter installation registers (B12 — the shared CF_* table is not the
 entire harness settings surface):**
 

@@ -3306,6 +3306,13 @@ else
   say "  FAIL  a bunker exec budget above the 300s ceiling reached the network (CF-247)"; selftest_fail
 fi
 
+# ch:trace row=CF-253 spec=docs/handbook/chapters/M2-dispatch.md#iiim2s3--result-attribution-cf-133 test=tests/test_cf253_harness_stall_bound.py doc=docs/handbook/chapters/M2-dispatch.md evidence=tests/test_cf253_harness_stall_bound.py::test_silent_upstream_stall_is_exported witness=none:local-fixture verdict=none:foreman-will-run-gitreins commit=none:worker-commit memory=none:foreman-close
+if PYTHONDONTWRITEBYTECODE=1 python3 -B -m pytest -q "$HERE/tests/test_cf253_harness_stall_bound.py" >/dev/null 2>&1; then
+  say "  PASS  silent harness stall bound and CPU progress (CF-253)"
+else
+  say "  FAIL  silent harness stall bound and CPU progress (CF-253)"; selftest_fail
+fi
+
 # BEGIN cf057-apply-refusal
 # CF-057: bunker-server-install.sh has no measured generic install path. Its --apply
 # spelling must therefore be a deliberate refusal, not an ignored argument that runs

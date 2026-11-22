@@ -31,7 +31,9 @@ def setup_worker(tmp_path, monkeypatch):
     signer = types.SimpleNamespace(headers=lambda *args: {})
     posted = []
     monkeypatch.setattr(worker, "git_field", lambda *args: "")
-    monkeypatch.setattr(worker, "run_harness", lambda *args: (0, 0.1, "ok", "", ""))
+    monkeypatch.setattr(
+        worker, "run_harness", lambda *args, **kwargs: (0, 0.1, "ok", "", "")
+    )
     monkeypatch.setattr(worker, "memory_record", lambda *args: "")
     monkeypatch.setattr(
         worker,

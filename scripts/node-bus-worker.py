@@ -86,9 +86,11 @@ import math
 import os
 import re
 import shlex
+import signal
 import socket
 import subprocess
 import sys
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -105,6 +107,8 @@ DEFAULT_INBOX_LIMIT = 10
 DEFAULT_LEASE_SECONDS = 30
 DEFAULT_TIMEOUT = 10
 DEFAULT_HARNESS_WALL = 1800
+# CF-253: silent upstreams lasted 1289–2140s; fail before the 1800s wall.
+DEFAULT_STALL_S = 300
 SEEN_LIMIT = 200
 # `reply_b64` lands in a scheduler tick row, not in a log file: bound it there rather than shipping
 # an unbounded harness transcript through the bus.
@@ -951,7 +955,28 @@ def result_reply(status, summary, tail=""):
     return base64.b64encode(text[:REPLY_MAX_CHARS].encode("utf-8")).decode("ascii")
 
 
-def run_harness(ident, prompt, timeout_s, values=None):
+def harness_cpu_ticks(pid):
+    """Sample CPU ticks across the Linux process tree, tolerating exiting processes."""
+    pending, seen, ticks = [pid], set(), {}
+    while pending:
+        current = pending.pop()
+        if current in seen:
+            continue
+        seen.add(current)
+        try:
+            with open(f"/proc/{current}/stat", encoding="utf-8") as stat:
+                fields = stat.read().rsplit(")", 1)[1].split()
+            ticks[current] = int(fields[11]) + int(fields[12])
+            with open(
+                f"/proc/{current}/task/{current}/children", encoding="utf-8"
+            ) as children:
+                pending.extend(int(item) for item in children.read().split())
+        except (OSError, ValueError, IndexError):
+            continue
+    return ticks
+
+
+def run_harness(ident, prompt, timeout_s, values=None, stall_s=None):
     """Run the harness once. Returns (exit_code, seconds, stdout, stderr, note).
 
     `values` is the §5 set from the directive. It is the only source: harness_env() strips every
@@ -960,35 +985,109 @@ def run_harness(ident, prompt, timeout_s, values=None):
     """
     argv = ident.harness_argv(prompt)
     workdir = ident.repo_path or ident.home
-    started = time.time()
+    started = time.monotonic()
+    stall_s = DEFAULT_STALL_S if stall_s is None else stall_s
     env = harness_env(ident, values or {})
+    note(
+        f"harness — stall bound {stall_s}s (wall {timeout_s}s): no output and no CPU progress; 0 disables"
+    )
     try:
-        completed = subprocess.run(
+        child = subprocess.Popen(
             argv,
             cwd=workdir,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
-            timeout=timeout_s,
             stdin=subprocess.DEVNULL,
             env=env,
+            start_new_session=True,
         )
-    except subprocess.TimeoutExpired:
-        return None, time.time() - started, "", "", f"wall limit {timeout_s}s exceeded"
     except OSError as exc:
         return (
             None,
-            time.time() - started,
+            time.monotonic() - started,
             "",
             "",
             f"could not start the harness: {exc}",
         )
-    return (
-        completed.returncode,
-        time.time() - started,
-        completed.stdout,
-        completed.stderr,
-        "",
-    )
+    lock = threading.Lock()
+    buffers = [bytearray(), bytearray()]
+    progress = [started]
+
+    def drain(stream, target):
+        try:
+            while True:
+                chunk = os.read(stream.fileno(), 65536)
+                if not chunk:
+                    break
+                with lock:
+                    target.extend(chunk)
+                    if len(target) > 1024 * 1024:
+                        del target[: len(target) - 1024 * 1024]
+                    progress[0] = time.monotonic()
+        finally:
+            stream.close()
+
+    readers = [
+        threading.Thread(target=drain, args=(stream, target), daemon=True)
+        for stream, target in zip((child.stdout, child.stderr), buffers)
+    ]
+    for reader in readers:
+        reader.start()
+    previous = harness_cpu_ticks(child.pid)
+    failure = ""
+    try:
+        while child.poll() is None or any(reader.is_alive() for reader in readers):
+            now = time.monotonic()
+            current = harness_cpu_ticks(child.pid)
+            if any(value > previous.get(pid, 0) for pid, value in current.items()):
+                with lock:
+                    progress[0] = now
+            previous = current
+            with lock:
+                idle = now - progress[0]
+            elapsed = now - started
+            if elapsed >= timeout_s:
+                failure = f"wall limit {timeout_s}s exceeded"
+                break
+            if stall_s > 0 and idle >= stall_s:
+                failure = (
+                    f"stalled: no harness output and no CPU progress for {stall_s}s — "
+                    f"the upstream may have accepted the request and produced nothing; "
+                    f"killed at {elapsed:.0f}s (wall limit {timeout_s}s)"
+                )
+                break
+            time.sleep(min(0.25, max(0.01, timeout_s - elapsed)))
+    finally:
+        # A completed leader may leave background children in the same process group.
+        if failure or child.poll() is None:
+            try:
+                os.killpg(child.pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline and (
+                child.poll() is None or any(r.is_alive() for r in readers)
+            ):
+                time.sleep(0.05)
+            try:
+                os.killpg(child.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        else:
+            try:
+                os.killpg(child.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        child.wait()
+        for reader in readers:
+            reader.join(timeout=1)
+    elapsed = time.monotonic() - started
+    with lock:
+        stdout, stderr = (
+            bytes(buf).decode("utf-8", errors="replace") for buf in buffers
+        )
+    return (None if failure else child.returncode, elapsed, stdout, stderr, failure)
 
 
 def git_field(clone, *argv):
@@ -1313,8 +1412,10 @@ def memory_record(ident, dispatch, values, result, outcome):
         "lane": str(values.get("CF_LANE") or ident.project or ""),
         "harness": ident.harness_name,
         "harness_version": ident.harness_version,
-        "model_requested": (result.get("harness") or {}).get("model_requested"),
-        "model_served": (result.get("harness") or {}).get("served_model"),
+        "model_requested": (result.get("harness") or {}).get("model_requested")
+        or "unreported",
+        "model_served": (result.get("harness") or {}).get("served_model")
+        or "unobserved",
         "model_served_source": (result.get("harness") or {}).get(
             "served_model_source", "unobserved"
         ),
@@ -1324,6 +1425,10 @@ def memory_record(ident, dispatch, values, result, outcome):
         "board_row": str(dispatch.get("board_row") or "-"),
         "node": str(result.get("host_identity") or socket.gethostname()),
         "artifact_digests": result.get("artifacts") or [],
+        # Export this bounded diagnostic, not arbitrary harness/provider error content.
+        "error": str(result.get("error") or "")
+        if str(result.get("error") or "").startswith("stalled:")
+        else "",
     }
     if not ident.duckbrain_url:
         return "UNVERIFIED: DuckBrain URL is not configured; no memory write claimed"
@@ -1500,7 +1605,9 @@ def process(dispatch, ident, signer, args, seen, in_reply_to=""):
         return True, None, False
 
     wall = dispatch_wall(dispatch, args)
-    code, seconds, stdout, stderr, note = run_harness(ident, text, wall, values)
+    code, seconds, stdout, stderr, note = run_harness(
+        ident, text, wall, values, stall_s=getattr(args, "stall_s", DEFAULT_STALL_S)
+    )
     served_model = observed_served_model(stdout, stderr)
     if note:
         bad("harness", f"{label} {note}")
@@ -2005,9 +2112,17 @@ def main(argv):
         help="harness wall limit",
     )
     parser.add_argument(
+        "--stall-s",
+        type=int,
+        default=DEFAULT_STALL_S,
+        help="seconds with no harness output and no CPU progress before the run is killed (0 disables)",
+    )
+    parser.add_argument(
         "--timeout", type=int, default=DEFAULT_TIMEOUT, help="per-request timeout"
     )
     args = parser.parse_args(argv)
+    if args.stall_s < 0:
+        parser.error("--stall-s must be non-negative")
 
     # Sender-side helper: no identity, no HOME, no network — it only hashes what the node will.
     if args.print_brief_digest:

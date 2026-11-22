@@ -54,7 +54,7 @@ class FakeHarness:
     def __init__(self):
         self.calls = 0
 
-    def __call__(self, ident, prompt, timeout_s, values=None):
+    def __call__(self, ident, prompt, timeout_s, values=None, **_kwargs):
         self.calls += 1
         return 0, 0.01, "fake harness output", "", ""
 

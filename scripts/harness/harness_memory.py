@@ -131,6 +131,9 @@ def memory_records(
         "ended_at": ended,
         "node": r1["node"],
     }
+    if record.get("error"):
+        r1["error"] = str(record["error"])
+        r2["error"] = r1["error"]
     return r1, r2
 
 

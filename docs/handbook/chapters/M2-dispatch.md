@@ -101,6 +101,7 @@ is established.
 | `--wait-seconds` | 0 (`:1486`) | 0..120 (`:1511`) | inbox long-poll budget | outside 0..120 → exit 2 ("the bus answers 400 outside it") |
 | `--interval` | 15 (`:1489`) | positive int | seconds between `--loop` polls | 0 starves the loop |
 | `--harness-wall` / `--timeout` | **1800 / 10** (`node-bus-worker.py:84` `DEFAULT_HARNESS_WALL`, `:83` `DEFAULT_TIMEOUT`; the CLI defaults at `:1491-1499` read these) | positive int | per-run wall / per-request timeout | see F2-3 for the wall fallback |
+| `--stall-s` | 300 seconds | integer >= 0 | maximum interval without harness output or process-tree CPU progress | too low kills slow runs without observable progress; 0 disables the detector and restores waiting until the wall |
 
 **`--dry-run` custody note (B08).** `--dry-run` (`node-bus-worker.py:1437-1441`, help "fetch and print the plan; run/post/ack nothing") does **not** avoid inbox custody mutation: `:1381-1385` prints `BUS WORKER: DRY RUN — nothing executed, nothing posted, nothing acked ({n} message(s) leased for {lease}s and left to expire)` — the messages were already **leased** before the dry-run branch, so a dry run holds inbox messages until their lease expires. It skips execution/post/ack, not the lease. The dry-run lease is **5 s** (`:1312` `lease = 5 if args.dry_run else args.lease_seconds`), not the configured `--lease-seconds` — a dry run holds each retrieved message for 5 s, distinct from a real run's lease. Unregistered operational overrides: `--home`, `--identity`, `--bus-identity`, `--key`, `--token-file`, `--agent`, `--project`, `--crier`, `--workdir`, `--harness-cmd`, `--gateway-port` (`:1443-1476`) — these select identity/credentials/destination/executable template but are registered **NAME ONLY** (default/validation/consequence not individually stated), a named RED on this field, not a completed register.
 
@@ -128,6 +129,15 @@ external. The state for a boundary contract with no measured wire is **UNVERIFIE
 "works" annotation is not implementation evidence (B03).
 
 ### III.M2.S3 — Result attribution (CF-133)
+
+The node logs the effective stall bound before launch. Unlike the wall, this is the line
+between waiting and an apparently hung harness: output bytes or process-tree CPU progress
+reset it. On expiry it terminates the process group and emits `stalled: no harness output and
+no CPU progress for Ns — the upstream may have accepted the request and produced nothing;
+killed at Es (wall limit Ws)`. This is a diagnosis, not proof of what the upstream did.
+The result carries `status="failed"` and `error`; the R1/R2 memory export carries the same
+stall error when configured and successful, otherwise the result reports `UNVERIFIED`.
+`once()` returns 1 for the failed run. This export is not proof of a Hermes session-store write.
 
 The result builder identifies the hand-out with `dispatch_id`, `corr_id` and `in_reply_to`,
 classifies the run with `status`/`ok`, and records `host_identity` from the node worker's own
