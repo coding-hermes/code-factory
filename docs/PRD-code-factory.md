@@ -49,6 +49,23 @@ One project (crier), one node, one directive that travelled over crier and reach
 gateway, one commit produced there, one artifact digest verified back on the control host, and a
 recorded FAIL when the gate is made to fail.
 
+**Status 2026-11-22T00:48Z (board re-measured at `878e8c71` — 614 task rows, 980 events: 217
+complete, 16 in_progress, 4 blocked, 377 pending): NOT MET, and one membership correction.** This
+paragraph supersedes the membership of the blocker list in the status blocks below, not the
+measurements those blocks record: `CF-133` closed at `59953ec2` (tier-1 `PASS`, evidence run
+`6370118d`, closed 2026-11-21T15:52:08Z), and it was still `pending` at every tip the earlier
+blocks pin (`0d50d6f0`, `f49fb016`, `9f7cd648`, `fc26da9b`), so those lists were correct when they
+were written. The open defects are therefore twelve, re-read by id at `878e8c71`: `CF-001`,
+`CF-002`, `CF-004`, `CF-136`, `CF-137`, `CF-138`, `CF-139` `in_progress`; `CF-080`, `CF-131`,
+`CF-132` `pending`; `CF-110`, `CF-112` `blocked`. The nine further `in_progress` rows and the two
+further `blocked` rows named in the blocks below are unchanged, and the census parses 614 rows with
+no malformed line and no duplicate id. Twenty-two rows closed `complete` between `9f7cd648` and
+`878e8c71`; by title and acceptance-criteria scan none of them is a commit produced on a node, none
+recomputes an artifact digest from pulled bytes on the control host, and none records a FAIL from a
+deliberately broken gate, so the three absent legs are unchanged. This paragraph certifies that
+membership scan only: the three-leg check itself was last measured at `9f7cd648`, and re-certifying
+it needs the row-by-row reading those blocks describe, not a title grep.
+
 **Status 2026-11-21T11:43Z (board re-measured at `f49fb016` — 604 task rows, 963 events: 210
 complete, 16 in_progress, 4 blocked, 374 pending): NOT MET, and the three legs are still absent —
 re-scanned rather than re-asserted.** The scan behind the 2026-11-20 paragraph was re-run at
