@@ -999,3 +999,4 @@
 {"id": 996, "timestamp": "2026-11-22T13:40:02Z", "event_type": "task_updated", "task_id": "CF-131", "actor": "foreman", "detail": "{\"status\":\"in_progress\"}"}
 {"id": 997, "timestamp": "2026-11-22T14:12:48Z", "event_type": "task_completed", "task_id": "CF-330", "actor": "foreman", "detail": "{\"status\":\"complete\"}"}
 {"id": 998, "timestamp": "2026-11-22T14:12:48Z", "event_type": "task_created", "task_id": "CF-525", "actor": "foreman", "detail": "{\"id\":\"CF-525\",\"status\":\"pending\"}"}
+{"id": 999, "timestamp": "2026-11-22T14:21:17Z", "event_type": "task_completed", "task_id": "CF-433", "actor": "foreman", "detail": "{\"status\":\"complete\"}"}
