@@ -989,3 +989,4 @@
 {"id": 986, "timestamp": "2026-11-22T08:27:39Z", "event_type": "task_completed", "task_id": "CF-515", "actor": "foreman", "detail": "{\"status\":\"complete\"}"}
 {"id": 987, "timestamp": "2026-11-22T08:44:11Z", "event_type": "task_updated", "task_id": "CF-322", "actor": "foreman", "detail": "{\"status\":\"in_progress\"}"}
 {"id": 988, "timestamp": "2026-11-22T08:44:11Z", "event_type": "task_updated", "task_id": "CF-513", "actor": "foreman", "detail": "{\"title\":\"P1 - 70 of 222 complete rows carry evidence that does not resolve (allowlist re-dated 2026-11-22, new=none); TWO rows still carry no evidence at all: P5G-34 and CF-422\"}"}
+{"id": 989, "timestamp": "2026-11-22T09:42:58Z", "event_type": "task_completed", "task_id": "CF-322", "actor": "foreman", "detail": "{\"status\":\"complete\"}"}

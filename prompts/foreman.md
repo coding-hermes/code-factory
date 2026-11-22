@@ -90,8 +90,9 @@ first and follow `prompts/unblock.md`:
 
 `specs/HARNESS-MATRIX.md` is the design authority for harness support: the foreman is always Hermes,
 a lane's harness is a SETTING (any model may run in any harness that can host it, §3), every run
-must write the same DuckBrain record, and support means five green legs in
-`tests/harness-conformance.sh` — not an install.
+must write the same DuckBrain record, and support means five green legs per harness in
+`tests/harness-conformance.sh` (six leg families in the battery: `apply` runs only under
+`--install`, and `node` is codex-only) — not an install.
 
 Its §8 backlog is filed as rows and is part of this loop:
 
