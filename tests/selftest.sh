@@ -3306,11 +3306,17 @@ else
   say "  FAIL  a bunker exec budget above the 300s ceiling reached the network (CF-247)"; selftest_fail
 fi
 
-# ch:trace row=CF-253 spec=docs/handbook/chapters/M2-dispatch.md#iiim2s3--result-attribution-cf-133 test=tests/test_cf253_harness_stall_bound.py doc=docs/handbook/chapters/M2-dispatch.md evidence=tests/test_cf253_harness_stall_bound.py::test_silent_upstream_stall_is_exported witness=none:local-fixture verdict=none:foreman-will-run-gitreins commit=none:worker-commit memory=none:foreman-close
-if PYTHONDONTWRITEBYTECODE=1 python3 -B -m pytest -q "$HERE/tests/test_cf253_harness_stall_bound.py" >/dev/null 2>&1; then
+# ch:trace row=CF-253 spec=docs/handbook/chapters/M2-dispatch.md#iiim2s3--result-attribution-cf-133 test=tests/cf253_stall_witness.py doc=docs/handbook/chapters/M2-dispatch.md evidence=tests/cf253_stall_witness.py:arm_silent_socket witness=none:local-fixture verdict=none:foreman-will-run-gitreins commit=none:worker-commit memory=none:foreman-close
+# CF-253: this gate is pytest-free (CI installs go and ruff only), so the arm runs the
+# plain-python witness. tests/test_cf253_harness_stall_bound.py pins the same behaviour
+# with pytest for the local guard lane.
+cf253_out=$(PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/cf253_stall_witness.py" 2>&1)
+if [ $? -eq 0 ]; then
   say "  PASS  silent harness stall bound and CPU progress (CF-253)"
 else
-  say "  FAIL  silent harness stall bound and CPU progress (CF-253)"; selftest_fail
+  say "  FAIL  silent harness stall bound and CPU progress (CF-253)"
+  printf '%s\n' "$cf253_out" | sed 's/^/        /'
+  selftest_fail
 fi
 
 # BEGIN cf057-apply-refusal
