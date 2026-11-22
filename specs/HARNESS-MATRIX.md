@@ -149,7 +149,7 @@ needs an additional input declares it in its adapter section and adds it here.
 | Variable | Meaning | Rule |
 |---|---|---|
 | `CF_MODEL` | model id requested by task-router | required |
-| `CF_PROVIDER` | provider lane (`anthropic`, `openai-codex`, `deepseek`, `pi`, `zai`, …) | required |
+| `CF_PROVIDER` | provider lane (`anthropic`, `openai-codex`, `deepseek`, `xkiro`, `pi`, `zai`, …) | required |
 | `CF_BASE_URL` | endpoint the harness must talk to (node router, gateway, or shim) | optional; default = node router |
 | `CF_API_KEY_FILE` | **path** to a mode-600 file holding the key | required for a paid provider; **a value in argv is a FAIL** (AGENTS.md r8) |
 | `CF_WORKDIR` | the clone the harness may write in | required; must be inside `$HOME` |

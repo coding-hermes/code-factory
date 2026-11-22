@@ -39,6 +39,7 @@ a tracked document may read as configuration that only works on one machine.
 | `DESIGN.md` | the node design authority (`README.md`, "What a node is") |
 | `PRD-code-factory.md` | the product requirements record |
 | `OPERATIONS.md` | operator-side runbook for the node lifecycle |
+| `PROVIDERS-AND-COST.md` | shipped model pins, payment classes, routing and pin authority |
 | `SCHEDULER-ADMISSION.md` | scheduler admission contract |
 | `handbook/` | the master handbook; `handbook/README.md` is its table of contents and honest status |
 | `handbook/appendices/units/` | the per-file evidence layer (its own `00-INDEX.md` lists every unit) |
