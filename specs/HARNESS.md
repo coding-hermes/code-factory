@@ -161,7 +161,8 @@ support:
 
 An `UNVERIFIED` or `FAIL` above is a measurement, not a defect: only codex, claude-code, dsh and
 hermes have ladders this repo can reproduce, and the conformance matrix refuses to promote any of
-them to "supported" without the five legs on a real node.
+them to "supported" without `check`, `apply`, `vars`, `smoke`, and `memory` on a real node;
+the battery's fixture results alone are not that real-node evidence.
 
 ## dsh — the installer, the layers, and the adapter decision
 
@@ -222,13 +223,16 @@ which this repo has measured), and the matrix's `memory` leg stays unwritten for
 
 ## Conformance is measured, not claimed
 
-`tests/harness-conformance.sh` runs three legs per harness — the adapter's own `--check`, a real
-smoke turn that must leave a file containing a token the battery chose (bytes re-read on the
-control host), and, only with `--install`, the adapter's `--apply` in a throwaway `$HOME` followed
-by a post-apply `--check`. It prints `PASS`/`FAIL`/`SKIP` with the measured value and regenerates
-`docs/HARNESS-CONFORMANCE.md` with `--write-doc`. The pi-agent fixture test is separate from this
-live battery: its fixture proves wiring, while upstream install, real-node execution, and memory remain
-UNVERIFIED residuals.
+`tests/harness-conformance.sh` emits five leg families per harness: `check` (adapter `--check`,
+`tests/harness-conformance.sh:522`), `apply` (adapter `--apply` in a throwaway `$HOME` followed by
+post-apply checking, `tests/harness-conformance.sh:738`), `vars` (contract fixture,
+`tests/harness-conformance.sh:428`), `smoke` (token-bearing file read back,
+`tests/harness-conformance.sh:597`), and `memory` (hermetic I3 writer/readback and sub-rows,
+`tests/harness-conformance.sh:386`). `apply` is only executed with `--install`; otherwise it emits
+`SKIP`. These battery rows are distinct from evidence on a real node: in particular `memory` emits
+a live-support `SKIP`. The battery prints `PASS`/`FAIL`/`SKIP` with measured values and regenerates
+`docs/HARNESS-CONFORMANCE.md` with `--write-doc`. The pi-agent fixture test is separate: upstream
+install, real-node execution, and memory remain UNVERIFIED residuals.
 
 The smoke leg resolves the binary from the adapter's own measurement (the `PASS binary` row that
 `--check` printed), and falls back to `PATH` only when the adapter names no path, or names one that
