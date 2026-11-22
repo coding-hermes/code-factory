@@ -41,6 +41,7 @@ a tracked document may read as configuration that only works on one machine.
 | `OPERATIONS.md` | operator-side runbook for the node lifecycle |
 | `PROVIDERS-AND-COST.md` | shipped model pins, payment classes, routing and pin authority |
 | `SCHEDULER-ADMISSION.md` | scheduler admission contract |
+| `specs/GOALS.md` | the goal artefact: the standing goal, its subgoal tree, closure evidence and the termination rule |
 | `handbook/` | the master handbook; `handbook/README.md` is its table of contents and honest status |
 | `handbook/appendices/units/` | the per-file evidence layer (its own `00-INDEX.md` lists every unit) |
 | `handbook/chapters/` | the handbook chapters (M-numbered) |
