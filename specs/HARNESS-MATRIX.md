@@ -195,8 +195,9 @@ Management surfaces: `install-<harness>.sh --check` (installed? which pin), `har
 
 ## 7. What "wired up" means, per harness
 
-Five leg families. Support requires all five to pass on a real node; a `SKIP` names what is
-missing but is not a pass or support evidence.
+Six leg families, two of them conditional (`apply` only under `--install`, `node` only for
+`codex`). Support requires the five per-harness families to pass on a real node, and `codex`
+additionally requires `node`; a `SKIP` names what is missing but is not a pass or support evidence.
 
 | Leg | Required evidence; battery coverage |
 |---|---|
@@ -205,6 +206,7 @@ missing but is not a pass or support evidence.
 | `vars` | runtime consumes the §5 set and rejects forbidden credentials; the battery tests a contract fixture, not runtime use |
 | `smoke` | real turn produces a known artifact and reports `model_served`; the battery checks the file token, not model provenance |
 | `memory` | real run writes I3 to DuckBrain with namespace and `run_id`, read back; the battery tests a local fixture and skips live evidence |
+| `node` | `codex` only: node creation from the adapter's measured rows; the battery runs the offline fixture and always emits a `SKIP` for live node evidence |
 
 `tests/harness-conformance.sh` emits these families, but does not establish every real-node
 requirement above. Its matrix alone is therefore not a release gate for "supported".

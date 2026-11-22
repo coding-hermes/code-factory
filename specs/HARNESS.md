@@ -223,14 +223,16 @@ which this repo has measured), and the matrix's `memory` leg stays unwritten for
 
 ## Conformance is measured, not claimed
 
-`tests/harness-conformance.sh` emits five leg families per harness: `check` (adapter `--check`,
-`tests/harness-conformance.sh:522`), `apply` (adapter `--apply` in a throwaway `$HOME` followed by
-post-apply checking, `tests/harness-conformance.sh:738`), `vars` (contract fixture,
+`tests/harness-conformance.sh` emits six leg families, two of them conditional: `check` (adapter
+`--check`, `tests/harness-conformance.sh:522`), `apply` (adapter `--apply` in a throwaway `$HOME`
+followed by post-apply checking, `tests/harness-conformance.sh:738`), `vars` (contract fixture,
 `tests/harness-conformance.sh:428`), `smoke` (token-bearing file read back,
-`tests/harness-conformance.sh:597`), and `memory` (hermetic I3 writer/readback and sub-rows,
-`tests/harness-conformance.sh:386`). `apply` is only executed with `--install`; otherwise it emits
-`SKIP`. These battery rows are distinct from evidence on a real node: in particular `memory` emits
-a live-support `SKIP`. The battery prints `PASS`/`FAIL`/`SKIP` with measured values and regenerates
+`tests/harness-conformance.sh:597`), `memory` (hermetic I3 writer/readback and sub-rows,
+`tests/harness-conformance.sh:386`), and `node` (the offline node-creation fixture, plus a
+`live-node` row that stays `SKIP`, `tests/harness-conformance.sh:709`). The count is never quoted
+without its two gates: `apply` runs only with `--install` (otherwise it emits `SKIP`), and `node`
+is dispatched only for `codex`. These battery rows are distinct from evidence on a real node: in
+particular `memory` emits a live-support `SKIP`. The battery prints `PASS`/`FAIL`/`SKIP` with measured values and regenerates
 `docs/HARNESS-CONFORMANCE.md` with `--write-doc`. The pi-agent fixture test is separate: upstream
 install, real-node execution, and memory remain UNVERIFIED residuals.
 
