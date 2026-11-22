@@ -5,7 +5,7 @@
 | Path | `~/code-factory/scripts/add_family_lanes.py` |
 | Repository | `code-factory` |
 | Revision | source last changed `9bee3fe6` (2026-11-16); reference tree `a7c5a8b9` |
-| Status | **SOURCE-VERIFIED AND STUB-TESTED** on 2026-11-22; no fresh scratch scheduler or live API run (§3, §8) |
+| Status | **UNVERIFIED — source-verified and stub-tested on 2026-11-22; no fresh scratch scheduler or live API run (§3, §8)** |
 
 ## 1. Purpose and why it matters
 

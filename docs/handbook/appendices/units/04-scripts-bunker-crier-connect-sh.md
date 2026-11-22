@@ -5,7 +5,7 @@
 | Path | `~/code-factory/scripts/bunker-crier-connect.sh` [scripts/bunker-crier-connect.sh:1] |
 | Repository | `code-factory` [scripts/bunker-crier-connect.sh:1] |
 | Revision | `384a842a` — current shipped behavior; tree `bb7ac31e` |
-| Status | **UPDATED — behavior re-derived from the current script and the CF-214 selftest fixture; the named `probe-04-crier-connect.sh` is not tracked here, so no probe transcript or measurement date is claimed** |
+| Status | **UNVERIFIED — behavior re-derived from the current script and the CF-214 selftest fixture; the named `probe-04-crier-connect.sh` is not tracked here, so no probe transcript or measurement date is claimed** |
 
 ## 1. Purpose and why it matters
 

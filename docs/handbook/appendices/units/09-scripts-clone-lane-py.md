@@ -204,5 +204,7 @@ why §3 records commands and their verbatim output rather than prose. The same d
 asks the same readback discipline of every new lane [docs/SCHEDULER-ADMISSION.md:77].
 
 Two documents in this tree are now stale against this one and were left untouched because they lie
-outside this module: the index still marks module 9 RED at [docs/master/00-INDEX.md:16], and the
-operations runbook still says this script's contract is unverified at [docs/OPERATIONS.md:207].
+outside this module: the index row for module 9 read RED when this was written, in the 2026-11-05
+generated index (a vintage no longer tracked), and ships VERIFIED today at
+[docs/handbook/appendices/units/00-INDEX.md:16]; the operations runbook still says this script's contract is
+unverified at [docs/OPERATIONS.md:207].
