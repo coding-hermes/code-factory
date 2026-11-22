@@ -207,10 +207,13 @@ directly with `${VAR:-}` and `${VAR:-default}` [scripts/bunker-server-install.sh
 
   The `URL:` row inside the `bunker-las-03` block below reads `http://<ci-box>:10001`: the real
   address is the one the operator's own `~/.config/bunker/config.yaml` names for that server, and it
-  is redacted to a placeholder here because this repository is public (CF-378).
+  is redacted to a placeholder here because this repository is public (CF-378). The `env -i` command
+  lines set `HOME=~` — the invoking shell expands it to the operator home the recorded runs used;
+  the literal host path they were first run under is not published (CF-336, enforced by
+  `tests/test_docs_template_boundary.py`).
 
 ```
-$ env -i PATH=~/.local/bin:/usr/local/bin:/usr/bin:/bin HOME=/home/kara \
+$ env -i PATH=~/.local/bin:/usr/local/bin:/usr/bin:/bin HOME=~ \
     bash scripts/bunker-server-install.sh --check
   FAIL  server_declared — BUNKER_SERVER unset — the client has no server to talk to
 
@@ -219,7 +222,7 @@ exit=1
 ```
 
 ```
-$ env -i PATH=~/.local/bin:/usr/local/bin:/usr/bin:/bin HOME=/home/kara \
+$ env -i PATH=~/.local/bin:/usr/local/bin:/usr/bin:/bin HOME=~ \
     BUNKER_SERVER=bunker-las-03 bash scripts/bunker-server-install.sh --check
 bunker server: bunker-las-03
   PASS  bunker_client — ~/.local/bin/bunker bunker 0.2.0
@@ -254,7 +257,7 @@ exit=0
 ```
 
 ```
-$ env -i PATH=/usr/bin:/bin HOME=/home/kara BUNKER_SERVER=bunker-las-03 \
+$ env -i PATH=/usr/bin:/bin HOME=~ BUNKER_SERVER=bunker-las-03 \
     bash scripts/bunker-server-install.sh --check
 bunker server: bunker-las-03
   FAIL  bunker_client — missing — no way to create or reach agents
@@ -271,7 +274,7 @@ exit=1
 ```
 
 ```
-$ env -i PATH=~/.local/bin:/usr/bin:/bin HOME=/home/kara \
+$ env -i PATH=~/.local/bin:/usr/bin:/bin HOME=~ \
     BUNKER_SERVER=bunker-las-03 bash scripts/bunker-server-install.sh --apply
 ... first rows identical to the --check run above, then:
   PASS  tool:jq — /usr/bin/jq
@@ -283,7 +286,7 @@ exit=0
 ```
 
 ```
-$ env -i PATH=~/.local/bin:/usr/bin:/bin HOME=/home/kara \
+$ env -i PATH=~/.local/bin:/usr/bin:/bin HOME=~ \
     BUNKER_SERVER=no-such-srv bash scripts/bunker-server-install.sh --check
 bunker server: no-such-srv
   PASS  bunker_client — ~/.local/bin/bunker bunker 0.2.0
@@ -301,7 +304,7 @@ exit=1
 ```
 
 ```
-$ env -i PATH=~/.local/bin:/usr/bin:/bin HOME=/home/kara \
+$ env -i PATH=~/.local/bin:/usr/bin:/bin HOME=~ \
     BUNKER_SERVER=bunker bash scripts/bunker-server-install.sh --check
 bunker server: bunker
   PASS  bunker_client — ~/.local/bin/bunker bunker 0.2.0
@@ -321,7 +324,7 @@ exit=1
 ```
 
 ```
-$ env -i PATH=~/.local/bin:/usr/bin:/bin HOME=/home/kara \
+$ env -i PATH=~/.local/bin:/usr/bin:/bin HOME=~ \
     BUNKER_CONFIG=/nonexistent/config.yaml BUNKER_SERVER=bunker-las-03 \
     bash scripts/bunker-server-install.sh --check
 bunker server: bunker-las-03
