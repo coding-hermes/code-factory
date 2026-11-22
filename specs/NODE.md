@@ -154,13 +154,12 @@ verified; an unknown revocation remains blocked. This implements the owner's “
 should roate the token on that box that lieask” (`.coding-hermes/board/tasks.jsonl:321`;
 `docs/THREAT-MODEL.md:103`; lifecycle `docs/handbook/chapters/M7-github.md:303–318`).
 
-**Implementation boundary:** these are target laws, not a claim of shipped enforcement.
-`project-node.sh:1018–1045` checks key readability, mode and SSH config, not project
-scope. `scripts/deploy_key.py:311–334` checks a registry name and host/port, not the
-full repository identity or actual provider grant; a same-name, same-host mismatch can
-pass. A missing registry name is refused, but that is not proof that a node rejects
-all foreign credentials. `tests/test_node_credential_law.py` pins this limitation and
-the required policy; a real project-binding admission check remains unimplemented.
+**Implementation boundary:** `scripts/deploy_key.py` records the supplied repository and key digest
+in the local registry at installation. `project-node.sh` checks the project name, repository,
+key path and digest before using the key; missing or mismatched local binding is refused. This
+is an operator-recorded binding, not independent proof of the provider's actual grant: the owner
+must verify the key is restricted to that repository before installation. Other credential types,
+including local DuckBrain credentials, are not enforced by this deploy-key check.
 
 A private repo is cloned with a key that belongs to **that repo**, never with an account key and
 never with an identity the agent happens to have. The whole path is `scripts/deploy_key.py`:

@@ -245,6 +245,30 @@ def cmd_install(args: argparse.Namespace) -> int:
         bad(exc.row, exc.value)
         return 1
     digest = __import__("hashlib").sha256(data).hexdigest()
+    registry = load_registry(home)
+    existing = registry.get("keys", {}).get(name)
+    if existing:
+        try:
+            previous = parse_repo(existing.get("repo", ""))
+        except (KeyError_, TypeError):
+            bad(
+                "key",
+                f"{name} has unproven repository binding — refuse to overwrite it",
+            )
+            return 1
+        if previous != remote:
+            bad(
+                "key",
+                f"{name} repository binding mismatch: registered for {existing['repo']} but requested {args.repo}",
+            )
+            return 1
+    for other_name, other in registry.get("keys", {}).items():
+        if other_name != name and other.get("sha256") == digest:
+            bad(
+                "key",
+                f"credential already registered for project {other_name} — refusing reuse for {name}",
+            )
+            return 1
     dest = home / KEYS_DIR / f"{name}.key"
     dest.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     os.chmod(dest.parent, 0o700)
@@ -325,6 +349,17 @@ def cmd_check(args: argparse.Namespace) -> int:
             f"(run: deploy_key.py install --home {home} --repo {args.repo} --key <file>)",
         )
         return 1
+    try:
+        recorded = parse_repo(entry.get("repo", ""))
+    except (KeyError_, TypeError):
+        bad("key", f"{name} has unproven repository binding — reinstall the deploy key")
+        return 1
+    if recorded != remote:
+        bad(
+            "key",
+            f"{name} repository binding mismatch: registered for {entry['repo']} but requested {args.repo}",
+        )
+        return 1
     if entry["host"] != remote["host"] or int(entry.get("port", 22)) != remote["port"]:
         bad(
             "key",
@@ -332,11 +367,29 @@ def cmd_check(args: argparse.Namespace) -> int:
             f"but the repo names {remote['host']}:{remote['port']}",
         )
         return 1
-    key_path = Path(entry["key"])
+    key_path = Path(entry.get("key", ""))
+    expected_path = home / KEYS_DIR / f"{name}.key"
+    if key_path != expected_path or key_path.is_symlink():
+        bad("key", f"{name} has unproven key path — expected {expected_path}")
+        return 1
     if not key_path.is_file():
         bad(
             "key",
             f"{key_path} is missing — the registry names a key that is not on disk",
+        )
+        return 1
+    try:
+        digest = hashlib.sha256(key_path.read_bytes()).hexdigest()
+    except OSError as exc:
+        bad("key", f"{key_path} unreadable — {exc}")
+        return 1
+    if (
+        not re.fullmatch(r"[0-9a-f]{64}", str(entry.get("sha256", "")))
+        or digest != entry["sha256"]
+    ):
+        bad(
+            "key",
+            f"{name} has unproven credential binding — key digest missing or mismatched",
         )
         return 1
     mode = stat.S_IMODE(key_path.stat().st_mode)
@@ -359,13 +412,27 @@ def cmd_check(args: argparse.Namespace) -> int:
         host_ok = f"Host {remote['host']}" in text and entry["key"] in text
         if cfg_mode & 0o077:
             bad("ssh_config", f"{cfg} is {cfg_mode:04o}: group/other can read it")
-        elif not host_ok:
+        elif not host_ok or text != expected:
             bad(
                 "ssh_config",
-                f"{cfg} does not offer {entry['key']} for Host {remote['host']}",
+                f"{cfg} does not match the registered identities for Host {remote['host']}",
+            )
+        elif (
+            sum(
+                1
+                for item in registry.get("keys", {}).values()
+                if item.get("host") == remote["host"]
+            )
+            != 1
+        ):
+            bad(
+                "ssh_config",
+                f"Host {remote['host']} offers multiple project identities — refusing unproven scope",
             )
         else:
             ok("ssh_config", f"{cfg} mode {cfg_mode:04o}, {drift}")
+    if failures:
+        return 1
     ok("clone", clone_command(home, args.repo, args.ref, args.dest))
     if args.json:
         print(

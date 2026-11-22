@@ -7412,7 +7412,7 @@ say "58. per-repo deploy key, node runtime, shared module cache, footprint, orph
 # key instead of cloning without one, and layer 00 must print a footprint row.
 cf003=$(mktemp -d)
 if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_node_credential_law.py" >"$cf003/law-out" 2>&1; then
-  say "  PASS  CF-347 target law and registry refusal boundary (not node admission)"
+  say "  PASS  CF-347 target law and node credential binding refusal"
 else
   say "  FAIL  CF-347 target law or registry refusal boundary"; selftest_fail
   sed 's/^/    | /' "$cf003/law-out"
@@ -7454,19 +7454,29 @@ git -C "$cf003/src" add README
 git -C "$cf003/src" commit -qm fixture
 for arm in green red; do
   mkdir -p "$cf003/$arm/.node/keys"
-  printf -- '-----BEGIN OPENSSH PRIVATE KEY-----\nFIXTURE\n-----END OPENSSH PRIVATE KEY-----\n' \
-    > "$cf003/$arm/.node/keys/project.key"
-  printf 'Host gitlab.example\n  IdentitiesOnly yes\n  IdentityFile %s\n' \
-    "$cf003/$arm/.node/keys/project.key" > "$cf003/$arm/.node/keys/ssh_config"
-  chmod 600 "$cf003/$arm/.node/keys/ssh_config"
+  printf -- '[REDACTED PRIVATE KEY]\n' > "$cf003/$arm/.node/keys/demo.key"
+  HOME="$cf003/$arm" git config --global url."file://$cf003/src".insteadOf git@gitlab.example:group/project.git
+  python3 - "$HERE/scripts" "$cf003/$arm" <<'PY'
+import hashlib, json, sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+from deploy_key import write_ssh_config
+home = Path(sys.argv[2])
+key = home / '.node/keys/demo.key'
+entry = {'repo': 'git@gitlab.example:group/project.git', 'host': 'gitlab.example',
+         'port': 22, 'key': str(key), 'sha256': hashlib.sha256(key.read_bytes()).hexdigest()}
+registry = {'keys': {'demo': entry}}
+(home / '.node/keys/keys.json').write_text(json.dumps(registry))
+write_ssh_config(home, registry)
+PY
 done
-chmod 600 "$cf003/green/.node/keys/project.key"
-chmod 644 "$cf003/red/.node/keys/project.key"
+chmod 600 "$cf003/green/.node/keys/demo.key"
+chmod 644 "$cf003/red/.node/keys/demo.key"
 out=$(env HOME="$cf003/green" NODE_PROJECT=demo CRIER_URL=http://127.0.0.1:9 \
-  NODE_DEPLOY_KEY="$cf003/green/.node/keys/project.key" \
+  NODE_DEPLOY_KEY="$cf003/green/.node/keys/demo.key" \
   NODE_SSH_CONFIG="$cf003/green/.node/keys/ssh_config" \
-  bash "$HERE/scripts/project-node.sh" --apply --project demo --repo "$cf003/src" --ref main --layers 40 2>&1); rc=$?
-key_row="  PASS  repo_key — $cf003/green/.node/keys/project.key mode 600"
+  bash "$HERE/scripts/project-node.sh" --apply --project demo --repo git@gitlab.example:group/project.git --ref main --layers 40 2>&1); rc=$?
+key_row="  PASS  repo_key — $cf003/green/.node/keys/demo.key mode 600"
 conf_row="  PASS  repo_key:config — core.sshCommand set in $cf003/green/repo (this repository only)"
 if [ "$rc" -eq 0 ] \
    && [ "$(printf '%s\n' "$out" | grep -Fxc -- "$key_row")" = 1 ] \
@@ -7479,10 +7489,10 @@ fi
 # CONTROL: the same fixture with the key readable by group/other must refuse the clone
 # rather than fall back to an ambient identity.
 out=$(env HOME="$cf003/red" NODE_PROJECT=demo CRIER_URL=http://127.0.0.1:9 \
-  NODE_DEPLOY_KEY="$cf003/red/.node/keys/project.key" \
+  NODE_DEPLOY_KEY="$cf003/red/.node/keys/demo.key" \
   NODE_SSH_CONFIG="$cf003/red/.node/keys/ssh_config" \
-  bash "$HERE/scripts/project-node.sh" --apply --project demo --repo "$cf003/src" --ref main --layers 40 2>&1); rc=$?
-bad_key="  FAIL  repo_key — $cf003/red/.node/keys/project.key mode 644 — group/other can read it (chmod 600)"
+  bash "$HERE/scripts/project-node.sh" --apply --project demo --repo git@gitlab.example:group/project.git --ref main --layers 40 2>&1); rc=$?
+bad_key="  FAIL  repo_key — $cf003/red/.node/keys/demo.key mode 644 — group/other can read it (chmod 600)"
 no_clone='  FAIL  repo_clone — not attempted — the declared deploy key is unusable (see repo_key)'
 if [ "$rc" -ne 0 ] \
    && [ "$(printf '%s\n' "$out" | grep -Fxc -- "$bad_key")" = 1 ] \
