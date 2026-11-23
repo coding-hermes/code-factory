@@ -361,3 +361,19 @@ Tick id (body, not heading): code-factory-dogfood-2026-11-23-15-03-37
 - Board rows filed this delivery: 0. Product commits: 1 (this log entry alone).
 - DuckBrain refire receipt written at key /project/code-factory/foreman/ticks/code-factory-dogfood-2026-11-23-15-03-37.refire-delivery-2 (namespace code-factory); no prior record for this tick id existed there.
 
+## 2026-11-23 no-op refire delta — delivery 3
+
+- Tick id (body, not heading): code-factory-dogfood-2026-11-23-15-03-37
+- Inbound dispatch count for this exact label in gateway.log: 3 — gateway lines 24449 (10:03:58Z, delivery 1), 25485 (10:29:24Z, delivery 2), 26290 (10:46:45Z, this delivery 3). Same gateway, platform=api_server, same chat id.
+- Product delta since delivery 2's receipt commit f72dce5a: EMPTY in the product tree — delivery 2's receipt commit is the published tip; this entry plus the two durable records below are the only writes.
+- Closeout verified from durable state, not delivery reports:
+  - Parity: fetched 15:50Z; HEAD == origin/main == gh/main == f72dce5a; rev-list both directions 0/0. Working copy clean; live-writer census of the repo root found only this transport (own HERMES_SESSION_ID matches, no foreign writer).
+  - Wave recovery: manifest 03-32-06 already recovered (delivery 1-2 verified, stands). The NEWER wave manifest code-factory-foreman-2026-11-22-22-24-47.w1 is also discharged: its CF-361 attempt-1 worker died uncommitted (3 resumes; rc=0 then rc=1, rc=1 — last error "Gateway draining: not_ready"), but the sibling tick 14-40-46's independent CF-361 dispatch landed the deliverable (product 56f44fa5, six contract pages in docs/contracts/), judged it, and closed the row (932ac6ab; row commit_hash e7957634; verdict dir .gitreins/history/2026-11-23/98bde653 on disk with tier1 PASS).
+  - CF-361 verdict honesty: every named criterion plus fix_verification reads PASS, but the verdict's overall is FAIL from the gitreins coverage arm ("Coverage FAILED — ungraded", detected_by empty) — the documented items-pass-while-overall-false judge artifact, not a criteria miss. Board truth (complete) is sound.
+  - The 22-24-47 worker's superseded deliverable in ~/worktrees/code-factory-CF-361 (specs/*.md for six systems, two modified docs) DIFFERS from what landed: it describes the systems under specs/, the merged deliverable uses docs/contracts/. Preserved unmerged as evidence of the duplicate delivery, per the wt/CF-346 precedent; not residue, not merged. Duplicate-dispatch doctrine worked: reconcile by AC merits, keep one.
+  - CF-403 (the wave's second row) stays PENDING in the owning row with its scope already narrowed (frozen-literal half fixed by CF-398 7d4b1f04; the boardctl run-id half is the remaining defect, owner = boardctl repo internal/board/write.go, tracked on the CF-403 row itself — no new row filed).
+- CI: green — last 3 runs on main all success (latest covers f72dce5a, 15:46Z).
+- Board rows filed this delivery: 0. Product commits: 1 (this log entry alone). No dispatch composed; wave budget spent on recovery verification only.
+- DuckBrain: refire receipt at /project/code-factory/foreman/ticks/code-factory-dogfood-2026-11-23-15-03-37.refire-delivery-3 and foreman handoff delta at /handoff/code-factory/foreman/2026-11-23T1600Z-delivery3-refire-delta (namespace code-factory).
+
+
