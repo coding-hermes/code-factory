@@ -412,3 +412,16 @@ Tick id (body, not heading): code-factory-dogfood-2026-11-23-15-03-37
 - Board rows filed this delivery: 0. Worker dispatches: 0. Product commits: 1 (this log entry alone). No GitReins lifecycle: no row picked, nothing to task-create/complete this delivery.
 - DuckBrain: refire receipt written at /project/code-factory/foreman/ticks/code-factory-dogfood-2026-11-23-15-03-37.refire-delivery-6 (namespace code-factory, read back id 6f1e34bb).
 - Why the perf leg was NOT re-measured: re-driving an unchanged tree measures the host, not the product; delivery 1's warm/cold numbers stand.
+
+## 2026-11-23 no-op refire delta — delivery 7
+
+- Tick id (body, not heading): code-factory-dogfood-2026-11-23-15-03-37
+- Inbound dispatch count for this exact label in gateway.log: 7 — gateway lines 24449 (10:03:58 local = 15:03 UTC, delivery 1), 25485 (10:29:24, delivery 2), 26290 (10:46:45, delivery 3), delivery 4 at 11:10:36 (16:10:36 UTC), delivery 5 at 11:24:11 (16:24:11 UTC), delivery 6 at 11:57:40 (16:57:40 UTC), and this delivery 7 at 12:38:20 local = 17:38:20 UTC (gateway line ~30197). Same gateway, platform=api_server, same chat id.
+- Product delta since delivery 6's receipt commit c92cd6c4: EMPTY in the product tree — c92cd6c4 is the published tip; working copy clean in the MAIN checkout; this entry plus one durable record are the only writes.
+- Parity re-verified: fetched origin and gh 17:5x UTC; origin/main == gh/main == HEAD == c92cd6c4; rev-list HEAD..origin/main = 0 and gh/main..HEAD = 0 (both remotes re-fetched this delivery).
+- Wave recovery re-verified for this delivery's banner: manifest .coding-hermes/waves/code-factory-foreman-2026-11-22-03-32-06.json finished_at_utc 2026-11-22T20:30Z, outcome recovered, workers 0; the NEWER manifest 22-24-47.json finished_at_utc 2026-11-23T16:16Z, outcome recovered, workers 0. Nothing to recover; no merge, no fixup, no new wave composed.
+- Carry verification this delivery: delivery-1 closeout entry still present in the published dogfood-log (line 303) and its 5 evidence files on disk at .coding-hermes/evidence/code-factory-dogfood-2026-11-23-15-03-37/; wt/CF-346 evidence branch preserved unmerged.
+- Live writer NOTED, not adopted: sibling foreman tick code-factory-foreman-2026-11-23-16-18-26 has CF-526 in flight in a SEPARATE worktree (~/cf-wt-cf526-20261123, dirty tests/test_worktree_census.py, launcher cf526-worker-launch.sh + selftest running, two session ids: foreman 1ffe1685… + worker local-ae36…). The main checkout is clean and unowned; this delivery made no board RMW and did not touch the sibling's tree — the CF-526 close belongs to the sibling lane when its worker exits.
+- CI: the delivery-6 receipt run (created 2026-11-23T17:38:04Z, main) was still IN FLIGHT at census time; the three prior runs on main are success (16:57:11Z, 16:24:04Z, 16:10:20Z). Conclusion of the in-flight run left to the scheduler's next tick to observe — not claimed green.
+- Board rows filed this delivery: 0. Worker dispatches: 0. Product commits: 1 (this log entry alone). No GitReins lifecycle: no row picked, nothing to task-create/complete this delivery.
+- Why the perf leg was NOT re-measured: re-driving an unchanged tree measures the host, not the product; delivery 1's warm/cold numbers stand.
