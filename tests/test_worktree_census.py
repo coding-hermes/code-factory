@@ -424,16 +424,54 @@ class WorktreeCensus(unittest.TestCase):
             if unresolved
             else "POST-REMOVE-WRITER-DETECTED"
         )
-        expected = (
-            f"REMOVED-WITH-RACE {json.dumps(str(path))} — {token} "
-            f"pid={writers[0].pid} (quiesced-by: {QUIESCED_BY})"
+        opposite = (
+            "POST-REMOVE-WRITER-DETECTED"
+            if unresolved
+            else "POST-REMOVE-CWD-UNRESOLVED"
         )
-        self.assertIn(expected, output.getvalue().splitlines())
+        # CF-526: the before-remove and post-removal scans bracket a LIVE
+        # /proc window, so under load the census line may legitimately carry
+        # more pids than this fixture injected — any same-uid process that
+        # dies (or becomes cwd-unresolvable) between the two snapshots joins
+        # the detection pid set, and an exact one-pid line assertion reds the
+        # whole guard for every board commit. Parse instead: pin the line's
+        # shape, the injected writer's presence in its own detection, and the
+        # absence of false claims — not the exact pid list.
+        lines = [
+            line
+            for line in output.getvalue().splitlines()
+            if line.startswith("REMOVED-WITH-RACE ")
+        ]
+        self.assertEqual(len(lines), 1, output.getvalue())
+        prefix = f"REMOVED-WITH-RACE {json.dumps(str(path))} — "
+        suffix = f" (quiesced-by: {QUIESCED_BY})"
+        self.assertTrue(lines[0].startswith(prefix), lines[0])
+        self.assertTrue(lines[0].endswith(suffix), lines[0])
+        detections = {}
+        for field in lines[0][len(prefix) : -len(suffix)].split("; "):
+            name, _, pid_list = field.rpartition(" pid=")
+            self.assertTrue(name and pid_list, lines[0])
+            detections[name] = frozenset(map(int, pid_list.split(",")))
+        self.assertIn(token, detections, lines[0])
+        self.assertIn(writers[0].pid, detections[token], lines[0])
+        # The fixture mocks os.readlink for the injected writer, so which
+        # detection claims it is deterministic in both arms.
+        self.assertNotIn(
+            writers[0].pid, detections.get(opposite, frozenset()), lines[0]
+        )
+        if unrelated:
+            # The pre-existing unresolved pid predates this run's scans: it
+            # must never be claimed as a NEW race — production keeps it in
+            # already_unresolved, and its cwd (the main worktree) cannot
+            # match the removed tree. This exclusion is the arm's contract.
+            self.assertNotIn(
+                unrelated.pid, frozenset().union(*detections.values()), lines[0]
+            )
         self.assertEqual(rc, 2, output.getvalue())
         self.assertNotIn("REAPED ", output.getvalue())
         self.assertIn("removed=1", output.getvalue())
         self.assert_preserved(spared)
-        print(expected)
+        print(lines[0])
 
     def test_writer_enters_between_scan_and_remove_is_detected(self):
         self.run_scan_remove_race()
