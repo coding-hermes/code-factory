@@ -399,3 +399,16 @@ Tick id (body, not heading): code-factory-dogfood-2026-11-23-15-03-37
 - Board rows filed this delivery: 0. Worker dispatches: 0. Product commits: 1 (this log entry alone).
 - No DuckBrain write this delivery: delivery 3's refire receipt and handoff delta stand; the delivery-5 delta is materially identical to deliveries 3-4 and the log entry above is the durable record.
 - Why the perf leg was NOT re-measured: re-driving an unchanged tree measures the host, not the product; delivery 1's warm/cold numbers stand.
+## 2026-11-23 no-op refire delta — delivery 6
+
+- Tick id (body, not heading): code-factory-dogfood-2026-11-23-15-03-37
+- Inbound dispatch count for this exact label in gateway.log: 6 — gateway lines 24449 (10:03:58 local = 15:03 UTC, delivery 1), 25485 (10:29:24, delivery 2), 26290 (10:46:45, delivery 3), delivery 4 at 11:10:36 (16:10:36 UTC), delivery 5 at 11:24:11 (16:24:11 UTC), and this delivery at 11:57:40 local = 16:57:40 UTC. Same gateway, platform=api_server, same chat id.
+- Product delta since delivery 5's receipt commit d4e9dafe: tip advanced only by the SIBLING foreman lane's board closeout 6c442a12 (foreman tick code-factory-foreman-2026-11-23-16-18-26 closed CF-385 at tip 20d25b63; not this lane's product tree delta — dogfood code surface unchanged).
+- Parity re-verified: fetched origin and gh 17:11 UTC; origin/main == gh/main == HEAD == 6c442a12; rev-list HEAD...origin/main = 0 0 and HEAD...gh/main = 0 0. Working copy clean, no index.lock, live-writer census (exact cwd, own-sid excluded): zero foreign writers.
+- Carry verification this delivery: delivery-1 closeout entry present in the published dogfood-log line 303 and its 5 evidence files present in the committed tree at .coding-hermes/evidence/code-factory-dogfood-2026-11-23-15-03-37/; CF-385 close verified from durable state — row complete on origin/main (commit_hash 20d25b63, updated_at 2026-11-23T16:34:25Z) and verdict run dir .gitreins/history/2026-11-23/e3672a71 on disk with passed=true; wt/CF-346 evidence branch preserved unmerged.
+- Wave recovery re-verified for this delivery's banner: manifest .coding-hermes/waves/code-factory-foreman-2026-11-22-03-32-06.json finished_at_utc 2026-11-22T20:30Z, outcome recovered, workers 0 — nothing to recover; no merge, no fixup, no new wave composed.
+- CI: green — last 4 runs on main all success (latest 2026-11-23T16:57:11Z covers 6c442a12, the CF-385 close).
+- Board census this delivery (source: origin/main tracked-tree read): 624 rows, 0 malformed, blocked=5 complete=240 in_progress=16 pending=363 — the complete delta vs delivery 5's census is CF-385's close (done by the sibling foreman, not this delivery).
+- Board rows filed this delivery: 0. Worker dispatches: 0. Product commits: 1 (this log entry alone). No GitReins lifecycle: no row picked, nothing to task-create/complete this delivery.
+- DuckBrain: refire receipt written at /project/code-factory/foreman/ticks/code-factory-dogfood-2026-11-23-15-03-37.refire-delivery-6 (namespace code-factory, read back id 6f1e34bb).
+- Why the perf leg was NOT re-measured: re-driving an unchanged tree measures the host, not the product; delivery 1's warm/cold numbers stand.
