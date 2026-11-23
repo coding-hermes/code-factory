@@ -467,3 +467,15 @@ Tick id (body, not heading): code-factory-dogfood-2026-11-23-15-03-37
 - Board rows filed this delivery: 0. Worker dispatches: 0. Product commits: 1 (this log entry alone). No GitReins lifecycle: no row picked, nothing to task-create/complete (coordination plane owned by the live sibling judge).
 - DuckBrain: refire receipt written at /project/code-factory/foreman/ticks/code-factory-dogfood-2026-11-23-15-03-37.refire-delivery-11 (namespace code-factory, read back after write).
 - Why the perf leg was NOT re-measured: re-driving an unchanged tree measures the host, not the product; delivery 1's warm/cold numbers stand.
+## 2026-11-23 no-op refire delta — delivery 12
+
+- Tick id (body, not heading): code-factory-dogfood-2026-11-23-15-03-37
+- Inbound dispatch count for this exact label in gateway.log: 12 — this delivery at gateway line 32176, 13:53:12 local = 18:53:12 UTC.
+- Wave recovery re-verified from the manifest file itself: .coding-hermes/waves/code-factory-foreman-2026-11-22-03-32-06.json finished_at_utc 2026-11-22T20:30Z, outcome recovered, workers 0 — nothing to recover; no merge, no fixup, no new wave composed (live-writer hold, below).
+- Sibling closeout state UPDATED (live-writer hold continues): CF-526's second tier-2 judge verdict landed in .gitreins/history/2026-11-23/94bcb245 (13:43 local) with passed=false at graded commit e571a45c (the live tip); CF-526 remains in_progress in the lifecycle store. The sibling foreman (tick code-factory-foreman-2026-11-23-16-18-26, session 1ffe1685) then dispatched a CF-533 worker: worktree ~/cf-wt-cf533-20261123, branch wt/CF-533 based at e571a45c, tests/test_worktree_census.py mid-edit at this delivery's census (session pids 759705/759842 live + poll loop in ~). Its CF-533 filing (event 1024 + row, 17:53:58Z) is still uncommitted dirty in the main tree. No board RMW, no adopt, no close by this delivery.
+- Product delta since delivery 11's receipt commit e571a45c: EMPTY — parity re-verified this delivery after fetch: origin/main == gh/main == HEAD == e571a45c, 0 behind / 0 ahead on both.
+- CI: green — last 3 runs on main all success (latest 18:42:53Z on delivery 11's e571a45c).
+- Board census: 624 rows published (origin/main); working copy carries 625 with the sibling's uncommitted CF-533 row.
+- Board rows filed this delivery: 0. Worker dispatches: 0. Product commits: 1 (this log entry alone). No GitReins lifecycle: no row picked — the coordination plane (board + .gitreins) is owned by the live sibling session, and a second dispatch would need board RMW plus lifecycle writes in the main tree (concrete active hazard cited for wave floor 0).
+- DuckBrain: refire receipt written at /project/code-factory/foreman/ticks/code-factory-dogfood-2026-11-23-15-03-37.refire-delivery-12 (namespace code-factory, read back after write).
+- Why the perf leg was NOT re-measured: re-driving an unchanged tree measures the host, not the product; delivery 1's warm/cold numbers stand.
