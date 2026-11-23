@@ -151,9 +151,16 @@ class WorktreeCensus(unittest.TestCase):
             f"{sorted(swallowed)}:\n{result.stdout}{result.stderr}",
         )
         self.assertIn("removed=1", result.stdout, result.stdout + result.stderr)
-        self.assertNotIn(
-            "REAPED ",
-            result.stdout,
+        # No output LINE may be a REAPED report while a race report is present
+        # (the uncertainty report replaces it). The echoed quiesced-by suffix
+        # may legitimately contain the literal assertion text mid-line, so the
+        # check is line-anchored, not a whole-stdout substring search.
+        reaped_lines = [
+            line for line in result.stdout.splitlines() if line.startswith("REAPED ")
+        ]
+        self.assertEqual(
+            [],
+            reaped_lines,
             "a REAPED line next to a race report is forged output:\n" + result.stdout,
         )
         return True
