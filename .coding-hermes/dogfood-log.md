@@ -347,3 +347,17 @@ The "UNVERIFIED" line above is scoped to the moment it was written. The tier-2 j
 
 Tick id (body, not heading): code-factory-dogfood-2026-11-23-15-03-37
 
+## 2026-11-23 no-op provenance — delivery 2
+
+- Tick id (body, not heading): code-factory-dogfood-2026-11-23-15-03-37
+- Inbound dispatch count for this exact label in gateway.log: 2 — 2026-11-23 10:03:58,429 (gateway line 24449, delivery 1) and 2026-11-23 10:29:24,746 (line 25485, this delivery 2). Both platform=api_server, same gateway.
+- Classification: repeated dispatch of one label is a scheduler/gateway dispatch defect, NOT a product defect; owning board = the coding-hermes scheduler project (dispatch path), not code-factory.
+- Parity/delta proof: git fetch origin; HEAD == origin/main == 2ee3cbb1; git rev-list --left-right --count HEAD...origin/main = 0 0; delivery 1's final closeout commit 2ee3cbb1 IS the published tip, so the product delta since the last delivery is EMPTY.
+- Delivery-1 closeout verified from durable state, not the report: its log entry (line 303 in the published blob) and its evidence files (01-bunker-install-check.txt, 02-project-node-check.txt, 02-sideeffect-count.txt, 03-provision-check.txt, 04-provision-ssh-repo.txt) exist in the committed tree under .coding-hermes/evidence/code-factory-dogfood-2026-11-23-15-03-37/.
+- Wave recovery re-verified: manifest code-factory-foreman-2026-11-22-03-32-06.json carries finished_at_utc 2026-11-22T20:30Z, outcome recovered, row CF-346 complete (commit 5fb7f16c and merge 8021e8ac ancestors of origin/main); evidence branch wt/CF-346 preserved unmerged. This tick's recovery banner itself names 0 worker(s) — nothing to recover, no merge, no dispatch, no new wave composed.
+- Board re-count at THIS delivery (source origin/main via scripts/board_read.py): 624 rows, whole-stream parse 624/624 OK, blocked=5 complete=239 in_progress=16 pending=364. Working copy clean; ownership.py state=clean; no live writer in the main checkout.
+- Stale .git/REBASE_HEAD marker (points at c00345c1, 6 commits behind HEAD, dated Nov 22 22:51): stale by definition, cleared this delivery after the census.
+- Why the perf leg was NOT re-measured: re-driving an unchanged tree measures the host, not the product; delivery 1's warm/cold numbers stand. The node spawn surface stays covered by the 11-17 run per delivery 1's own note.
+- Board rows filed this delivery: 0. Product commits: 1 (this log entry alone).
+- DuckBrain refire receipt written at key /project/code-factory/foreman/ticks/code-factory-dogfood-2026-11-23-15-03-37.refire-delivery-2 (namespace code-factory); no prior record for this tick id existed there.
+
