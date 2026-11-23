@@ -387,3 +387,15 @@ Tick id (body, not heading): code-factory-dogfood-2026-11-23-15-03-37
 - CI: green — last 3 runs on main all success (latest covers f35e40ff, 16:10:20Z).
 - Board rows filed this delivery: 0. Worker dispatches: 0 (no dispatchable refire delta; wave manifest closed instead). Product commits: 1 (this log entry alone).
 - No DuckBrain write this delivery: delivery 3's refire receipt and handoff delta stand; the delivery-4 delta is materially identical to delivery 3's and the log entry above is the durable record.
+## 2026-11-23 no-op provenance — delivery 5
+
+- Tick id (body, not heading): code-factory-dogfood-2026-11-23-15-03-37
+- Inbound dispatch count for this exact label in gateway.log: 5 — gateway lines 24449 (10:03:58 local = 15:03 UTC, delivery 1), 25485 (10:29:24, delivery 2), 26290 (10:46:45, delivery 3), delivery 4 at 11:10:36 (16:10:36 UTC), and delivery 5 at 11:24:11 local = 16:24:11 UTC (this delivery). Same gateway, platform=api_server, same chat id. Note (delivery 5 correction): earlier entries quoted these gateway timestamps with a Z suffix; the gateway log is stamped in host local time (-05), so the true UTC times are as written here.
+- Product delta since delivery 4's receipt commit 20d25b63: EMPTY in the product tree — 20d25b63 is the published tip; this entry is the only write.
+- Parity re-verified: fetched 16:26 UTC; origin/main == gh/main == HEAD == 20d25b63; rev-list HEAD..origin/main = 0 and gh/main..HEAD = 0. Working copy clean (porcelain empty). Delivery-1 closeout evidence files still on disk under .coding-hermes/evidence/code-factory-dogfood-2026-11-23-15-03-37/ (5 files).
+- Wave recovery re-verified for this delivery's banner: manifest 03-32-06 finished_at 2026-11-22T20:30Z outcome recovered with 0 worker(s); the NEWER manifest 22-24-47 finished_at 2026-11-23T16:16Z outcome recovered (closed at delivery 4). Both manifests carried zero dispatched workers — nothing to recover, no merge, no new wave composed.
+- CI: the latest run on main (displayTitle "delivery 4", created 16:24:04Z) was still in flight at census time (16:26 UTC, conclusion empty); the two prior runs (16:10:20Z and 15:46:18Z, main) are success. Conclusion of the in-flight run left to the scheduler's next tick to observe — not claimed green.
+- Board re-census at THIS delivery (source origin/main via tracked-tree read): 624 rows, whole-stream parse 624/624 OK, 0 malformed, 0 duplicate ids, blocked=5 complete=239 in_progress=16 pending=364 — identical to delivery 2's census; the board is untouched across deliveries 2-5.
+- Board rows filed this delivery: 0. Worker dispatches: 0. Product commits: 1 (this log entry alone).
+- No DuckBrain write this delivery: delivery 3's refire receipt and handoff delta stand; the delivery-5 delta is materially identical to deliveries 3-4 and the log entry above is the durable record.
+- Why the perf leg was NOT re-measured: re-driving an unchanged tree measures the host, not the product; delivery 1's warm/cold numbers stand.
