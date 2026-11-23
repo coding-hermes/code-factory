@@ -377,3 +377,13 @@ Tick id (body, not heading): code-factory-dogfood-2026-11-23-15-03-37
 - DuckBrain: refire receipt at /project/code-factory/foreman/ticks/code-factory-dogfood-2026-11-23-15-03-37.refire-delivery-3 and foreman handoff delta at /handoff/code-factory/foreman/2026-11-23T1600Z-delivery3-refire-delta (namespace code-factory).
 
 
+## 2026-11-23 no-op refire delta — delivery 4
+
+- Tick id (body, not heading): code-factory-dogfood-2026-11-23-15-03-37
+- Inbound dispatch count for this exact label in gateway.log: 4 — gateway lines 24449 (10:03:58, delivery 1), 25485 (10:29:24, delivery 2), 26290 (10:46:45, delivery 3), and line 4 at 11:10:36 (this delivery 4, refire of the same label ~24 minutes after delivery 3).
+- Product delta since delivery 3's receipt commit f35e40ff: EMPTY in the product tree — f35e40ff is the published tip; working copy clean; this entry plus one gitignored manifest finalization are the only writes.
+- Parity re-verified: fetched gh 16:12Z; HEAD == gh/main == f35e40ff; `git rev-list --count gh/main..HEAD` = 0. Delivery 3's receipt is fully published and its CI run (16:10:20Z, main) is success.
+- Wave recovery preamble discharged: manifest code-factory-foreman-2026-11-22-03-32-06 already recovered (finished_at 2026-11-22T20:30Z, outcome "recovered", rows complete — stands from delivery 1-3). The NEWER manifest code-factory-foreman-2026-11-22-22-24-47.json is now marked final/finished_at_utc 2026-11-23T16:16Z / outcome "recovered" (gitignored waves/ path, working-tree state only, matching the 03-32-06 precedent): CF-361 complete on origin/main (row commit_hash e7957634; sibling dispatch product 56f44fa5, close 932ac6ab, verdict 98bde653 tier1 PASS, overall-FAIL = documented coverage-arm artifact), CF-403 pending in its owner scope, superseded duplicate deliverable preserved unmerged in ~/worktrees/code-factory-CF-361, no live workers remain.
+- CI: green — last 3 runs on main all success (latest covers f35e40ff, 16:10:20Z).
+- Board rows filed this delivery: 0. Worker dispatches: 0 (no dispatchable refire delta; wave manifest closed instead). Product commits: 1 (this log entry alone).
+- No DuckBrain write this delivery: delivery 3's refire receipt and handoff delta stand; the delivery-4 delta is materially identical to delivery 3's and the log entry above is the durable record.
