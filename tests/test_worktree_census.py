@@ -17,11 +17,25 @@ from unittest import mock
 
 QUIESCED_BY = "fixture operator holds worker admission closed"
 APPLY = ("reap", "--apply", "--quiesced-by", QUIESCED_BY)
+# The only uncertainty fields the census tool can print after a removal.
+RACE_DETECTION_FIELDS = (
+    "POST-REMOVE-CWD-UNRESOLVED",
+    "POST-REMOVE-WRITER-DETECTED",
+)
 
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = Path(
     os.environ.get("CF_WORKTREE_CENSUS_SCRIPT", ROOT / "scripts/worktree_census.py")
 )
+
+
+class _FakeResult:
+    """Minimal stand-in for subprocess.run's result in helper unit tests."""
+
+    def __init__(self, returncode, stdout, stderr=""):
+        self.returncode = returncode
+        self.stdout = stdout
+        self.stderr = stderr
 
 
 class WorktreeCensus(unittest.TestCase):
@@ -89,6 +103,61 @@ class WorktreeCensus(unittest.TestCase):
     def assert_success(self, result):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def assert_clean_reap(self, result, path, writer_pids=frozenset()):
+        """Assert a clean reap, tolerating ONLY the ambient /proc noise report.
+
+        Ambient same-uid pids on this host (systemd session helpers, ssh-agent,
+        sshd sessions, krakend) are permanently cwd-unresolvable and short-lived
+        churn joins them between snapshots, so an otherwise clean reap can
+        legitimately print POST-REMOVE-CWD-UNRESOLVED pid=<ambient> and exit 2
+        (CF-533). Accept rc==2 only when every reported pid is outside this
+        fixture, the reported tree is the one this arm reaped, the tool's own
+        SUMMARY confirms the removal, and no REAPED line is present (the
+        uncertainty report replaces it — a REAPED line next to a race report
+        would be forged output). Any other non-zero rc stays a hard failure.
+        Returns True when an ambient report was accepted.
+        """
+        if result.returncode == 0:
+            return False
+        race_lines = [
+            line
+            for line in result.stdout.splitlines()
+            if line.startswith("REMOVED-WITH-RACE ")
+        ]
+        self.assertTrue(
+            race_lines,
+            "rc=2 without a race report is not ambient noise:\n"
+            + result.stdout
+            + result.stderr,
+        )
+        prefix = f"REMOVED-WITH-RACE {json.dumps(str(path))} — "
+        named = set()
+        for line in race_lines:
+            self.assertTrue(line.startswith(prefix), line)
+            body = line[len(prefix) :]
+            cut = body.rfind(" (quiesced-by: ")
+            self.assertTrue(cut >= 0, line)
+            for field in body[:cut].split("; "):
+                name, sep, pid_list = field.rpartition(" pid=")
+                self.assertIn(name, RACE_DETECTION_FIELDS, line)
+                self.assertTrue(sep and pid_list, line)
+                pids = frozenset(map(int, pid_list.split(",")))
+                self.assertTrue(pids, line)
+                named |= pids
+        swallowed = named & set(writer_pids)
+        self.assertFalse(
+            swallowed,
+            "ambient tolerance must never swallow a fixture writer pid "
+            f"{sorted(swallowed)}:\n{result.stdout}{result.stderr}",
+        )
+        self.assertIn("removed=1", result.stdout, result.stdout + result.stderr)
+        self.assertNotIn(
+            "REAPED ",
+            result.stdout,
+            "a REAPED line next to a race report is forged output:\n" + result.stdout,
+        )
+        return True
+
     def registered(self, path):
         return f"worktree {path}\0" in self.git("worktree", "list", "--porcelain", "-z")
 
@@ -117,7 +186,7 @@ class WorktreeCensus(unittest.TestCase):
     def test_clean_merged_removed_and_main_preserved(self):
         path = self.tree()
         result = self.run_tool(*APPLY)
-        self.assert_success(result)
+        self.assert_clean_reap(result, path)
         self.assertFalse(path.exists())
         self.assertFalse(self.registered(path))
         self.assertTrue(self.repo.is_dir())
@@ -206,27 +275,37 @@ class WorktreeCensus(unittest.TestCase):
         path = self.tree()
         proc = self.start_writer(path)
         result = self.run_tool(*APPLY, script=weaponized)
-        self.assert_success(result)
+        self.assert_clean_reap(result, path, writer_pids={proc.pid})
         self.assertFalse(path.exists(), result.stdout)
         self.assertFalse(self.registered(path), result.stdout)
         self.assertIsNone(proc.poll(), "writer must still be alive at deletion")
         with self.assertRaisesRegex(AssertionError, "live fixture path was deleted"):
             self.assert_preserved(path)
-        # Run the SAME positive test against the mutant: the suite must go red.
-        red = subprocess.run(
-            [
-                sys.executable,
-                "-B",
-                "-m",
-                "unittest",
-                "tests.test_worktree_census.WorktreeCensus.test_live_writer_refused",
-            ],
-            cwd=ROOT,
-            env={**self.env, "CF_WORKTREE_CENSUS_SCRIPT": str(weaponized)},
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
+        # Run the SAME positive test against the mutant: the suite must go red
+        # for the FORGERY reason — the preservation oracle catching the deleted
+        # live tree. An ambient cwd-unresolvable report inside the sub-run also
+        # reds it (the sub-run's assert_success sees rc=2 before its
+        # preservation assert), but such a red proves proc noise, not the
+        # mutant, so retry past them until the forgery red appears.
+        red = None
+        for _ in range(6):
+            red = subprocess.run(
+                [
+                    sys.executable,
+                    "-B",
+                    "-m",
+                    "unittest",
+                    "tests.test_worktree_census.WorktreeCensus."
+                    "test_live_writer_refused",
+                ],
+                cwd=ROOT,
+                env={**self.env, "CF_WORKTREE_CENSUS_SCRIPT": str(weaponized)},
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if "live fixture path was deleted" in red.stderr:
+                break
         self.assertNotEqual(red.returncode, 0, red.stdout + red.stderr)
         self.assertIn("live fixture path was deleted", red.stderr)
         print(
@@ -286,10 +365,15 @@ class WorktreeCensus(unittest.TestCase):
         sibling = self.tree("tree-other")
         proc = self.start_writer(sibling)
         result = self.run_tool(*APPLY)
-        self.assert_success(result)
+        ambient = self.assert_clean_reap(result, path, writer_pids={proc.pid})
         self.assertFalse(path.exists())
         self.assert_preserved(sibling)
-        self.assertIn(f"live writer pid={proc.pid}", result.stdout)
+        if not ambient:
+            self.assertIn(f"live writer pid={proc.pid}", result.stdout)
+        # An ambient rc=2 breaks the tool's loop before the sibling is scanned,
+        # so its census line is absent there; the removal of "tree" beside a
+        # live "tree-other" writer still proves the prefix discrimination, and
+        # assert_clean_reap rejects any report naming the sibling's writer pid.
 
     def test_locked_preserved(self):
         path = self.tree()
@@ -302,7 +386,7 @@ class WorktreeCensus(unittest.TestCase):
     def test_main_protected_even_when_repo_is_linked_tree(self):
         path = self.tree()
         result = self.run_tool(*APPLY, repo=path)
-        self.assert_success(result)
+        self.assert_clean_reap(result, path)
         self.assertTrue(self.repo.is_dir())
         self.assertTrue(self.registered(self.repo))
         self.assertIn("main worktree", result.stdout)
@@ -344,12 +428,25 @@ class WorktreeCensus(unittest.TestCase):
                 if assertion is None:
                     print(result.stdout.strip())
         result = self.run_tool(*APPLY)
-        self.assert_success(result)
+        ambient = self.assert_clean_reap(result, path)
         allow = (
             f"REAPED {json.dumps(str(path))} — clean, merged, no-live-writer "
             f"(quiesced-by: {QUIESCED_BY})"
         )
-        self.assertIn(allow, result.stdout.splitlines())
+        race = next(
+            (
+                line
+                for line in result.stdout.splitlines()
+                if line.startswith("REMOVED-WITH-RACE ")
+            ),
+            None,
+        )
+        if ambient:
+            # The uncertainty report replaced the REAPED line; the echoed
+            # quiescence assertion must still terminate it as one line.
+            self.assertTrue(race.endswith(f"(quiesced-by: {QUIESCED_BY})"), race)
+        else:
+            self.assertIn(allow, result.stdout.splitlines())
         self.assertIn(
             f"REFUSED {json.dumps(str(self.repo))} — main worktree "
             f"(quiesced-by: {QUIESCED_BY})",
@@ -357,7 +454,41 @@ class WorktreeCensus(unittest.TestCase):
         )
         self.assertFalse(path.exists())
         self.assertFalse(self.registered(path))
-        print(allow)
+        print(race if ambient else allow)
+
+    def test_clean_reap_helper_tolerates_only_ambient_noise(self):
+        # The tolerance itself must be able to fail: an ambient-only rc=2 is
+        # accepted, a report naming a fixture writer pid is rejected, an rc=2
+        # without a race report is rejected, and rc=0 stays the clean path.
+        ambient = (
+            'REFUSED "/scratch/repo" — main worktree (quiesced-by: x)\n'
+            'REMOVED-WITH-RACE "/scratch/tree" — POST-REMOVE-CWD-UNRESOLVED '
+            "pid=1,2 (quiesced-by: x)\n"
+            "SUMMARY count=2 merged=2 unmerged=0 dirty=0 live-writer=0 "
+            "unknown=0 removed=1 mode=reap apply=true\n"
+        )
+        self.assertTrue(
+            self.assert_clean_reap(_FakeResult(2, ambient), Path("/scratch/tree"))
+        )
+        with self.assertRaises(AssertionError):
+            self.assert_clean_reap(
+                _FakeResult(2, ambient.replace("pid=1,2 ", "pid=1,2,77 ")),
+                Path("/scratch/tree"),
+                writer_pids={77},
+            )
+        with self.assertRaises(AssertionError):
+            self.assert_clean_reap(
+                _FakeResult(2, 'REFUSED "/scratch/tree" — 1 dirty paths\n'),
+                Path("/scratch/tree"),
+            )
+        with self.assertRaises(AssertionError):
+            self.assert_clean_reap(
+                _FakeResult(2, "SUMMARY count=1 removed=0 mode=reap apply=true\n"),
+                Path("/scratch/tree"),
+            )
+        self.assertFalse(
+            self.assert_clean_reap(_FakeResult(0, ambient), Path("/scratch/tree"))
+        )
 
     def run_scan_remove_race(self, unresolved=False, preexisting_unresolved=False):
         path = self.tree("a-tree")
@@ -486,12 +617,24 @@ class WorktreeCensus(unittest.TestCase):
         path = self.tree()
         assertion = "operator\nREAPED forged"
         result = self.run_tool("reap", "--apply", "--quiesced-by", assertion)
-        self.assert_success(result)
-        self.assertIn(
-            f"REAPED {json.dumps(str(path))} — clean, merged, no-live-writer "
-            "(quiesced-by: operator\\nREAPED forged)",
-            result.stdout.splitlines(),
-        )
+        ambient = self.assert_clean_reap(result, path)
+        if ambient:
+            # The uncertainty report replaced the REAPED line; the escaped
+            # assertion must still terminate it as one line, unforgeable.
+            race = next(
+                line
+                for line in result.stdout.splitlines()
+                if line.startswith("REMOVED-WITH-RACE ")
+            )
+            self.assertTrue(
+                race.endswith("(quiesced-by: operator\\nREAPED forged)"), race
+            )
+        else:
+            self.assertIn(
+                f"REAPED {json.dumps(str(path))} — clean, merged, no-live-writer "
+                "(quiesced-by: operator\\nREAPED forged)",
+                result.stdout.splitlines(),
+            )
         self.assertNotIn("REAPED forged", result.stdout.splitlines())
 
     def test_apply_requires_reap_and_no_proc_bypass(self):
