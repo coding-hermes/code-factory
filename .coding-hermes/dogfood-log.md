@@ -300,3 +300,50 @@ The "UNVERIFIED" line above is scoped to the moment it was written. The tier-2 j
   second (intermittent refusal). A transcript that is not reproducible from its committed script hides
   the arm's real result — the deviation was not cosmetic, it was the thing masking the failure.
 - Judge run for this addendum: `fd3b385b` (tier 1 + tier 2 over the closeout diff), recorded on the row.
+## 2026-11-23 — run `code-factory-dogfood-2026-11-23-15-03-37` (delivery 1 of this run)
+
+- **Verdict**: 🟢 control-hold: the documented control-host path is honest at today's tip; no new
+  rows filed because every friction point this walk hit already has an owner.
+- **Wave recovery first**: the tick opened as WAVE RECOVERY for `code-factory-foreman-2026-11-22-03-32-06`
+  (0 workers). Verified against origin/main rather than the manifest's own words: row
+  CF-346 complete at 5fb7f16c and merge 8021e8ac are both ancestors of main; evidence branch
+  `wt/CF-346` @ b0a642fa preserved unmerged; manifest `finished_at 2026-11-22T20:30Z, outcome
+  recovered` (closed by ops tick fire of 11-22). Nothing to recover; no merge, no dispatch.
+- **Residue landed before the walk**: the shared checkout held a staged board-only diff (8 rows,
+  updated_at 2026-11-23T13:42:06Z, content attributing pm tick `code-factory-pm-2026-11-23-13-30-00`)
+  that its tick ended without committing. Attributed, no live writer (census), board validate OK
+  (RESULT: OK, 101 legacy warnings), committed as e487d578 and pushed. First commit attempt was
+  blocked by a tier-1 red on `section 42 CF-390 worktree census/reaper`; the arm ran green solo
+  (20 tests OK, rc=0) so the red was load-collision, not a defect — nothing filed, guard re-ran
+  full-suite green on the retry.
+- **Path walked at e487d578 (evidence: .coding-hermes/evidence/<this tick>/)**:
+  1. Quick start step 1 `bunker-server-install.sh --check` with the README's own CRIER_URL
+     placeholder: aborts at `FAIL server_declared — BUNKER_SERVER unset` (the pre-CF-009 behavior),
+     4 lines, rc=1. Honest per the README's own "fail with the missing value named" promise.
+  2. Quick start step 2 `project-node.sh --check --project myproject` with a throwaway HOME:
+     full ladder ran, `NODE: FAIL (5)` (reach/crier, gateway_auth, python, crier_identity, repo),
+     every row names its remedy; **python row names HERMES_PYTHON_BIN=python3.12 exactly as the
+     README quick start promises**; side-effect census `find $H -mindepth 1` = 1 entry
+     (`$H/.node`, 0 files) — the README-documented side effect reproduced exactly at today's tip.
+  3. Provisioning `--check` with throwaway HOME (the CF-506/CF-507 surface): the FAIL inputs row
+     names all FIVE template credentials; agent row FAILs naming the absence and the remedy
+     (`run --apply to create it`). CF-507's fix holds (agent row grades the client's output).
+- **Premises re-measured live (all three rows stay open, no new rows)**:
+  - CF-037 fix holds: reach row prints `-> 000` (three digits), not 000000.
+  - CF-496 premise live: reach row still prints the bare `-> 000` naming neither the vantage
+    point nor the requirement (control-host run, healthy-by-proxy bus absent).
+  - CF-508 premise live: REPO=git@... passes `--check` — the only scheme mention is the `..`
+    continuation row `resolved repo=git@...`; no PASS/FAIL row names the scheme or its
+    credential implications (file 04-provision-ssh-repo.txt).
+  - CF-506 premise live: README:136-137 names three credential files; the template and the
+    live inputs row name five (file 03-provision-check.txt).
+- **Not walked this fire, and why**: Quick start step 3 (node-create) — needs the documented
+  spawn-capable target preflight; this fire spent its budget on the recovery bookkeeping, the
+  residue landing and the legs above. The spawn surface was measured by the 11-17 run (CF-489/CF-496)
+  and has not changed class since (no product delta touching bunker/ in the interim beyond the rows
+  above); a re-drive would re-measure the las-02/03 hosts, not the tree.
+- **Tip walked**: e487d578a5 (origin/main, parity 0/0 before the entry; pushed). CI green at the
+  prior tip 932ac6ab and last 3 runs success; guard full-suite green at e487d578 on the residue commit.
+
+Tick id (body, not heading): code-factory-dogfood-2026-11-23-15-03-37
+

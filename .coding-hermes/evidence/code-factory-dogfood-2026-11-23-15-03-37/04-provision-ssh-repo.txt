@@ -1,0 +1,9 @@
+  PASS  config — cf-df-ssh.conf — 53 lines, KEY=VALUE only
+  FAIL  inputs — not readable: GITHUB_TOKEN_FILE(/mnt/ssd/tmp/dogfood-prov2.joTy9g/.config/code-factory/github.token) DUCKBRAIN_TOKEN_FILE(/mnt/ssd/tmp/dogfood-prov2.joTy9g/.duckbrain/9router-foreman.token) CRIER_AGENT_KEY_FILE(/mnt/ssd/tmp/dogfood-prov2.joTy9g/.config/code-factory/<project>/agent.key) CRIER_AUTH_TOKEN_FILE(/mnt/ssd/tmp/dogfood-prov2.joTy9g/.hermes/secrets/crier-fleet.env) S3_ENV_FILE(/mnt/ssd/tmp/dogfood-prov2.joTy9g/.config/code-factory/s3.env)
+bunker-provision --check — project=code-factory agent=<agent-id> server=<bunker-server>
+  ..    resolved repo=git@github.com:coding-hermes/code-factory.git ref=main harness=hermes namespaces=code-factory,coder (primary code-factory) ttl=30d crier=http://<control-host>:8767 duckbrain=http://<control-host>:3000
+  FAIL  github_auth — GITHUB_TOKEN_FILE /mnt/ssd/tmp/dogfood-prov2.joTy9g/.config/code-factory/github.token is unreadable
+  PASS  bunker_cli — /home/kara/.local/bin/bunker
+  FAIL  server — <bunker-server> not listed by 'bunker list'
+  FAIL  agent — <agent-id> absent — run --apply to create it
+RC=1 (leg4)

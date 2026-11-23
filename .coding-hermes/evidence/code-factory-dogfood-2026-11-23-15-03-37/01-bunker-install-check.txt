@@ -1,0 +1,4 @@
+== cmd: bash scripts/bunker-server-install.sh --check
+  FAIL  server_declared — BUNKER_SERVER unset — the client has no server to talk to
+
+RESULT: FAIL (1)
