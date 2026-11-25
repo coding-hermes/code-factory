@@ -1287,9 +1287,10 @@ def refusal(ident, dispatch, reason, detail, in_reply_to=""):
         ),
         "status": "refused",
         # `ok` is the SCHEDULER'S verdict field, not a restatement of this envelope's status:
-        # dispatchReplyVerdict() reads `ok` and treats its ABSENCE as success, so a refusal that
-        # only said status=refused would close the tick as completed (specs/ENVELOPE.md
-        # §Correlation and idempotency).
+        # dispatchReplyVerdict() (dispatch_leg.go:749-776, CF-355) reads `ok` and validates
+        # `status` against it; a reply carrying NO ok is never a success — status alone is a
+        # refusal (unrecognised) or a FAIL (failed/refused), and `completed` requires ok:true
+        # (specs/ENVELOPE.md §`ok` is the verdict).
         "ok": False,
         "error": summary,
         "reply_b64": result_reply("refused", summary),
@@ -1787,9 +1788,11 @@ def process(dispatch, ident, signer, args, seen, in_reply_to=""):
         "run_id": run_id,
         "missing": [],
         "status": status,
-        # `ok` is the scheduler's verdict (`dispatchReplyVerdict`). Its ABSENCE reads as success,
-        # so a failed run must say so HERE and not only in `status` — a status-only failure would
-        # complete the tick as a success (CF-211).
+        # `ok` is the scheduler's verdict (`dispatchReplyVerdict`, dispatch_leg.go:749-776 —
+        # CF-355). Its absence is NEVER a success: a reply whose envelope omits `ok` resolves
+        # by `status` alone to refusal or FAIL — `completed` requires ok:true — so this
+        # envelope must say ok HERE, not only in `status` (CF-211, verdict tests
+        # dispatch_verdict_test.go:42-47).
         "ok": not failed_status,
         "reply_b64": result_reply(
             status, summary, one_line(stdout or stderr, REPLY_TAIL_CHARS)
