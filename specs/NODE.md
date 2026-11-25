@@ -67,7 +67,7 @@ table no longer claims them:
   including the `inference_key` this repo cannot supply. Whether a bunker agent image already ships
   that file is **not measured** by this repo.
 - **A node-side bus worker.** Layer 30 starts and checks no process and opens no socket:
-  `scripts/project-node.sh:244-249` tests `-f $STATE/crier.json`, then `stat -c '%a'` against `600`,
+  `scripts/project-node.sh:791-793` tests `-f $STATE/crier.json`, then `stat -c '%a'` against `600`,
   and prints `crier_identity` / `crier_mode`. Whether a worker is running on the node is unmeasured
   by this ladder; CF-068 owns the file-existence weakness this layer still has.
 - **A round trip whose digest is recomputed on the control host.** Layer 90 prints `[90] manifest`
