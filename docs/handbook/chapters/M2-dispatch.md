@@ -161,6 +161,96 @@ proves that a harness-reported model differing from `CF_MODEL` stays distinct; t
 proves the explicit unobserved marker. The scheduler-side `correlateDispatchReply` implementation
 and its contract test remain outside this repository.
 
+### III.M2.S4 — Result, error and settlement vocabulary (P5G-17)
+
+Board row P5G-17 asks what a dispatch result IS: who emits it, what shape it takes, the order it
+settles in, what failure means, and how redelivery is bounded. This subsection is the
+specification answer, derived from the shipped sources measured at code-factory commit
+`4ba54126`: the code surface is `scripts/node-bus-worker.py` (every bare `file:line` below is
+that file at this commit), and the spec surfaces are `specs/ENVELOPE.md` (§Result, §Correlation
+semantics, §Durable delivery, §Ack after delivery, §Correlation and idempotency) and
+`specs/TRACE.md` (§2 ladder, §3 propagation). The scheduler-side consumer
+(`dispatchReplyVerdict`) is outside this tree and pinned by the consumer-pin arm of
+`tests/test_bus_result_delivery.py`.
+
+Actor: The executing node's bus worker, and only it. `scripts/node-bus-worker.py` builds every
+result: `refusal()` (:1274) for a dispatch the node will not execute, the terminal builder
+inside `process()` (:1779-1813) once harness and gate have a terminal outcome, and `deliver()`
+(:1839) posts it to the inbox the dispatch names in `reply_to`. The harness never mints a
+result; the scheduler only reads one.
+
+Data shape: A terminal result carries `env_version, dispatch_id, corr_id, in_reply_to, run_id,
+missing, status, ok, reply_b64, host_identity, harness{name, model_requested, served_model,
+served_model_source}, vars, exit_codes, gate_exit, branch, commit, artifacts, wall_s,
+finished_at`, plus `error` when failed (:1779-1818); refusals carry the same identity block
+plus `status:"refused"`, `ok:false`, `error`, `refused_by` and `refusal` (:1288-1308). `run_id`
+is resolved by `run_identity()` (:1252) as `dispatch.run_id` or `dispatch.vars.CF_RUN_ID`,
+never `corr_id` (`specs/TRACE.md` ladder rule 1). Failure reasons have two shipped spellings:
+the plaintext `error` names dispatch-controlled input by bounded identity — a failing gate's
+`cmd` becomes length + sha256 prefix (`bounded_text()` :183, used at :1759) — and the verbatim
+node words travel base64 in `reply_b64` (`result_reply()` :1026, `REPLY_MAX_CHARS` 4000). That
+split is the CF-131 guard contract (`specs/ENVELOPE.md` §Reserved field names).
+
+Ordering: Delivery before ack, per message. The result envelope is POSTed; only an accepted
+delivery (200/201, :1902-1914) puts that message id on the ackable list, and the ack loop runs
+last (:2096-2128) — one failed delivery must not leave an unrelated message unacked.
+Correlation is identity-ordered, never arrival-ordered: the scheduler matches `in_reply_to`
+first (the relay message id, PRIMARY key), then `corr_id`, then the original dispatch echoed
+inside `task`; a result naming neither key never completes a tick (`specs/ENVELOPE.md`
+§Correlation semantics; arm A4). Node-side, the result is recorded in the seen-cache at
+execution time — before any delivery is attempted (key from `dispatch_key()` :1005, check at
+:1548) — so a redelivery re-sends the recorded result instead of re-running the harness
+(arm A5).
+
+Failure behavior: `ok` is the verdict the scheduler reads and its ABSENCE reads as success
+(CF-211), so the shipped coupling is `"ok": not failed_status` (:1793) with `failed_status` =
+harness exit ≠ 0, a gate that could not run, or a gate exit ≠ `gate.expect_exit`
+(:1749-1767); a gate that could not run is a FAILED result, never a completed tick on work
+nobody gated (arm A7). A harness that could not run is classified failed (`status` :1705,
+`ok` :1706, `error` :1707) while retaining the refusal builder's `refused_by`/`refusal`
+diagnostics. A delivery body matching the relay guard's control-key shapes is never posted at
+all (`guard_match` tripwire, :1885-1894): the dispatch stays unacked rather than looping a
+reply that refuses itself (CF-131). A failed memory export is recorded on the result as an
+`UNVERIFIED` note and never upgraded to a successful write (:1819-1824).
+
+Recovery rule: At-least-once delivery of the result with exactly-once STORAGE of it — never
+exactly-once execution. A repeated `dispatch_key` returns the recorded result verbatim
+(:1548-1553); `delivery_key()` (:1011) derives the relay idempotency key as
+`<dispatch_key>:result` from the dispatch alone, capped at `IDEMPOTENCY_KEY_MAX` 128 (:122),
+so a retry inside the relay dedup window (`CR_IDEMPOTENCY_WINDOW_S`, 24 h default) is answered
+with the FIRST accept and stores nothing new (arm A6). Failures are delivered and then acked
+like any result — withholding the ack would only loop the work (`specs/ENVELOPE.md` §Result).
+`deliver()` refuses to emit a non-refusal result missing any of
+`in_reply_to`/`corr_id`/`run_id` (:1860-1868), per `specs/ENVELOPE.md` §Correlation and
+idempotency.
+
+The settlement state table is the deterministic artifact; every row cites the shipped builder
+or test arm it comes from:
+
+| # | Dispatch state | Result `status` | `ok` | Required reason members | Delivered | Dispatch acked |
+|---|---|---|---|---|---|---|
+| 1 | Missing `in_reply_to`/`corr_id`/`run_id` — named `envelope` refusal | refused | false | `error`, `refused_by`, `refusal`, `missing[]` | yes | yes |
+| 2 | `text_b64` does not decode, or no decodable directive (`text_b64`/`brief`) | refused | false | `error`, `refused_by`, `refusal` | yes | yes |
+| 3 | `brief.digest` absent or mismatched (`brief_digest`) | refused | false | `error`, `refused_by`, `refusal` | yes | yes |
+| 4 | Harness could not run | failed | false | `error`, `reply_b64` (plus retained `refused_by`/`refusal`) | yes | yes |
+| 5 | Harness exit ≠ 0 | failed | false | `error`, `reply_b64` | yes | yes |
+| 6 | Gate could not run, or gate exit ≠ `expect_exit` | failed | false | `error`, `reply_b64` | yes | yes |
+| 7 | Harness exit 0 and gate exit = `expect_exit` | completed | true | none — `reply_b64` is always present | yes | yes |
+| 8 | `dispatch_key` already in the seen-cache | recorded result re-returned verbatim (:1548-1553) | unchanged | — | yes (same `delivery_key`) | yes |
+| 9 | Reply body matches the relay guard's control-key shapes | none — the envelope is never POSTed (:1885-1894) | — | — | no | no |
+
+Invariant the table encodes: `status:"completed"` ⇔ `ok:true`; `status:"failed"` or
+`status:"refused"` ⇒ `ok:false` plus `error`; a result naming neither `in_reply_to` nor
+`corr_id` never completes a tick.
+
+Validation vector (shipped, run at the pinned commit from the repository root):
+`python3 tests/test_bus_result_delivery.py` drives the real worker CLI
+(`scripts/node-bus-worker.py --once`) against a stub crier relay and asserts the verdict,
+refusal-shape, idempotent-redelivery and lost-answer arms (A1-A11) plus the consumer pin.
+Observed: 12 PASS (consumer-pin, A1..A11), exit 0.
+
+ch:trace row=P5G-17 spec=docs/handbook/OUTLINE.md#f1-dispatch-and-settlement wave=none:serial-worker test=tests/test_bus_result_delivery.py doc=docs/handbook/chapters/M2-dispatch.md evidence=tests/test_bus_result_delivery.py witness=none:shipped-node-bus-worker-and-envelope-trace-specs verdict=none:foreman-verifies-and-closes commit=none:worker-commit memory=none:foreman-writes
+
 ## 7. Verification
 
 | Check | Command | Expected | Last run | Result |
