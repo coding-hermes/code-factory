@@ -77,30 +77,34 @@ drill record proves the drill, not the deployment.
 ## 1. A failed run settles as a pass
 
 **What fails.** The settlement reader `dispatchReplyVerdict`
-(`internal/scheduler/dispatch_leg.go:713-726`) reads only `payload["ok"]` and treats the
-absence of a verdict as success (`:709-712`). A node reply carrying `status:"failed"` —
-the field `node-bus-worker.py:1180` actually sends — and no `ok` is scored a success: the
-control-plane half of the silent-success defect, CF-355 open (M9 §2). The node-side
-mirror: a worker that replies with a false `ok` records a pass for work that never
-happened (M2 §2). One reconciliation before either transport claim is used (V2-RSK-04):
-the dispatcher leg always sends `ok` — including its documented failed-result reporting,
-which writes `ok: false` with error detail (M11 §6) — so that leg *does* carry verdict
-information and the reader's ok-only policy happens to score it correctly. What the
-dispatcher leg never carries is the node worker's `status` verdict field; the defect is
-the reader ignoring that field on the leg that sends it, not the dispatcher's own failed
-reporting.
+(`internal/scheduler/dispatch_leg.go:742-776`) reads boolean `ok` as the verdict and
+validates `status` against it — CF-355 shipped: a result carrying neither field is refused,
+contradictions are refused, and a node reply carrying `status:"failed"` — the field
+`node-bus-worker.py:1180` actually sends — with no `ok` is recorded as a FAIL (M9 §2; the
+control-plane half of the silent-success defect is closed, scheduler commit `70956121`).
+The node-side mirror is the live half of this risk: a worker that replies with a false
+`ok` records a pass for work that never happened (M2 §2) — `ok` remains the verdict
+carrier, so settlement still trusts the reporter. One reconciliation before either
+transport claim is used (V2-RSK-04): the dispatcher leg always sends `ok` — including its
+documented failed-result reporting, which writes `ok: false` with error detail (M11 §6) —
+so that leg *does* carry verdict information and is scored correctly. What the dispatcher
+leg never carries is the node worker's `status` verdict field; the shipped law now
+validates that field on the leg that does send it.
 
 **Signal.** A board row closes complete while the worker's reply body says
-`status:"failed"`; a scheduler pass row whose correlated reply carries no `ok` field.
+`status:"failed"` with an explicit `ok: true` — under the shipped law a bare
+`status:"failed"` with no `ok` can no longer close complete (it settles FAIL).
 
 **Containment.** Read the reply body, not the verdict bit. The reply carries `status`,
-`dispatch_id`, `corr_id`, `branch`, `commit` and artifacts (CT-04); the settlement defect
-is confined to the reader, not the transport.
+`dispatch_id`, `corr_id`, `branch`, `commit` and artifacts (CT-04); the shipped law makes
+the reader refuse silence and contradictions, so the residual risk is a false report by
+the worker itself, not the reader.
 
-**Recovery.** No automated recovery — CF-355 is open on both halves. Closing it requires
-the scheduler to read `status` at `dispatch_leg.go:713-726`.
+**Recovery.** The control-plane half is recovered: CF-355 shipped in the scheduler
+(`dispatch_leg.go:742-776`, judged tier-2 PASS run `5b997976`). The node-side mirror has
+no automated recovery — it needs a truthful `ok` from the worker (M2 §2).
 
-**Contract that guards it.** CT-04 (node → crier, PARTIAL — both sides RED), CT-06
+**Contract that guards it.** CT-04 (node → crier, PARTIAL — sender guarantee still RED), CT-06
 (crier → scheduler, PROVEN on the dispatcher leg that always sends `ok`).
 
 ## 2. Custody lost on restart — the memory registry backend
@@ -488,7 +492,8 @@ them (M9 review).
 **Owner.** The scheduler owns settlement; gitreins owns the grade.
 
 **Retry / recovery.** Re-grade, never infer: a missing verdict is re-run through the judge,
-not defaulted to pass (CF-355 open on both halves, §1).
+not defaulted to pass (CF-355 shipped: the scheduler refuses a result with neither field
+rather than defaulting it, §1).
 
 **Proof.** A verdict that names its criteria and whose exit matches its rows (VII §6).
 Contracts: CT-04 (PARTIAL), CT-13 (UNVERIFIED).
@@ -1365,7 +1370,7 @@ tables to hold the page.
 
 | Pri | Class | Containment | Owner | Retry / recovery | Proof of recovery |
 |---|---|---|---|---|---|
-| 1 | Silent success | read the reply body, not the verdict bit | scheduler settlement owner | close CF-355 on both halves | reply `status` and `ok` agree on every settlement |
+| 1 | Silent success | read the reply body, not the verdict bit | scheduler settlement owner | done — CF-355 shipped (`dispatch_leg.go:742-776`); node-side false-`ok` half remains | reply `status` and `ok` agree on every settlement |
 | 2 | Untrusted directive | `FailClosed`, `RequireAgentSig` on | Crier guard owner | re-enable, re-deliver, audit `Result.Patterns` | no unsigned read; policy verdicts recorded |
 | 3 | Admission refusals | named fail-before-side-effect refusals | provisioning owner | re-run with correct inputs | refusal rows present where they must fire |
 | 4 | Custody on restart | explicit durable backend | Crier store owner | configure, restart, redeliver | restart drill with redelivery |

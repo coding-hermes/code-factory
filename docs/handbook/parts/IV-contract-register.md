@@ -1189,7 +1189,7 @@ bundle that must be re-frozen.
 - **State:** PARTIAL
 - **Sends because:** One project per node; repo clone, seeded prompts/skills, env, identity, bus worker (M2 §2)
 - **Receives because:** Delivery with per-agent signature, leases, replies, idempotency (M10 §2)
-- **Measured defect:** transport works; settlement reads only `ok` — CF-355 open (M2 §6, M9 §6)
+- **Measured defect:** transport works; settlement once read only `ok` — resolved by CF-355's shipped law (`dispatchReplyVerdict` reads `ok` and validates `status`; `internal/scheduler/dispatch_leg.go:742-776`) (M2 §6, M9 §6)
 - **Sender guarantee:** RED — no `file:line` in the model states what `node` commits to.
 - **Receiver requirement:** RED — what `crier` accepts and rejects is not stated here.
 - **To close:** quote the encode site in `node` and the decode/validate site in `crier`, then replace the RED line with those citations.
@@ -1225,7 +1225,7 @@ bundle that must be re-frozen.
 - **Receives because:** Whose turn it is; lane admission (tasks vs cooldown); per-lane cadence, weight, pin; settlement of every dispatch
 - **Measured defect:** the dispatcher leg works — it always sends `ok`, the field dispatchReplyVerdict reads (M11 §6)
 - **Sender guarantee:** crier internal/registry/handler.go:170,1452 — the answering message carries ReplyTo correlation into the scheduler's durable inbox
-- **Receiver requirement:** internal/scheduler/dispatch_leg.go:713 — dispatchReplyVerdict reads the correlated payload's ok (first message wins, :428)
+- **Receiver requirement:** internal/scheduler/dispatch_leg.go:742-776 — dispatchReplyVerdict reads the correlated payload's boolean ok and validates status against it (CF-355; first message wins, :428)
 
 ### CT-07 — router → gateway
 

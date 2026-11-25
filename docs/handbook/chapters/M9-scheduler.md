@@ -9,7 +9,7 @@
 | Revision | `6606f856746f2e2c802fa4e1d37a6b2afef0b85e` (scheduler repo HEAD; moved from `34e44897` through 15 commits. The cited files `cmd/schedulerd/main.go` (57 flags), `internal/scheduler/dispatch_leg.go`, `internal/scheduler/admission_mode.go`, `internal/scheduler/usage_pool_policy.go`, `internal/bus/dispatch.go`, `internal/api/*`, `internal/database/migrations.go` are byte-identical since `34e44897`; `internal/scheduler/packer_select.go` gained +12 lines (board-stasis gate now at `:474`/`:614`), `internal/scheduler/spawn.go` gained +7 (buildForemanPrompt now `:1249`), and a new file `internal/scheduler/noop_pacing.go` (149 lines) added a NOOP-PACING admission step) |
 | Language / runtime | Go — `go.mod` declares `go 1.26.0` + `toolchain go1.26.10`; `go env GOVERSION` resolves **go1.26.10** (`GOTOOLCHAIN=auto`). Host bootstrap `go` = **go1.26.5** (`~/.local/bin/go` → symlink → `~/sdk/go1.26.5/bin/go`); `/usr/bin/go` = **go1.26.8** (`/usr/lib/go-1.26/bin/go`; measured: `/usr/bin/go version` → `go1.26.8 linux/amd64`, `readlink -f /usr/bin/go` → `/usr/lib/go-1.26/bin/go`, binary dated Oct 5) |
 | Owner lane | coding-hermes-scheduler (control plane) |
-| Status | **UNVERIFIED** — settlement (`dispatch_leg.go:260-336, :713-726`), `internal/bus/dispatch.go:175-208`, the admission authority (`admission_mode.go:98-129, 143-208, 230-267`), the binary defaults (`cmd/schedulerd/main.go:95-200`), the auth path (`internal/api/auth.go:187-197`), the API route table (`internal/api/server.go:289-370`) and `config.example.toml` read; `tick_process.go`/`packer_select.go`/`namespace_alloc.go` grep-level, not line-by-line; §9 log inventory narrowed to the settlement/batch-dispatch surface (2 of 382 sites) with the uncovered count named as RED |
+| Status | **UNVERIFIED** — settlement (`dispatch_leg.go:260-336, :742-776`), `internal/bus/dispatch.go:175-208`, the admission authority (`admission_mode.go:98-129, 143-208, 230-267`), the binary defaults (`cmd/schedulerd/main.go:95-200`), the auth path (`internal/api/auth.go:187-197`), the API route table (`internal/api/server.go:289-370`) and `config.example.toml` read; `tick_process.go`/`packer_select.go`/`namespace_alloc.go` grep-level, not line-by-line; §9 log inventory narrowed to the settlement/batch-dispatch surface (2 of 382 sites) with the uncovered count named as RED |
 
 ## 2. Purpose, authority and position
 
@@ -26,10 +26,13 @@ the board/memory projections that follow a recorded result.
 **What breaks if this module is absent.** No cadence tick fires; nothing is admitted, dispatched
 or settled.
 
-**What breaks if it lies.** `dispatchReplyVerdict` (`dispatch_leg.go:713-726`) reads only
-`payload["ok"]` and treats the *absence* of a verdict as success (`:709-712`). A node reply
-carrying `status:"failed"` (the field `node-bus-worker.py:1180` actually sends) and no `ok` is
-scored a success — the control-plane half of the silent-success defect (CF-355).
+**What breaks if it lies.** Under the shipped CF-355 law, `dispatchReplyVerdict`
+(`dispatch_leg.go:742-776`) reads boolean `ok` as the verdict and validates `status` against
+it: a result carrying neither is refused, contradictions are refused, and a node reply
+carrying `status:"failed"` (the field `node-bus-worker.py:1180` actually sends) with no `ok`
+is recorded as a FAIL. The lie that still lands is a false `ok: true` — `ok` remains the
+verdict carrier, which is why the node-side rule (`specs/ENVELOPE.md` §ok) demands a
+truthful `ok`.
 
 **Required behavior (normative).** Approved target behavior governs; the code inventory in
 §3–§13 is implementation coverage, not the requirement.
@@ -48,8 +51,9 @@ scored a success — the control-plane half of the silent-success defect (CF-355
   keys: `execution_runs`, `execution_attempts`, `verification_receipts`, `execution_events`,
   `execution_outbox`, `execution_projections`) requires durable outcome, connector settlement,
   independent verification and descendant quiescence. **The new data structures do not prove every
-  runtime path uses them**: the legacy `dispatchReplyVerdict` reply path that scores
-  missing-verdict replies as success is still the inspected behavior for its callers (CF-355), and
+  runtime path uses them**: the legacy `dispatchReplyVerdict` reply path now enforces the
+  CF-355 field law for its callers (silence and contradictions refused; `status:"failed"`
+  without `ok` is a FAIL; `dispatch_leg.go:742-776`), and
   the supported path plus the migration from legacy `ok`/`status` replies to the closed typed
   result is to be reconciled, not assumed away by the schema's existence.
 - **Hook semantics.** PRE hooks run after selection/slot acquisition; POST hooks run after the
@@ -279,7 +283,7 @@ retired; each row carries the CT id its peer chapter cites, so two ends can be m
 |---|---|---|---|---|---|
 | CT-01 | owner | in | **operator config (boundary)** — a human writes `fleet.toml` + `scheduler.db` project rows (lane enabled/cadence/weight/pin); there is no producer function (the load path `config.LoadRootConfig`, called at `main.go:640,673,762,854,870,968,995,1023,1054,1309`, is the consumer's loader, not a producer) | `internal/scheduler/admission_mode.go:112` `admissionModeForProject` (reads the lane's admission mode from the DB) | **UNVERIFIED (boundary)** — the consumer is nameable; the producer is a human writing config, not a function (CT-01 is a boundary contract, not internal) |
 | CT-02 | crier | out | `internal/bus/dispatch.go:175` `payload()` emits `text_b64` (base64 at line 202), field **`board`** (not `board_row`) | crier `internal/registry/handler.go:990` `HandleDeliver` | **works** — CF-354 fixed and closed (commit `1f1c0fe`); crier delivers the envelope verbatim; the former `text`/`text_b64` mismatch was node-side consumption |
-| CT-06 | crier | in | `dispatcher.py:500-508` builds the completion reply `{in_reply_to, agent, ok, …}`; transported via crier `internal/registry/handler.go:990` `HandleDeliver` into the scheduler's inbox | `internal/scheduler/dispatch_leg.go:713` `dispatchReplyVerdict` reads only `payload["ok"]` | **works (dispatcher leg)** — the dispatcher always sends `ok` (`dispatcher.py:501`), the exact field `dispatchReplyVerdict` reads. CF-355 (the node's `status` reply scoring success-on-failure) is the **node-reply** leg, carried at CT-04, not this producer |
+| CT-06 | crier | in | `dispatcher.py:500-508` builds the completion reply `{in_reply_to, agent, ok, …}`; transported via crier `internal/registry/handler.go:990` `HandleDeliver` into the scheduler's inbox | `internal/scheduler/dispatch_leg.go:742-776` `dispatchReplyVerdict` reads boolean `ok` and validates `status` against it (CF-355) | **works (dispatcher leg)** — the dispatcher always sends `ok` (`dispatcher.py:501`), the exact field `dispatchReplyVerdict` reads as the verdict. CF-355 (the node's `status` reply scoring success-on-failure) is the **node-reply** leg, carried at CT-04, not this producer |
 | CT-05 | foreman | in | `scripts/load_lane_config.py:31-37` (reads `prompts/*.md` → `UPDATE projects SET prompt=?, prompt_mode='append'`) | `internal/scheduler/spawn.go:1249` `buildForemanPrompt` (namespace default → project replace/append → dynamic footer; the builtin prompt text instructs "read your own board with `board_read.py`" and "unblock before you block", `spawn.go:1208-1214`) | **UNVERIFIED** — both ends are in-repo (internal, B3); the OUTLINE VIII.1 "3 of 11 prompt files disagree" breakage is **unmeasured** (no command establishes which three files disagree or on what) |
 | CT-15 | foreman | out | **external** — the foreman lane's decision/finding/goal writes (out of scope) | **external** — the duckbrain service (out of scope) | **UNVERIFIED (boundary)** — neither side has an in-repo `file:function`, and the wire was not measured; an outline "works" annotation is not implementation evidence (B03) |
 
@@ -335,7 +339,7 @@ the named RED on this field — not a "sample" claimed as complete.
 
 | Failure | Presents as | Distinguished from | Recovery |
 |---|---|---|---|
-| Silent success | pass for a `status:"failed"` reply | a real pass | **OPEN** — CF-355 (`dispatch_leg.go:713-726`) |
+| Silent success | pass for a `status:"failed"` reply | a real pass | **resolved** — CF-355 (`dispatch_leg.go:742-776`): silence and contradictions refused; `status:"failed"` without `ok` is a FAIL |
 | `text_b64` undecodable | the node refuses the dispatch (`node-bus-worker.py:1022-1034`) | a malformed envelope | **resolved** — CF-354 (complete): the node decodes `text_b64` first |
 | Deadline expiry | `DispatchStateExpired`, `TickTimeout` (`:291-314`) | a failed reply (`TickFailed`, `:316-325`) | the reply is PARTIAL, named `dispatch_deadline` |
 | No authoritative lane inventory | 8 vs 16 vs 1 lanes across three modules | a single census | **OPEN** — CF-335 |
@@ -345,8 +349,9 @@ the named RED on this field — not a "sample" claimed as complete.
 
 - The reply await is bounded by the same session deadline the node got as `limits.wall_s`
   (`:255-260`); the wall is printed because it decides both the node's budget and the await.
-- `dispatchReplyVerdict`'s documented premise is "absence of a verdict is SUCCESS" (`:709-712`) —
-  the exact place a `status` field is ignored.
+- `dispatchReplyVerdict` now reads boolean `ok` and validates `status` against it under the
+  shipped CF-355 law (`dispatch_leg.go:742-776`) — the place a contradicting or absent
+  verdict is refused, never ignored.
 - **Admission authority (B19).** `admission_mode.go:143-184`
   `laneOwnsBoard` derives board ownership from the filesystem (workdir containment);
   `boardOwnedByLane` is **defined at `:177`** (doc comment `:173`), honours an explicit

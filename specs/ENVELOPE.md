@@ -131,16 +131,28 @@ a run whose receipt differs can be diffed instead of guessed at.
 
 ### `ok` is the verdict; `status` is the node's own classification
 
-`status` says what the node thinks happened. **`ok` is the field the scheduler reads**, and its
-**absence reads as success** (`dispatchReplyVerdict`, `internal/scheduler/dispatch_leg.go`). A
-result that says `"status": "failed"` and omits `ok` is therefore closed as a **completed** tick —
-the failure is invisible to the control host, which is the defect this rule exists to prevent.
+`status` says what the node thinks happened. **`ok` is the field the scheduler reads**, and
+`status` is validated against it, never read instead of it (`dispatchReplyVerdict`,
+`internal/scheduler/dispatch_leg.go:742-776`; refusal arms pinned at
+`internal/scheduler/dispatch_verdict_test.go:42-47`, the settled-row fixture for a
+`status: "failed"` result with no `ok` at `:70-99`). The shipped mapping (CF-355): `ok: true`
+with `status` absent or `"completed"` is a success; `ok: false` is a FAIL carrying the
+recorded reason unless `status` also claims `"completed"` — a contradicting pair is
+**refused**, named; `ok: true` with `status: "failed"` or `"refused"` is the mirrored
+contradiction and is **refused**; with no boolean `ok` (a non-boolean `ok` counts as
+absent), `status: "completed"` is **refused** because completed requires `ok: true`,
+`status: "failed"` or `"refused"` is recorded as a **FAIL** with the reason, and an
+unrecognised status — or no status at all — is **refused**. Absence never reads as success:
+a result carrying neither a boolean `ok` nor a recognised `status` is refused, and silence
+is never laundered into a pass — the failure is never invisible to the control host, which
+is the defect this rule exists to prevent.
 
 So, for every result:
 
 - `status: "completed"` ⇔ `"ok": true`.
 - `status: "failed"` or `"refused"` ⇒ `"ok": false`, **plus a reason** the scheduler can record:
-  `error` (a short string; the scheduler's verdict reads it before anything else) and `reply_b64`
+  `error` (a short string — the reason chain reads a decoded `error_b64` before it, then
+  plain `error` before any other spelling) and `reply_b64`
   (the node's own words, which become the tick's text). A failing gate must name the gate and its
   exit code, not just its own exit status. The gate's `cmd` is dispatch text, so the plain
   `error` field names it by bounded identity (length + sha256 prefix, §Reserved field names);

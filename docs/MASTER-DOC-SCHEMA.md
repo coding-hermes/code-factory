@@ -175,7 +175,7 @@ all currently answered by grepping the log.
 | Harness overruns deadline | `DONE:124`, job killed | a crash (`DONE:1` + traceback) | automatic; check the `rc=` log |
 | Node unreachable | `client for … failed`, no job dir | a killed job | check bunker, not the harness |
 | Reply refused by guard | task runs, answer lost | a timeout | base64 on both legs; see CF-133 |
-| **Silent success** | scheduler records a pass for a `status:"failed"` reply | a real pass | **OPEN** (CF-355): `dispatchReplyVerdict` at `internal/scheduler/dispatch_leg.go:713–726` reads only `payload["ok"]`; a node reply carrying `status:"failed"` and no `ok` field is scored a success |
+| **Silent success** | scheduler records a pass for a `status:"failed"` reply | a real pass | **resolved** (CF-355): shipped `dispatchReplyVerdict` at `internal/scheduler/dispatch_leg.go:742-776` reads boolean `ok` and validates `status` against it — silence and contradictions are refused, and a node reply carrying `status:"failed"` and no `ok` field is recorded as a FAIL |
 
 **8. Evidence of record.** Board rows CF-138, CF-204; job dirs
 `~/.cf-jobs/job-1793880806-316410e1` (boundary), `…-dde03817` (kill);

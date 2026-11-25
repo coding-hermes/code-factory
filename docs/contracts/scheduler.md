@@ -49,9 +49,15 @@ Credential sources here: `SCHEDULER_OPERATOR_TOKEN`, or read from schedulerd's
 - Correlation order: `in_reply_to` first, then `corr_id`, then the original dispatch echoed
   inside `task` (string or object) — `internal/scheduler/dispatch_leg.go:689-725`
   (`correlateDispatchReply`).
-- Verdict: the `ok` field, absence reads as success; `ok:false` is a failure, reason from
-  `error_b64` (decoded) then `error`/`err`/`reply`/`text`/`message` — `dispatch_leg.go:727-745`
-  (`dispatchReplyVerdict`).
+- Verdict: boolean `ok` is the verdict; `status` (`completed`/`failed`/`refused`) is validated
+  against it, never read instead of it (CF-355). `ok:true` with status absent or `completed`
+  succeeds; `ok:false` is a failure with the reason from `error_b64` (decoded) first, then
+  plain `error` first among `error`/`err`/`reply`/`text`/`message`, then a named default —
+  unless `status:"completed"` contradicts it; `ok:true` with `status:"failed"`/`"refused"` is
+  a named refusal; no boolean `ok`: `completed` is refused (completed requires `ok:true`),
+  `failed`/`refused` is a FAIL with the reason, anything else is refused — absence never
+  reads as success; the node's own words reach the tick via `reply_b64` (reply text below) —
+  `dispatch_leg.go:742-776` (`dispatchReplyVerdict`, `dispatchReplyStatuses`).
 - Reply text: `reply_b64` decoded first, then `reply`/`answer`/`text`/`message`/`output`,
   else the whole payload as JSON — `dispatch_leg.go:761-786` (`dispatchReplyText`).
 - Expiry sentence: `no correlated reply for corr=<corr> (message=<id>) within <budget>` —

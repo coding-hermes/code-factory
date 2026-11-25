@@ -23,8 +23,12 @@ declared, no target resolved, the inbox is never consumed, and a dispatch sits u
 it expires.
 
 **What breaks if it lies.** `node-bus-worker.py` replies with an outcome; a false `ok` for a
-failed run records a pass for work that never happened. The mirror-image defect on the control
-side is CF-355 (a failed result with no `ok` is recorded as success).
+failed run records a pass for work that never happened (`ok` stays the verdict carrier under
+CF-355). The mirror-image defect on the control side was CF-355 (a failed result with no `ok`
+used to be recorded as success); the shipped scheduler law refuses it — a result with neither
+a boolean `ok` nor a recognised `status` is refused, contradictions are refused, and
+`status: "failed"` with no `ok` is recorded as a FAIL (`dispatchReplyVerdict`,
+`internal/scheduler/dispatch_leg.go:742-776`).
 
 ## 3. Submodule inventory
 
@@ -114,7 +118,7 @@ cross-system contracts carry their CT id; an interface with no canonical entry i
 | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
 |---|---|---|---|---|---|
 | CT-03 | crier | in (inbox) | crier `internal/registry/handler.go:1690` `HandleRetrieve` (the lease-granting side) | `scripts/node-bus-worker.py:1007` `process` consumes one dispatch (decodes `text_b64` first via `directive_text` `:977`, then the legacy plain members for older senders) | **works** — CF-354 fixed in commit `1f1c0fe` (decodes `text_b64`), board-closed in commit `6184e52` (F2-5) |
-| CT-04 | crier | out (reply) | `scripts/node-bus-worker.py:1176` builds `{status:"failed"/"completed", dispatch_id, corr_id, …}` (`:1176-1192`) and `:1208` `deliver()` POSTs it to `/agents/{target}/inbox` | crier `internal/registry/handler.go:990` `HandleDeliver` (accepts the reply verbatim) | **works (transport)** — crier accepts the reply verbatim. CF-355 is **this reply's** settlement defect: the node sends `status` (`:1180`), the scheduler's `dispatchReplyVerdict` reads only `ok` — carried at CT-04 (node reply), not CT-06 (the dispatcher leg) |
+| CT-04 | crier | out (reply) | `scripts/node-bus-worker.py:1176` builds `{status:"failed"/"completed", dispatch_id, corr_id, …}` (`:1176-1192`) and `:1208` `deliver()` POSTs it to `/agents/{target}/inbox` | crier `internal/registry/handler.go:990` `HandleDeliver` (accepts the reply verbatim) | **works (transport)** — crier accepts the reply verbatim. CF-355 was **this reply's** settlement defect: the node sends `status` (`:1180`), and the scheduler's `dispatchReplyVerdict` once read only `ok` — the shipped CF-355 law reads `ok` and validates `status` against it, so a `status:"failed"` reply with no `ok` settles as a FAIL and silence is refused (`internal/scheduler/dispatch_leg.go:742-776`) — carried at CT-04 (node reply), not CT-06 (the dispatcher leg) |
 | CT-09 | duckbrain | out | `scripts/node-bus-worker.py:1398` `memory_record` → `DuckBrainClient` → `export_records` (writes R1 to the project namespace, then R2 to the shared `factory` namespace, each with exact-key readback; fail-closed `UNVERIFIED` on transport error) | **external** — the duckbrain service (out of scope) | **works (hermetic)** — implemented in commit `d773480e` (CF-330 seam, closes CF-316 with it): `tests/test_harness_memory.py` 7 passed / 19 subtests (R1-then-R2 order, FAIL outcome on killed run, namespace refusal before write) and `tests/harness-conformance.sh --memory-only` PASS (61/0/10 — skips are live-DuckBrain legs, so the live-node leg stays UNVERIFIED); OUTLINE Part IV's `node → duckbrain` **missing** entry is superseded by this row |
 | CT-11 | sessionstore | out | **external** — the Hermes agent runtime records turns to its own `state.db` (out of scope; not a code-factory script) | **external** — the Hermes session store (out of scope) | **UNVERIFIED (boundary)** — neither side has an in-repo `file:function`, and the wire was not measured; "works" is not asserted without a measured observation |
 
@@ -202,11 +206,19 @@ execution time — before any delivery is attempted (key from `dispatch_key()` :
 :1548) — so a redelivery re-sends the recorded result instead of re-running the harness
 (arm A5).
 
-Failure behavior: `ok` is the verdict the scheduler reads and its ABSENCE reads as success
-(CF-211), so the shipped coupling is `"ok": not failed_status` (:1793) with `failed_status` =
-harness exit ≠ 0, a gate that could not run, or a gate exit ≠ `gate.expect_exit`
-(:1749-1767); a gate that could not run is a FAILED result, never a completed tick on work
-nobody gated (arm A7). A harness that could not run is classified failed (`status` :1705,
+Failure behavior: `ok` is the verdict the scheduler reads (CF-211), and the shipped CF-355 law
+(`dispatchReplyVerdict`, `internal/scheduler/dispatch_leg.go:742-776`; refusal arms
+`internal/scheduler/dispatch_verdict_test.go:42-47`) never reads absence as success: a reply
+carrying neither a boolean `ok` nor a recognised `status` is REFUSED, `status` may not
+contradict `ok` (`ok:true` + `status:"failed"/"refused"` and `ok:false` +
+`status:"completed"` are named refusals; `status:"completed"` without `ok` is refused), and
+`status:"failed"/"refused"` without `ok` is recorded as a FAIL with the reason (decoded
+`error_b64`, then plain `error`, then a named default). The node's own side is unchanged: the
+shipped coupling `"ok": not failed_status` (:1793) — `failed_status` = harness exit ≠ 0, a
+gate that could not run, or a gate exit ≠ `gate.expect_exit` (:1749-1767) — puts an explicit,
+contradiction-free verdict on every reply, so no node result reaches the refusal arms; a gate
+that could not run is a FAILED result, never a completed tick on work nobody gated (arm A7).
+A harness that could not run is classified failed (`status` :1705,
 `ok` :1706, `error` :1707) while retaining the refusal builder's `refused_by`/`refusal`
 diagnostics. A delivery body matching the relay guard's control-key shapes is never posted at
 all (`guard_match` tripwire, :1885-1894): the dispatch stays unacked rather than looping a
@@ -293,7 +305,7 @@ on this field, not a "sample" claimed complete:
 |---|---|---|---|
 | Stub, PATH-shadowed, or unpinned Bunker client cannot prove identity | `client_identity` fails; plan is refused and no target emitted. A client that merely prints matching words is insufficient unless it is the pinned executable | a matching client-reported agent and server from the pinned realpath | pass `--bunker-bin PATH` or set `BUNKER_BIN` to the intended executable; inspect the recorded realpath and SHA-256 |
 | `text_b64` undecodable | node refuses: "`text_b64` does not decode to UTF-8 text" (`:1022-1034`), no silent fallback to another member | a malformed dispatch | **resolved** — CF-354 (complete): the node decodes `text_b64` first and refuses a non-decoding value rather than reading a different member |
-| Failed result recorded as success | scheduler pass for a `status:"failed"` reply | a real pass | **OPEN** — CF-355 (control-plane half, M9) |
+| Failed result recorded as success | scheduler pass for a `status:"failed"` reply | a real pass | **resolved** — CF-355: `dispatchReplyVerdict` refuses silence and contradictions and records `status:"failed"`/`"refused"` with no `ok` as a FAIL (`internal/scheduler/dispatch_leg.go:742-776`; scheduler commit `70956121`, tier-2 judge PASS run `5b997976`; node side §Failure behavior) |
 | `configure_family` PID hardcode | config fails at import unless PID 1755676 is alive | a live scheduler | **OPEN** — F2-2 |
 | `configure_family` partial write | one lane configured, fifteen fail, exit 0 | a full failure | **resolved** — CF-356: **transaction boundary** is one lane, not the loop — the lane's `UPDATE` is committed at `scripts/configure_family.py:247` before the next lane's API call, and every daemon call for a lane precedes that write (`POST /api/v1/projects` `:356`, `PUT /api/v1/projects/<name>` `:370`), so the daemon never waits on this script's lock; **retry policy** — a `database is locked`/`database is busy` write is retried to `BUSY_ATTEMPTS = 5` attempts in total with a monotonically increasing 0.25 s × 2 backoff (`:58-62`, `busy_backoff` `:186-188`, retry loop `:220-251`), per-lane outcome recorded as configured / already / failed-with-reason; **exit status** — 0 only when every targeted lane is configured or already correct, a shortfall prints each unconfigured lane with its recorded reason and exits 2, and a token/DB/shape failure exits 3 (`:54-56`, `:442-453`) |
 | Un-FK-checked clone namespace | a cloned lane's workdir may not exist | a validated clone | **OPEN** — CF-358 |
@@ -346,8 +358,10 @@ on this field, not a "sample" claimed complete:
   - **F2-5** (new) — CF-354 was the node reading `text` while the scheduler sent `text_b64`. The
     node now decodes `text_b64` first (`directive_text`, `:989-999`) and falls back to the legacy
     plain members for older senders. The contract state moved from broken to works; CF-354 is
-    `complete` on the board (closed in commit `6184e52`). CF-355 (reply `status` vs `ok`) remains
-    open.
+    `complete` on the board (closed in commit `6184e52`). CF-355 (reply `status` vs `ok`) is
+    resolved in the shipped scheduler law — `dispatchReplyVerdict` reads `ok` and validates
+    `status` against it (`internal/scheduler/dispatch_leg.go:742-776`); closed in the
+    scheduler repo at `a9697e3b`.
 
 ## 14. Wave-2 redline — review requirements (target behavior vs implementation coverage)
 

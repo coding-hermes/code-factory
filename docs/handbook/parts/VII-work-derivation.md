@@ -176,8 +176,9 @@ mode admits on time — the lane paces itself, and stasis or failure stretches t
 measured defect that motivated step 8 ran 76 spawns a day with 63 dry-run ticks and no
 artifact, because a no-op tick burned nothing and reset no counter (M9 §3, the
 NOOP-PACING finding). The readback rule at settlement belongs to the same authority and
-is the honest edge of it: `dispatchReplyVerdict` (`dispatch_leg.go:713-726`) reads only
-`payload["ok"]`, and the absence of a verdict is treated as success (M9 §2; CF-355 open).
+is the honest edge of it: `dispatchReplyVerdict` (`dispatch_leg.go:742-776`) reads
+boolean `ok` and validates `status` against it — absence is refused, never read as
+success (M9 §2; CF-355 shipped).
 
 ## VII.4 Dispatch — envelope, lease, execution
 
@@ -256,9 +257,10 @@ The readback rules:
   line that contradicts its own rows was the defect; the fix held the contract in both
   directions with a red control, so the pass is not reachable by deleting the warning
   mechanism (M5 §6, CF-384).
-- **Readback mismatches are findings, not interpretations.** The control-plane half reads
-  only `ok` while the node sends `status` — a failed result can be recorded as a pass, and
-  the row stays open until the two fields agree (M2 §6, M9 §2; CF-355). The mirror rule
+- **Readback mismatches are findings, not interpretations.** The control-plane half once read
+  only `ok` while the node sent `status`; CF-355's shipped law settles that — the scheduler
+  refuses a result with neither field, refuses contradictions, and records `status:"failed"`
+  without `ok` as a FAIL (`dispatch_leg.go:742-776`; M2 §6, M9 §2). The mirror rule
   holds on the worker side: a false `ok` for a failed run records a pass for work that
   never happened (M2 §2).
 - **A verdict file readback is a surface, not a courtesy.** Closing work requires reading
@@ -605,7 +607,7 @@ unknown field, unknown version, same-id/different-digest, and legacy `ok: true` 
 | `dispatch_id` | dispatch envelope identity | `dispatch_id` (`node-bus-worker.py` reply, `:1176-1192`) | node worker / dispatcher |
 | `corr_id` | end-to-end correlation | `corr_id` (same reply) | scheduler envelope |
 | `run_id` | execution run identity | **absent** from the reply (M2 §6, measured); required in closeout proof tables | (target) — canonical, emitted when implementation catches up |
-| `status` | typed outcome: pass/fail/unverified/partial/unknown | `status` exists; the value domain is untyped in the reader (`dispatch_leg.go:713-726` reads only `ok`) | node worker |
+| `status` | typed outcome: pass/fail/unverified/partial/unknown | `status` exists and the shipped reader validates it against `ok` — unrecognised values, contradictions and absent verdicts are refused (`dispatch_leg.go:742-776`, CF-355) | node worker |
 | `ok` | legacy boolean verdict bit | `ok` (dispatcher always sets it, M11 §6; node worker does not, M2 §6) | dispatcher (reliably), node worker (not) |
 
 Rules the schemas impose:

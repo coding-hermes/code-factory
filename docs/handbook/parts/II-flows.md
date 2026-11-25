@@ -116,10 +116,12 @@ settles the durable report (`CT-06`). Runtime cells `R01`–`R05` in §2.17 cove
 corresponding nominal, replay, crash, concurrency and revocation behavior.
 
 **Exceptional branches:** settlement must distinguish delivery acceptance, running,
-interrupted, rejected, partially published and settled results — but the measured
-implementation reads only `ok` (`dispatch_leg.go:713-726`), so a node reply carrying
-`status:"failed"` and no `ok` — the field `node-bus-worker.py:1180` actually sends —
-is scored a success (CF-355, M9 §2). An unacked message redelivers after lease
+interrupted, rejected, partially published and settled results — and the shipped
+implementation enforces the CF-355 field law (`dispatchReplyVerdict`,
+`internal/scheduler/dispatch_leg.go:742-776`): a node reply carrying `status:"failed"` and
+no `ok` — the field `node-bus-worker.py:1180` actually sends — is recorded as a FAIL, and
+silence or a contradicting `status`/`ok` pair is refused (CF-355, M9 §2). An unacked
+message redelivers after lease
 expiry; reconciliation on replay must not duplicate accepted publication or reset
 the round budget, and an empty inbox list is not a lost message (M10 §11). A failed
 POST closeout hook never rewrites the immutable execution verdict. It does block

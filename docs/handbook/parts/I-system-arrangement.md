@@ -419,10 +419,11 @@ from approved target behavior.
   worker loop. Does not decide what to work on.
 - **Inputs:** `CT-03` (the dispatcher is the second consumer of the same
   contract, M2 §6/M11 §6); `CT-21` the installation token file.
-- **Outputs:** `CT-04` the reply — shape `:1176-1192` (PARTIAL: transport works,
-  but the scheduler's `dispatchReplyVerdict` at `dispatch_leg.go:713-726` reads
-  only `ok`, while the node sends `status:"failed"` with no `ok` at
-  `node-bus-worker.py:1180` — CF-355, a failed run recorded as success); `CT-09`
+- **Outputs:** `CT-04` the reply — shape `:1176-1192` (PARTIAL: transport works, and the
+  CF-355 settlement mismatch is resolved — the scheduler's `dispatchReplyVerdict` at
+  `dispatch_leg.go:742-776` reads boolean `ok` and validates `status`, so the node's
+  `status:"failed"` with no `ok` at `node-bus-worker.py:1180` settles as a FAIL; the
+  sender guarantee remains RED, M2 §6); `CT-09`
   DuckBrain records (MISSING — zero calls, CF-329, M2 §6); `CT-10` board row
   events (BROKEN — no in-repo producer, M4 §6); `CT-11` turns to the session
   store (boundary wire, M2 §6); `CT-12` the staged diff via the pre-commit hook

@@ -122,8 +122,12 @@ structure text and stays stale until Part IV is re-rendered.
 **Supersessions (carried, now in CT terms).** OUTLINE Part IV's "scheduler → crier … broken" and
 "crier → node … works" are superseded: CT-02 works (transport), and the former `text_b64` vs
 `text` mismatch (CF-354) is fixed node-side (`node-bus-worker.py:977` decodes `text_b64` first).
-CF-355 (node sends `status`, scheduler reads `ok`) is carried at **CT-04** (the node reply's
-settlement), not CT-06 — CT-06 is the dispatcher completion leg, which always sends `ok` and works.
+CF-355 (node sends `status`; the scheduler once read only `ok`) was carried at **CT-04** (the
+node reply's settlement), not CT-06 — CT-06 is the dispatcher completion leg, which always
+sends `ok` and works. CF-355's shipped law settles it: `dispatchReplyVerdict`
+(`internal/scheduler/dispatch_leg.go:742-776`) reads boolean `ok` and validates `status`
+against it — silence and contradictions are refused, and `status:"failed"` without `ok` is
+a FAIL.
 
 ## PART V — SETTINGS REGISTER
 
