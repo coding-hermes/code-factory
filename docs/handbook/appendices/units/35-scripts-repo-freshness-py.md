@@ -172,7 +172,7 @@ $ python3 -B scripts/repo_freshness.py --no-fetch --jobs 8
 repo-freshness — db ~/.hermes/coding-hermes/scheduler.db, 74 enabled projects, 53 unique workdirs, bound 0, fetch off
   WARN  bunker-docs — not a git workdir (~/.hermes/stand-in/docs/bunker): fatal: not a git repository (or any of the parent directories): .git
   PASS  bunker-foreman — lag 0, ahead 0, main vs origin/main, last fetch 21m ago (2026-11-05T16:34:30Z)
-  PASS  code-factory — lag 0, ahead 0, main vs gh/main, last fetch 33s ago (2026-11-05T16:54:54Z) [16 lanes: code-factory, code-factory-docs, code-factory-dogfood, code-factory-duckbrain, code-factory-duckbrain-dogfood, code-factory-duckbrain-pm, code-factory-duckbrain-qa, code-factory-duckbrain-releng, code-factory-duckbrain-sync, code-factory-ops, code-factory-perf, code-factory-pm, code-factory-readme, code-factory-releng, code-factory-review, code-factory-sync]
+  PASS  code-factory — lag 0, ahead 0, main vs gh/main, last fetch 33s ago (2026-11-05T16:54:54Z) [per-lane list elided — this snapshot predates the retirement of six sibling spellings, and the live family has changed since; canonical lane set: docs/handbook/appendices/lane-inventory.md, generated from the scheduler DB]
   …
 repo-freshness: 53 workdirs, 6 measured (6 fresh, 0 failed), 47 unmeasurable, 0 fetch errors (bound 0, fetch off, max lag 0, report)
 FRESHNESS: PASS (6 measured, max lag 0)

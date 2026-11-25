@@ -9,9 +9,13 @@
 
 ## 1. Purpose and why it matters
 
-This operator-invoked loader creates and configures eight predefined code-factory satellite lanes
-through the scheduler HTTP API [scripts/add_family_lanes.py:1-2,105-120,145-235]. It does not
-activate them. The creation payload and update payload do not contain `enabled`
+This operator-invoked loader creates and configures the eight lane templates
+defined in `scripts/add_family_lanes.py` (table below) through the scheduler
+HTTP API [scripts/add_family_lanes.py:1-2,105-120,145-235]. That table is the
+script's template set, not the operating lane count of the live family: the
+canonical lane set — generated from the scheduler DB — is
+docs/handbook/appendices/lane-inventory.md. The loader does not activate the
+lanes it creates. The creation payload and update payload do not contain `enabled`
 [scripts/add_family_lanes.py:170-175,135-142]. The scheduler is the admission authority; API
 acceptance is not evidence of actual scheduling.
 
