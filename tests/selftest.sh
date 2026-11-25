@@ -9384,5 +9384,18 @@ else
 fi
 rm -rf "$cf131"
 
+# ch:trace row=CF-537 spec=specs/M13-chat-gateways.md#4-wiring wave=none:serial-worker test=tests/test_m13_bunker_gateways.py evidence=tests/test_m13_bunker_gateways.py witness=none:local-fixture-stub-transport verdict=none:foreman-runs-gitreins commit=none:worker-sha memory=none:foreman-closeout
+say "M13 gateways: artifact emission, verification, provision and re-sync (CF-537)"
+cf537=$(mktemp -d)
+if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_m13_bunker_gateways.py" \
+     >"$cf537/out" 2>&1; then
+  say "  PASS  generator emits the token-free sibling artifact; verify-node grades a merged node; node_gateways_merge merges byte-idempotently (re-sync no-op) and refuses token bytes; bunker-provision.sh merges the artifact at --apply, warns GATEWAY_TOKEN_REF_UNRESOLVED (never fatal), and leaves a gateway-less config untouched (tests/test_m13_bunker_gateways.py)"
+else
+  say "  FAIL  the M13 gateways legs (tests/test_m13_bunker_gateways.py)"
+  selftest_fail
+  sed 's/^/    | /' "$cf537/out"
+fi
+rm -rf "$cf537"
+
 say ""
 [ "$fails" -eq 0 ] && finish 0 || finish 1

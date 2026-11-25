@@ -394,6 +394,28 @@ CFPROBE
     warn "env_profile" "no NODE_ENV_FILE or CONFIG_SET_* — the node's environment is declared nowhere"
   fi
 
+  # chat gateways (M13 §4, CF-537): the sibling <project>.gateways.json of the provision
+  # config is graded read-only here — parseable, §3-shaped, token-free (R2) — and merged
+  # into the node's ~/.hermes/config.yaml by --apply. No artifact: one note, nothing
+  # measured, exactly as verify-node.sh grades a gateway-less node (M13 R3).
+  local gw_artifact="" gw_candidate="" gw_out="" gw_rc=0
+  if [ -n "$CONFIG" ] && [ -n "$PROJECT" ]; then
+    gw_candidate="$(dirname -- "$CONFIG")/${PROJECT}.gateways.json"
+    [ -r "$gw_candidate" ] && gw_artifact="$gw_candidate"
+  fi
+  if [ -z "$gw_artifact" ]; then
+    note "gateways — no <project>.gateways.json beside the config — scheduler-only lane, node config untouched (M13 R3)"
+  else
+    gw_out=$(python3 "$HERE/node_gateways_merge.py" --validate "$gw_artifact" 2>&1); gw_rc=$?
+    if [ "$gw_rc" -eq 0 ]; then
+      local gw_names
+      gw_names=$(printf '%s\n' "$gw_out" | sed -n 's/^gateway_platforms=//p' | head -1)
+      ok "gateways" "artifact valid (M13 §3, R2: tokens by reference) — platforms: ${gw_names:-none} — merges at --apply"
+    else
+      bad "gateways" "$(printf '%s\n' "$gw_out" | grep '^  FAIL  gateways' | head -1 | sed 's/^  FAIL  gateways — //')"
+    fi
+  fi
+
   # crier: delegate to the one script that knows how to prove a signed read. This block used to
   # re-implement the probe with a curl, which can only ever see 401 on a hardened bus (the signer is
   # checked before the agent is looked up) and reported a wired node as not connected.
@@ -681,6 +703,48 @@ apply() {
     fi
     "$b" exec --server "$SERVER" "$AGENT" -- bash -lc 'rm -f "$HOME/node_gateway_auth.py"' >/dev/null 2>&1 || true
     rm -f "$tmp"
+  fi
+
+  # 5b. chat gateways (M13 §4, CF-537): merge the sibling <project>.gateways.json into the
+  #     node's ~/.hermes/config.yaml — at provision and at every re-sync (--apply is the
+  #     re-entry point, and the merge is byte-idempotent). The artifact is validated HERE
+  #     before anything is staged (R2: a poisoned artifact refuses the run before the node
+  #     is touched); the node-side merge validates again inside node_gateways_merge.py.
+  #     An unresolved token_env surfaces as the M13 §5 WARNING GATEWAY_TOKEN_REF_UNRESOLVED
+  #     — never fatal. No artifact: a scheduler-only lane, the node config is untouched (R3).
+  #     Both staged files are removed either way (no gateway residue in the node home).
+  if [ "${HARNESS:-hermes}" = "hermes" ]; then
+    local gw_artifact="" gw_candidate=""
+    if [ -n "$CONFIG" ] && [ -n "$PROJECT" ]; then
+      gw_candidate="$(dirname -- "$CONFIG")/${PROJECT}.gateways.json"
+      [ -r "$gw_candidate" ] && gw_artifact="$gw_candidate"
+    fi
+    if [ -z "$gw_artifact" ]; then
+      note "gateways — no <project>.gateways.json beside the config — scheduler-only lane, node config untouched (M13 R3)"
+    else
+      say "  ..    merging chat gateways (M13 §4)"
+      local gw_out gw_rc gw_refs
+      if ! gw_out=$(python3 "$HERE/node_gateways_merge.py" --validate "$gw_artifact" 2>&1); then
+        bad "gateways" "artifact refused before anything was staged: $(printf '%s\n' "$gw_out" | grep '^  FAIL  gateways' | head -1 | sed 's/^  FAIL  gateways — //')"
+        rc=1
+      elif "$b" cp "$gw_artifact" "$AGENT:cf-gateways.json" --server "$SERVER" >/dev/null 2>&1 \
+        && "$b" cp "$HERE/node_gateways_merge.py" "$AGENT:node_gateways_merge.py" --server "$SERVER" >/dev/null 2>&1; then
+        gw_out=$("$b" exec --server "$SERVER" "$AGENT" -- bash -lc \
+          "python3 \$HOME/node_gateways_merge.py \$HOME/cf-gateways.json --apply" 2>&1); gw_rc=$?
+        printf '%s\n' "$gw_out" | sed 's/^/  ..    /'
+        if [ "$gw_rc" -ne 0 ]; then
+          bad "gateways" "the merge exited $gw_rc on the node — rows above; config.yaml left consistent (writes are atomic)"; rc=1
+        elif printf '%s\n' "$gw_out" | grep -q "GATEWAY_TOKEN_REF_UNRESOLVED"; then
+          gw_refs=$(printf '%s\n' "$gw_out" | sed -n 's/^gateway_unresolved=//p' | head -1)
+          warn "gateway_token_env" "GATEWAY_TOKEN_REF_UNRESOLVED — ${gw_refs:-unresolved refs} has no value in the node environment (M13 §5: warning, not fatal — the gateway starts disabled and the lane runs scheduler-only until the variable lands)"
+        else
+          ok "gateways" "platforms merged into the node's ~/.hermes/config.yaml (tokens by reference, M13 R2)"
+        fi
+      else
+        bad "gateways" "could not stage the gateways artifact or the merge tool"; rc=1
+      fi
+      "$b" exec --server "$SERVER" "$AGENT" -- bash -lc 'rm -f "$HOME/node_gateways_merge.py" "$HOME/cf-gateways.json"' >/dev/null 2>&1 || true
+    fi
   fi
 
   # 6. node plumbing: the tested path (repo + harness + layers), now with credentials in place
