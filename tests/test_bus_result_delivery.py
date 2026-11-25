@@ -7,9 +7,11 @@ the tick. What had never been exercised is the PRODUCING half — a node that po
 scheduler can do anything with. Two things were missing, and both are asserted here against the
 REAL worker CLI:
 
-  * the scheduler reads `payload["ok"]`, and treats its ABSENCE as success
-    (`dispatchReplyVerdict`, dispatch_leg.go:713) — so a node that only said
-    `"status": "failed"` had its failure closed as a COMPLETED tick;
+  * at CF-211 the scheduler read `payload["ok"]` and treated its ABSENCE as success, so a node
+    that only said `"status": "failed"` had its failure closed as a COMPLETED tick. CF-355 has
+    since re-derived that consumer (`dispatchReplyVerdict`, dispatch_leg.go:749): `ok` stays
+    the verdict, a `status` a reply claims must not contradict it, and a reply carrying NEITHER
+    a boolean ok NOR a recognised status is refused — silence is never laundered into a pass;
   * a lost delivery was never retried with a stable relay idempotency key, and the result was
     cached only AFTER delivery, so a redelivery re-RAN the harness instead of re-sending the
     result.
@@ -31,8 +33,9 @@ scheduler checkout is present; it never silently passes a disagreement.
             in_reply_to + ok=true, and the scheduler's model completes the tick
   A2 green  a failing gate POSTs ok=false with the node's reason, and the tick FAILS with it
             (not: completes)
-  A3 red    the PRE-CF-211 envelope (the same bytes minus ok/error/reply_b64/in_reply_to) reads
-            as a SUCCESS while `status` says failed — the arm discriminates on `ok` alone
+  A3 green  the PRE-CF-211 envelope (the same bytes minus ok/error/reply_b64/in_reply_to) is
+            read as a FAIL under CF-355 (`status` carries the verdict when `ok` is absent), and
+            the same strip minus `status` is REFUSED — silence is never laundered into a pass
   A4 red    a result whose corr_id and in_reply_to name a DIFFERENT hand-out never completes the
             tick: the await names the expected corr_id, the message is settled as residue (acked
             when it can belong to nobody, deferred when it names another in-flight hand-out)
@@ -52,9 +55,10 @@ The red control runs the SAME fixture against a pre-fix worker source and requir
       python3 tests/test_bus_result_delivery.py
 
 which asserts the pre-fix envelope carries no `ok`/`in_reply_to`/idempotency key, that a failed
-gate is therefore completed as a success, and that a refused delivery re-runs the harness. Those
-arms fail against the fixed worker, so the pair discriminates. A fixture that cannot reproduce the
-defect it was written for is decoration.
+gate's verdict can only ride on `status` (CF-355 fails such a reply; the pre-CF-355 consumer
+completed it), and that a refused delivery re-runs the harness. Those arms fail against the fixed
+worker, so the pair discriminates. A fixture that cannot reproduce the defect it was written for
+is decoration.
 """
 
 from __future__ import annotations
@@ -356,7 +360,7 @@ class Relay:
 
 
 def consumer_correlate(payload, receipt):
-    """`correlateDispatchReply` (dispatch_leg.go:673) — identity, never arrival order.
+    """`correlateDispatchReply` (dispatch_leg.go:695) — identity, never arrival order.
 
     The scheduler matches on `in_reply_to` (the relay message id) FIRST, then on `corr_id`, then
     on the original dispatch echoed back inside `task` (string or object). Anything else is not
@@ -396,23 +400,59 @@ def _decoded_field(payload, key):
         return ""
 
 
+# `dispatchReplyStatuses` (dispatch_leg.go:736) — the result field set the scheduler reads
+# from a dispatch reply: the only statuses that can carry a verdict on their own.
+dispatch_reply_statuses = frozenset(("completed", "failed", "refused"))
+
+
 def consumer_verdict(payload):
-    """`dispatchReplyVerdict` (dispatch_leg.go:713) — `ok` is the verdict, absence is success."""
+    """`dispatchReplyVerdict` (dispatch_leg.go:749) — CF-355's result-field law.
+
+    `ok` stays the verdict; a `status` a reply claims must not contradict it; and a reply
+    carrying NEITHER a boolean ok NOR a recognised status is refused — silence is never
+    laundered into a success. `completed` requires ok=true; a contradicting pair is refused
+    with the contradiction named.
+    """
     flag = payload.get("ok")
-    if flag is False:
-        decoded = _decoded_field(payload, "error_b64")
-        if decoded:
-            return False, decoded
-        for key in ("error", "err", "reply", "text", "message"):
-            value = payload.get(key)
-            if isinstance(value, str) and value.strip():
-                return False, value
-        return False, "the agent reported ok=false"
-    return True, ""
+    ok_present = isinstance(flag, bool)
+    status = payload.get("status")
+    status = status if isinstance(status, str) else ""
+    status_recognised = status in dispatch_reply_statuses
+
+    if ok_present and flag is False:
+        # ok=false is a failure unless status claims completion.
+        if status_recognised and status == "completed":
+            return False, 'refused: ok=false contradicts status="completed"'
+        return False, consumer_failure_reason(payload, "the agent reported ok=false")
+    if ok_present:
+        # ok=true is a success unless status claims failure or refusal.
+        if status_recognised and status != "completed":
+            return False, f'refused: ok=true contradicts status="{status}"'
+        return True, ""
+    # No boolean ok: the status member is the only possible verdict carrier.
+    if status_recognised:
+        if status == "completed":
+            return False, 'refused: status="completed" requires ok=true, ok absent'
+        return False, consumer_failure_reason(
+            payload, "the agent reported status=" + status + " with no ok field"
+        )
+    return False, "refused: reply carries neither ok nor a recognised status"
 
 
-def consumer_text(payload):
-    """`dispatchReplyText` (dispatch_leg.go:744) — `reply_b64` first, then the plain members."""
+def consumer_failure_reason(payload, fallback):
+    """`dispatchReplyFailureReason` (dispatch_leg.go:780) — the agent's own failure text."""
+    decoded = _decoded_field(payload, "error_b64")
+    if decoded:
+        return decoded
+    for key in ("error", "err", "reply", "text", "message"):
+        value = payload.get(key)
+        if isinstance(value, str) and value.strip():
+            return value
+    return fallback
+
+
+def consumer_string_text(payload):
+    """`dispatchReplyStringText` (dispatch_leg.go:823) — a REAL string answer member, or ""."""
     decoded = _decoded_field(payload, "reply_b64")
     if decoded:
         return decoded
@@ -420,11 +460,19 @@ def consumer_text(payload):
         value = payload.get(key)
         if isinstance(value, str) and value.strip():
             return value
+    return ""
+
+
+def consumer_text(payload):
+    """`dispatchReplyText` (dispatch_leg.go:808) — the string answer, else the payload dump."""
+    string_text = consumer_string_text(payload)
+    if string_text:
+        return string_text
     return json.dumps(payload, sort_keys=True) if payload else ""
 
 
 def dispatch_reply_key(payload):
-    """`dispatchReplyKey` (dispatch_leg.go:563) — the identity a message CLAIMS, for the log."""
+    """`dispatchReplyKey` (dispatch_leg.go:585) — the identity a message CLAIMS, for the log."""
     if not isinstance(payload, dict):
         return "unreadable"
     for key in ("corr_id", "in_reply_to"):
@@ -443,10 +491,10 @@ def dispatch_reply_key(payload):
 
 
 def consumer_await(messages, receipt, outstanding=None):
-    """`awaitDispatchReply` (dispatch_leg.go:362) — the batch, then the deadline verdict.
+    """`awaitDispatchReply` (dispatch_leg.go:380) — the batch, then the deadline verdict.
 
     `outstanding` is the set of corr ids / message ids that belong to OTHER in-flight hand-outs
-    (`dispatchReplyOwnedElsewhere`, dispatch_leg.go:651): a message naming one of them is deferred
+    (`dispatchReplyOwnedElsewhere`, dispatch_leg.go:673): a message naming one of them is deferred
     for its owner instead of being acked as residue.
     """
     outstanding = set(outstanding or ())
@@ -455,7 +503,16 @@ def consumer_await(messages, receipt, outstanding=None):
         payload = message["payload"]
         if consumer_correlate(payload, receipt):
             ok, why = consumer_verdict(payload)
-            text = consumer_text(payload) or why
+            if ok:
+                text = consumer_text(payload)
+            else:
+                # CF-355 (dispatch_leg.go:446): a failed verdict is recorded with its NAMED
+                # reason; a real string answer the reply carried still wins, and the opaque
+                # payload dump never buries the refusal.
+                text = why
+                string_text = consumer_string_text(payload)
+                if string_text.strip():
+                    text = string_text
             return {
                 "state": "completed" if ok else "failed",
                 "text": text,
@@ -878,8 +935,9 @@ class BusResultDeliveryTest(Rig):
         )
 
     # -- A3 --------------------------------------------------------------------------------
-    def test_a3_pre_cf211_envelope_reads_as_success(self):
-        """A3  the pre-CF-211 envelope (no `ok`) reads as SUCCESS — the red this arm detects"""
+    def test_a3_pre_cf211_envelope_is_failed_not_laundered(self):
+        """A3  the pre-CF-211 envelope (status=failed, no ok) is a FAIL under CF-355, and a
+        strip carrying neither ok nor a recognised status is REFUSED — never completed"""
         gate = {"cmd": "exit 7", "expect_exit": 0}
         dispatch = dispatch_envelope(
             "d-a3", self.fixture.corr_id, reply_to="scheduler", gate=gate
@@ -888,8 +946,8 @@ class BusResultDeliveryTest(Rig):
         self.run_once()
         payload = self.delivered_payload()
 
-        # The strip is faithful or the red proves nothing: every pre-fix member is present, and
-        # the only members removed are the ones this row added.
+        # The strip is faithful or the proof proves nothing: every pre-fix member is present, and
+        # the only members removed are the ones CF-211 added.
         for name in PRE_FIX_MEMBERS:
             self.assertIn(
                 name, payload, f"the envelope lost the pre-fix member {name!r}"
@@ -901,22 +959,58 @@ class BusResultDeliveryTest(Rig):
         pre_fix = {name: payload[name] for name in PRE_FIX_MEMBERS}
         self.assertEqual("failed", pre_fix["status"])
 
-        verdict, _why = consumer_verdict(pre_fix)
-        self.assertTrue(
+        # CF-355 arm 1 (dispatch_leg_test.go TestDispatchLeg_StatusFailedWithoutOkFailsTheTick):
+        # a reply posting status=failed with NO ok is read as FAIL — the tick does not complete,
+        # and the named refusal reaches it.
+        verdict, why = consumer_verdict(pre_fix)
+        self.assertFalse(
             verdict,
-            "the pre-fix envelope was NOT read as a success — the arm no longer reproduces the "
-            "defect it exists for",
+            f"the pre-CF-211 envelope was read as a success — the model no longer enforces "
+            f"the CF-355 law: {why!r}",
         )
+        self.assertIn("status=failed", why, f"the refusal was not named: {why!r}")
         received = consumer_await(
             [{"payload": pre_fix}],
             {"corr_id": self.fixture.corr_id, "message_id": self.fixture.message_id},
         )
         self.assertEqual(
-            "completed",
+            "failed",
             received["state"],
-            f"the pre-fix strip no longer completes a failed run: {received}",
+            f"the model completed a status-only failure — CF-355 refuses that: {received}",
         )
-        # And the same fixture with `ok` present is a failure: the arm discriminates on `ok`.
+        self.assertIn(
+            "status=failed",
+            received["text"],
+            f"the tick does not carry the named refusal: {received['text']!r}",
+        )
+
+        # CF-355 arm 2: strip `status` too and the result carries NEITHER ok nor a recognised
+        # status — refused outright, never silently recorded as a pass.
+        bare = {name: value for name, value in pre_fix.items() if name != "status"}
+        verdict, why = consumer_verdict(bare)
+        self.assertFalse(verdict, f"a bare result was read as a success: {why!r}")
+        self.assertIn(
+            "neither ok nor",
+            why,
+            f"the bare result was not refused by name: {why!r}",
+        )
+        received = consumer_await(
+            [{"payload": bare}],
+            {"corr_id": self.fixture.corr_id, "message_id": self.fixture.message_id},
+        )
+        self.assertEqual(
+            "failed",
+            received["state"],
+            f"the model completed a result carrying neither ok nor status: {received}",
+        )
+        self.assertIn(
+            "refused: reply carries neither",
+            received["text"],
+            f"the refusal did not reach the tick: {received['text']!r}",
+        )
+
+        # And the same fixture with `ok` present is a failure with the node's reason: the arm
+        # still discriminates the CF-211 producer fix on `ok` alone.
         verdict, why = consumer_verdict(payload)
         self.assertFalse(verdict, "the fixed envelope was read as a success")
         self.assertIn("exit 7", why)
@@ -1096,6 +1190,116 @@ class BusResultDeliveryTest(Rig):
             f"a tick completed on work nobody gated: {received}",
         )
 
+    # -- A11 -------------------------------------------------------------------------------
+    def test_a11_verdict_mapping_mirrors_the_cf355_table(self):
+        """A11  the modelled verdict mirrors the shipped CF-355 mapping table row for row"""
+        cases = (
+            # (name, payload, want_ok, reason substring; "" = success needs an empty reason).
+            # Mirrors TestDispatchReplyVerdict_Mapping (dispatch_verdict_test.go) exactly.
+            ("ok true alone succeeds", {"ok": True, "reply": "done"}, True, ""),
+            (
+                "ok true with status completed succeeds",
+                {"ok": True, "status": "completed", "reply": "done"},
+                True,
+                "",
+            ),
+            (
+                "ok false with status failed carries the failure reason",
+                {"ok": False, "status": "failed", "error": "repo missing"},
+                False,
+                "repo missing",
+            ),
+            (
+                "ok false with status refused is a failure",
+                {"ok": False, "status": "refused"},
+                False,
+                "ok=false",
+            ),
+            (
+                "ok false decodes error_b64 into the reason",
+                {"ok": False, "error_b64": b64("boom")},
+                False,
+                "boom",
+            ),
+            (
+                "ok false alone stays the legacy failure",
+                {"ok": False},
+                False,
+                "the agent reported ok=false",
+            ),
+            (
+                "neither ok nor status is refused",
+                {"reply": "plain answer"},
+                False,
+                "neither ok nor",
+            ),
+            (
+                "status failed with NO ok is FAIL",
+                {"status": "failed"},
+                False,
+                "status=failed",
+            ),
+            (
+                "status refused with NO ok is FAIL",
+                {"status": "refused", "error": "gate denied"},
+                False,
+                "gate denied",
+            ),
+            (
+                "status completed WITHOUT ok is refused",
+                {"status": "completed"},
+                False,
+                "requires ok=true",
+            ),
+            (
+                "unrecognised status with NO ok is refused",
+                {"status": "banana"},
+                False,
+                "neither ok nor",
+            ),
+            (
+                "non-boolean ok with NO status is refused",
+                {"ok": "true"},
+                False,
+                "neither ok nor",
+            ),
+            (
+                "ok true contradicts status failed",
+                {"ok": True, "status": "failed"},
+                False,
+                "contradicts",
+            ),
+            (
+                "ok true contradicts status refused",
+                {"ok": True, "status": "refused"},
+                False,
+                "contradicts",
+            ),
+            (
+                "ok false contradicts status completed",
+                {"ok": False, "status": "completed"},
+                False,
+                "contradicts",
+            ),
+        )
+        for name, payload, want_ok, want_reason in cases:
+            ok, why = consumer_verdict(payload)
+            self.assertEqual(
+                want_ok,
+                ok,
+                f"{name}: verdict ok={ok} (reason {why!r}), want {want_ok}",
+            )
+            if not want_ok:
+                self.assertIn(
+                    want_reason,
+                    why,
+                    f"{name}: reason {why!r} does not carry {want_reason!r}",
+                )
+            else:
+                self.assertEqual(
+                    "", why, f"{name}: reason {why!r}, want empty on a success"
+                )
+
 
 # ---------------------------------------------------------------------------------------------
 # the consumer pin — the model above must still be the scheduler's code
@@ -1111,7 +1315,31 @@ CONSUMER_ANCHORS = (
         'payload["corr_id"].(string); s != "" && s == receipt.CorrID',
         "correlates on corr_id",
     ),
-    ('payload["ok"].(bool); ok && !v', "reads `ok` as the verdict"),
+    (
+        'okVal, okPresent := payload["ok"].(bool)',
+        "reads a boolean `ok` as the verdict carrier",
+    ),
+    (
+        'dispatchReplyStatuses = map[string]bool{ "completed": true, "failed": true, '
+        '"refused": true,',
+        "recognises completed/failed/refused as the verdict-carrying statuses",
+    ),
+    (
+        'refused: ok=false contradicts status="completed"',
+        "refuses ok=false that claims completion",
+    ),
+    (
+        "refused: ok=true contradicts status=%q",
+        "refuses ok=true contradicted by its status",
+    ),
+    (
+        'refused: status="completed" requires ok=true, ok absent',
+        "refuses a bare completed status with no ok",
+    ),
+    (
+        "refused: reply carries neither ok nor a recognised status",
+        "refuses a reply carrying neither ok nor a recognised status",
+    ),
     ("reply_b64", "decodes reply_b64 as the reply text"),
     ("Status: TickCompleted", "completes a tick"),
     ("Status: TickFailed", "fails a tick"),
@@ -1167,8 +1395,9 @@ def consumer_pin(failures):
 #       python3 tests/test_bus_result_delivery.py
 #
 # It asserts the DEFECT: no `ok` on the envelope, no `in_reply_to`, no relay idempotency key —
-# and therefore a failed run read as a completed tick, and a refused delivery re-running the
-# harness. Pointed at the fixed worker these arms fail, so the pair discriminates.
+# so a failed run's verdict can only ride on `status` (CF-355 fails such a reply by name; the
+# pre-CF-355 consumer completed it), and a refused delivery re-runs the harness. Pointed at the
+# fixed worker these arms fail, so the pair discriminates.
 #
 # Under a bare `unittest discover` this class would be graded against the CURRENT (fixed) worker
 # and fail by construction, so the whole class skips without its control env: a reader sees WHY
@@ -1205,8 +1434,9 @@ class PreFixControlTest(Rig):
             f"the pre-fix delivery already carried an idempotency key: {body}",
         )
 
-    def test_p2_a_failed_gate_completes_the_tick_as_success(self):
-        """P2  pre-fix: a FAILED gate is read as a completed tick (the defect CF-211 is about)"""
+    def test_p2_a_failed_gates_verdict_rides_on_status_alone(self):
+        """P2  pre-fix: a FAILED gate's envelope carries no `ok` — its verdict rides on `status`
+        (CF-355 fails such a reply by name; the pre-CF-355 consumer completed it)"""
         gate = {"cmd": "exit 7", "expect_exit": 0}
         dispatch = dispatch_envelope(
             "d-p2", self.fixture.corr_id, reply_to="scheduler", gate=gate
@@ -1215,15 +1445,34 @@ class PreFixControlTest(Rig):
         self.run_once()
         payload = self.delivered_payload()
         self.assertEqual("failed", payload.get("status"), "the run did not fail")
+        self.assertNotIn(
+            "ok",
+            payload,
+            f"the pre-fix envelope already carried a boolean `ok`: {payload}",
+        )
+        verdict, why = consumer_verdict(payload)
+        self.assertFalse(
+            verdict, f"status=failed with no ok read as a success: {why!r}"
+        )
+        self.assertIn(
+            "no ok field",
+            why,
+            f"the verdict did not ride on `status` (want the named status-only failure): "
+            f"{why!r}",
+        )
         received = consumer_await(
             [{"payload": payload}],
             {"corr_id": self.fixture.corr_id, "message_id": self.fixture.message_id},
         )
         self.assertEqual(
-            "completed",
+            "failed",
             received["state"],
-            f"the pre-fix worker already failed the tick ({received}) — the control no longer "
-            f"reproduces the defect",
+            f"the tick completed on a status-only failure envelope: {received}",
+        )
+        self.assertIn(
+            "status=failed",
+            received["text"],
+            f"the tick does not carry the named failure: {received['text']!r}",
         )
 
     def test_p3_a_refused_delivery_re_runs_the_harness(self):
@@ -1244,7 +1493,7 @@ class PreFixControlTest(Rig):
 ARMS = (
     "test_a1_completed_result_reaches_the_scheduler_inbox",
     "test_a2_failed_gate_result_fails_the_tick_with_the_nodes_reason",
-    "test_a3_pre_cf211_envelope_reads_as_success",
+    "test_a3_pre_cf211_envelope_is_failed_not_laundered",
     "test_a4_mismatched_corr_id_never_completes_the_tick",
     "test_a5_budget_exhaustion_is_retried_not_dropped",
     "test_a6_lost_answer_still_lands_exactly_once",
@@ -1252,11 +1501,12 @@ ARMS = (
     "test_a8_observed_different_model_is_not_misattributed",
     "test_a9_missing_model_observation_is_explicit",
     "test_a10_refused_result_keeps_the_same_model_attribution_shape",
+    "test_a11_verdict_mapping_mirrors_the_cf355_table",
 )
 
 CONTROL_ARMS = (
     "test_p1_envelope_carries_no_ok_and_no_in_reply_to",
-    "test_p2_a_failed_gate_completes_the_tick_as_success",
+    "test_p2_a_failed_gates_verdict_rides_on_status_alone",
     "test_p3_a_refused_delivery_re_runs_the_harness",
 )
 
