@@ -34,6 +34,18 @@
 # CONFIG_SET_* scalars in ~/.hermes/config.yaml — BEFORE the harness layer starts a gateway.
 # Without it a node's environment is hand-edited state that cannot be diffed or re-applied.
 #
+# Credential lifecycle (CF-366, flow F12): --apply finishes by writing a CREATION MANIFEST that
+# records the agent, server, bus base URL, DuckBrain namespaces and the PATHS ONLY (never
+# contents) of every credential this run staged or installed; --destroy reads it, revokes the
+# crier bus registration with DELETE <bus>/agents/AGENT (Bearer CR_PERMISSIONS_ADMIN_TOKEN, or a
+# token file named by CR_PERMISSIONS_ADMIN_TOKEN_FILE — crier DF-CRIER-515), proves the
+# revocation with a follow-up GET expecting 404 (never claims revoked without that probe), and
+# appends one JSONL residue record naming what this destroy could not reclaim. Locations: the
+# manifest lives in $HOME/.config/code-factory/bunker-manifests/<AGENT>.manifest.json (override
+# with BUNKER_MANIFEST_DIR); the residue log defaults to <manifest dir>/residue.jsonl (override
+# with CF_RESIDUE_LOG). A failed --apply writes no manifest; --destroy without one warns and can
+# only revoke when CRIER_URL is still set in the config.
+#
 # Idempotent: an existing agent is reused, an existing clone is fast-forwarded, an existing
 # node.json is rewritten only when a value differs, and a second profile apply changes nothing.
 # --check is read-only and names every measured value; it never writes.
@@ -47,6 +59,7 @@
 #   repo / node_json / auth_* / crier_* / git_credential / gateway_auth / gitreins / commit_hook /
 #           harness  the key=value lines the staged probe printed from inside the node
 # ch:trace row=CF-214 spec=docs/handbook/OUTLINE.md#M1-PROVISIONING wave=none:serial-worker test=tests/selftest.sh::CF-214 evidence=none:worker-implementation-awaits-foreman-gitreins witness=none:live-node-not-authorized verdict=none:foreman-judge-pending commit=none:worker-sha memory=none:foreman-closeout
+# ch:trace row=CF-366 spec=docs/handbook/OUTLINE.md#F12-CREDENTIAL-LIFECYCLE wave=none:serial-worker test=tests/selftest.sh::CF-366 evidence=none:fixture-test-awaits-foreman-gitreins witness=none:live-bus-revoke-not-authorized verdict=none:foreman-judge-pending commit=none:worker-sha memory=none:foreman-closeout
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 # CF-261: refuse an unavailable library before parsing arguments or using helpers.
@@ -73,8 +86,16 @@ CLI_DUCKBRAIN_URL="" CLI_GITHUB_TOKEN_FILE="" CLI_DUCKBRAIN_TOKEN_FILE=""
 CLI_CRIER_AGENT_KEY_FILE="" CLI_CRIER_AUTH_TOKEN_FILE="" CLI_S3_ENV_FILE=""
 CLI_CONFIG_SET=()
 
+# Credential lifecycle locations (CF-366). Both are env-overridable so tests can point them at a
+# tmpdir; the defaults keep the manifest and the residue log together under the config dir.
+BUNKER_MANIFEST_DIR="${BUNKER_MANIFEST_DIR:-$HOME/.config/code-factory/bunker-manifests}"
+CF_RESIDUE_LOG="${CF_RESIDUE_LOG:-$BUNKER_MANIFEST_DIR/residue.jsonl}"
+# The residue record for one destroy run: what the manifest said existed that this destroy could
+# not revoke. Holds paths and names only, never credential values.
+residue_items=()
+
 usage() {
-  sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,44p' "$0" | sed 's/^# \{0,1\}//'
   exit "${1:-2}"
 }
 
@@ -452,6 +473,9 @@ bundle_paths() {  # bundle_paths <dest-on-node-relative>
 
 apply() {
   local b tmp rc=0
+  # The manifest records the DECLARED PAT path, not the app-mode temp: by manifest time the
+  # minted installation token has been deleted, and the durable file is the one residue checks.
+  local manifest_github_token_file="$GITHUB_TOKEN_FILE"
   resolve_namespaces || return 1
   say "bunker-provision --apply — project=$PROJECT agent=$AGENT server=$SERVER"
 
@@ -706,19 +730,232 @@ apply() {
   fi
 
   say ""
+  # 9. credential lifecycle (CF-366): the creation manifest. Written only after a fully green
+  #    apply — a manifest is a claim that this provisioning SUCCEEDED, and --destroy trusts it.
+  #    A failed apply writes none, so destroy warns and can only revoke with CRIER_URL re-armed.
+  if [ "$rc" -eq 0 ] && [ "$FAILED" -eq 0 ]; then
+    write_creation_manifest || rc=1
+  fi
   if [ "$rc" -eq 0 ] && [ "$FAILED" -eq 0 ]; then say "BUNKER APPLIED: $AGENT"; else say "BUNKER INCOMPLETE ($FAILED)"; fi
   [ "$rc" -eq 0 ] && [ "$FAILED" -eq 0 ]
 }
 
+# --- credential lifecycle: manifest, revocation, residue (CF-366) -----------------------------
+json_str() {  # one JSON string literal on stdout
+  local s="${1:-}"
+  s="${s//\\/\\\\}"; s="${s//\"/\\\"}"
+  printf '"%s"' "$s"
+}
+
+manifest_path() { printf '%s/%s.manifest.json' "$BUNKER_MANIFEST_DIR" "$AGENT"; }
+
+manifest_field() {  # manifest_field <json-text> <key> -> the string value, or nothing
+  printf '%s\n' "$1" | sed -n "s/^[[:space:]]*\"$2\"[[:space:]]*:[[:space:]]*\"\(.*\)\",\{0,1\}[[:space:]]*\$/\1/p" | head -n 1
+}
+
+revoke_admin_token() {  # the operator credential, never printed: env first, then the token file
+  local tok="${CR_PERMISSIONS_ADMIN_TOKEN:-}"
+  if [ -z "$tok" ] && [ -n "${CR_PERMISSIONS_ADMIN_TOKEN_FILE:-}" ] && [ -r "$CR_PERMISSIONS_ADMIN_TOKEN_FILE" ]; then
+    tok="$(head -c 4096 "$CR_PERMISSIONS_ADMIN_TOKEN_FILE" | tr -d '\r\n')"
+  fi
+  printf '%s' "$tok"
+}
+
+bus_call() {  # bus_call <METHOD> <url> <token> -> the HTTP status (000 on transport failure)
+  # The bearer travels on curl's STDIN (-K -), never in argv: a header on the command line is
+  # visible to every local user through ps (the same rule the DuckBrain probe already follows).
+  local method="$1" url="$2" token="$3" code
+  if [ -n "$token" ]; then
+    code=$(printf 'header = "Authorization: Bearer %s"\n' "$token" \
+           | curl -s -K - -o /dev/null -m 15 -w '%{http_code}' -X "$method" "$url" 2>/dev/null)
+  else
+    code=$(curl -s -o /dev/null -m 15 -w '%{http_code}' -X "$method" "$url" 2>/dev/null)
+  fi
+  printf '%s' "${code:-000}"
+}
+
+attempt_revoke() {  # DELETE then probe; rc 0 only when the probe proves the registration gone
+  local del probe
+  del="$(bus_call DELETE "$bus/agents/$AGENT" "$token")"
+  case "$del" in
+    204|404)
+      probe="$(bus_call GET "$bus/agents/$AGENT" "$token")"
+      if [ "$probe" = 404 ]; then
+        if [ "$del" = 204 ]; then
+          ok "crier_revoke" "revoked: DELETE $bus/agents/$AGENT -> $del, probe -> $probe"
+        else
+          ok "crier_revoke" "already gone: DELETE -> $del, probe -> $probe (idempotent)"
+        fi
+        return 0
+      fi
+      bad "crier_revoke" "crier registration: DELETE -> $del but probe -> $probe — revocation not proven"
+      return 1 ;;
+    *)
+      bad "crier_revoke" "crier registration: DELETE $bus/agents/$AGENT -> $del with CR_PERMISSIONS_ADMIN_TOKEN armed — revocation refused"
+      return 1 ;;
+  esac
+}
+
+residue_add() { residue_items+=("$1"); }
+
+record_residue() {  # one JSONL line naming agent, UTC timestamp and every unreclaimed item
+  local ts item items="" first=1 n=0 dir
+  n="${#residue_items[@]}"
+  [ "$n" -gt 0 ] || { note "residue: nothing unreclaimed to record"; return 0; }
+  ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  dir="$(dirname "$CF_RESIDUE_LOG")"
+  if ! mkdir -p "$dir"; then
+    bad "residue" "cannot create $dir for the residue log"
+    return 1
+  fi
+  for item in "${residue_items[@]}"; do
+    if [ "$first" -eq 1 ]; then first=0; else items="$items,"; fi
+    items="$items$(json_str "$item")"
+  done
+  printf '{"agent": %s, "server": %s, "timestamp": %s, "unreclaimed": [%s]}\n' \
+    "$(json_str "$AGENT")" "$(json_str "$SERVER")" "$(json_str "$ts")" "$items" >> "$CF_RESIDUE_LOG" \
+    || { bad "residue" "could not append to $CF_RESIDUE_LOG"; return 1; }
+  chmod 600 "$CF_RESIDUE_LOG" 2>/dev/null || true
+  ok "residue" "recorded $n unreclaimed item(s) -> $CF_RESIDUE_LOG"
+}
+
+write_creation_manifest() {  # PATHS ONLY, never credential values
+  local path ts app_env_file=""
+  path="$(manifest_path)"
+  ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  [ "${GITHUB_AUTH_MODE:-token}" = app ] && app_env_file="$GITHUB_APP_ENV_FILE"
+  if ! mkdir -p "$BUNKER_MANIFEST_DIR"; then
+    bad "manifest" "cannot create $BUNKER_MANIFEST_DIR — destroy would be unable to revoke or enumerate residue"
+    return 1
+  fi
+  if ! {
+    printf '{\n'
+    printf '  "agent": %s,\n' "$(json_str "$AGENT")"
+    printf '  "server": %s,\n' "$(json_str "$SERVER")"
+    printf '  "project": %s,\n' "$(json_str "$PROJECT")"
+    printf '  "bus_base": %s,\n' "$(json_str "${CRIER_URL:-}")"
+    printf '  "duckbrain_namespaces": %s,\n' "$(json_str "${NAMESPACES:-}")"
+    printf '  "credentials": {\n'
+    printf '    "crier_agent_key_file": %s,\n' "$(json_str "${CRIER_AGENT_KEY_FILE:-}")"
+    printf '    "crier_auth_token_file": %s,\n' "$(json_str "${CRIER_AUTH_TOKEN_FILE:-}")"
+    printf '    "github_token_file": %s,\n' "$(json_str "${manifest_github_token_file:-}")"
+    printf '    "github_app_env_file": %s,\n' "$(json_str "$app_env_file")"
+    printf '    "duckbrain_token_file": %s,\n' "$(json_str "${DUCKBRAIN_TOKEN_FILE:-}")"
+    printf '    "s3_env_file": %s\n' "$(json_str "${S3_ENV_FILE:-}")"
+    printf '  },\n'
+    printf '  "created": %s\n' "$(json_str "$ts")"
+    printf '}\n'
+  } > "$path"; then
+    bad "manifest" "could not write $path"
+    return 1
+  fi
+  chmod 600 "$path" 2>/dev/null || true
+  ok "manifest" "creation record written: $path (paths only, never credential values — destroy reads it to revoke and to enumerate residue)"
+}
+
 destroy() {
-  local b
+  local b manifest manifest_path server_out server_rc bus token probe_code reg_exists=""
+  local never_existed=0 ns val cr_key
   [ "$YES" -eq 1 ] || { say "refusing to destroy without --yes (would remove agent $AGENT on $SERVER)"; exit 2; }
   [ -n "$AGENT" ] || { say "refusing to destroy: AGENT unset"; exit 2; }
   b=$(have bunker)
   [ -n "$b" ] || { say "bunker client missing"; exit 1; }
   say "destroying $AGENT on $SERVER"
-  "$b" destroy "$AGENT" --server "$SERVER" || { bad "destroy" "bunker destroy failed"; exit 1; }
-  ok "destroy" "$AGENT removed from $SERVER"
+
+  # 1. what did this agent carry? Without the creation manifest (a pre-CF-366 agent, or an apply
+  #    that never went green) residue can only be enumerated from what this destroy revokes now.
+  manifest_path="$(manifest_path)"
+  manifest=""
+  if [ -r "$manifest_path" ] && manifest="$(cat "$manifest_path")"; then
+    note "creation manifest: $manifest_path"
+  else
+    manifest=""
+    warn "manifest" "no readable creation manifest at $manifest_path — residue enumeration is limited to what this destroy revokes"
+  fi
+
+  # 2. the node itself
+  server_out=$(timeout 120 "$b" destroy "$AGENT" --server "$SERVER" 2>&1); server_rc=$?
+  if [ "$server_rc" -eq 0 ]; then
+    ok "destroy" "$AGENT removed from $SERVER"
+  elif printf '%s' "$server_out" | grep -Eiq 'not found|no such|unknown agent|does not exist'; then
+    ok "destroy" "bunker reports $AGENT absent on $SERVER (not found)"
+  else
+    bad "destroy" "bunker destroy failed: $(printf '%s' "$server_out" | tail -n 1)"
+    exit 1
+  fi
+
+  # 3. the bus identity. CRIER_URL wins; the manifest's bus_base is the fallback, so a destroy
+  #    that forgets the URL still revokes against the bus the agent actually registered on.
+  bus="${CRIER_URL:-$(manifest_field "$manifest" bus_base)}"
+  bus="${bus%/}"
+  token="$(revoke_admin_token)"
+  if [ -z "$bus" ]; then
+    warn "crier_revoke" "no bus recorded (CRIER_URL unset, manifest silent) — bus identity not probed"
+  else
+    probe_code="$(bus_call GET "$bus/agents/$AGENT" "$token")"
+    case "$probe_code" in
+      404) reg_exists=0 ;;
+      2??) reg_exists=1 ;;
+      *) reg_exists="" ;;
+    esac
+    case "$reg_exists" in
+      1)
+        if [ -z "$token" ]; then
+          bad "crier_revoke" "crier registration: no CR_PERMISSIONS_ADMIN_TOKEN armed — $AGENT still answers GET $probe_code on $bus"
+          residue_add "crier_registration:$AGENT"
+        elif attempt_revoke; then
+          :
+        else
+          residue_add "crier_registration:$AGENT"
+        fi ;;
+      0)
+        if [ "$server_rc" -eq 0 ]; then
+          ok "crier_revoke" "registration already absent (probe -> $probe_code) — nothing to revoke"
+        else
+          ok "never_existed" "$AGENT never existed: bunker destroy reported not found and the registry probe -> $probe_code on $bus"
+          never_existed=1
+        fi ;;
+      *)
+        if [ -z "$token" ]; then
+          bad "crier_revoke" "crier registration: probe answered $probe_code (not 404/2xx) and no CR_PERMISSIONS_ADMIN_TOKEN armed — cannot revoke"
+          residue_add "crier_registration:$AGENT"
+        else
+          note "registry probe indeterminate ($probe_code) — resolving with DELETE"
+          if attempt_revoke; then :; else residue_add "crier_registration:$AGENT"; fi
+        fi ;;
+    esac
+  fi
+
+  # 4. residue: every item the manifest said existed that this destroy did not reclaim. The
+  #    DuckBrain namespace has no delete here; credential files survive on the control host (or
+  #    — worse — their material lived only on the now-destroyed node and is gone unreposed).
+  if [ -n "$manifest" ]; then
+    for ns in $(printf '%s' "$(manifest_field "$manifest" duckbrain_namespaces)" | tr ',' ' '); do
+      [ -n "$ns" ] && residue_add "namespace:$ns"
+    done
+    for cr_key in crier_agent_key_file crier_auth_token_file github_token_file github_app_env_file duckbrain_token_file s3_env_file; do
+      val="$(manifest_field "$manifest" "$cr_key")"
+      if [ -n "$val" ]; then
+        if [ -e "$val" ]; then
+          residue_add "credential_file:$val"
+        else
+          residue_add "credential_material_lost:$val"
+        fi
+      fi
+    done
+  fi
+  # The residue record is durable by contract: losing it must not pass silently.
+  record_residue || exit 1
+
+  if [ "$never_existed" -eq 1 ]; then
+    exit 0
+  fi
+  if [ "$FAILED" -gt 0 ]; then
+    say "BUNKER DESTROY INCOMPLETE ($FAILED) — the failing row names the credential that did not revoke"
+    exit 1
+  fi
+  say "BUNKER DESTROYED: $AGENT"
+  exit 0
 }
 
 # --- args ---------------------------------------------------------------------------------
