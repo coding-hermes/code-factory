@@ -184,6 +184,57 @@ the guard/judge battery); result quoted in the tick report.
   `b3ed55c` stands as dated evidence.
 - `--apply` / `--destroy` end to end against a real server.
 
+## Addendum 2026-11-25 (second derivation): CF-537 landed mid-judge
+
+The first derivation (commit `0c0d38ff`, blob `301f7410`) was judged as CF-539-DOC1 (run dir
+`40f08422`, verdict `cb9d1cea`): sub-claims (1)(2)(3)(5) and Publication PASS, the locator
+content check PASS (18/18), the fixture reproduction PASS, the no-regression control PASS —
+and gate (4) FAIL, because the criterion demanded `SELFTEST: PASS` while the suite prints
+`SELFTEST: FAIL (52)` at BOTH the judged commit and the parent `c417a3ff` (identical sorted
+FAIL ARM sets, sections 1, 10, 31, 56, 64, 75 — a host-condition red the judge itself proved
+pre-existing with a clean-worktree parent control). The criterion was misworded for a red-base
+tip; the row's AC3 wording ("SELFTEST: PASS at the commit that carries the doc edit") met the
+same host red. While that judge ran, CF-537 (`965fad01`, the merge-consumer sibling whose
+staged work had held the registered checkout all tick) landed and moved every script locator
+after `:394` (+22 at `:394`, +42 at `:683`).
+
+The unit was therefore re-derived at blob `4d1fde78` (`965fad01`, sha256 prefix
+`92d196f4d6965a07`): the remap is again pure equal-block mapping (0 manual locators — the
+CF-537 diff is two pure insertions), the CF-537 merge step is now covered (§1, §2b, §5, §6,
+§7), the destroy/refusal fixtures were re-run at `965fad01` with identical outputs, and the
+census is restated by an instrument-free rule any reader can re-run with grep — every
+bracketed `path:line` token in the file: **367 references, 256 distinct pairs** (the first
+derivation's Status line said 337/236 by the author's private regex, which the DOC1 judge
+flagged as not reader-reproducible; the grep rule yields 339/238 on the first derivation and
+367/256 on this one). The row's AC1 pin (`d7f07455`) is a measurement-device artifact of
+filing time: the post-CF-366 blob it meant is now `4d1fde78` (which contains CF-366), and the
+AC is reworded at closeout with this disclosure. The DOC1 FAIL bundle is preserved at
+`.gitreins/history/2026-11-25/40f08422/` as evidence the re-derivation graded green on every
+arm except the misworded gate.
+
+Verification of this revision (instruments in tick scratch, transcripts quoted):
+
+```
+$ python3 emit_r2.py                 # 0c0d38ff -> 965fad01 remap
+remapped unit written; 0 manual locators left in place
+$ python3 verify_unit_r2.py          # census + EOF + AC2 at blob 4d1fde78
+census (instrument-free rule): 367 references, 256 distinct
+EOF check: OK
+AC2 content check: OK (32/32 constructs cited at their blob line)
+$ python3 scripts/master_doc_check.py
+05-scripts-bunker-provision-sh.md              VERIFIED   ok
+63 module(s): 54 VERIFIED, 1 error(s)   (the same pre-existing module-37 red, CF-541)
+$ bash docs/audits/cf198-section-mapping.sh
+arms_plan=80 arms_tree=80
+RESULT: OK
+$ bash scripts/bunker-provision.sh --config /nonexistent.conf --check   # at 965fad01
+  FAIL  config — cannot read /nonexistent.conf                     # exit 1
+$ bash scripts/bunker-provision.sh --destroy --agent probe-agent --server probe-server
+refusing to destroy without --yes (would remove agent probe-agent on probe-server)   # exit 2
+$ bash tests/test_cf366_destroy_revocation.sh
+CF-366 PASS                                                        # exit 0
+```
+
 ch:trace row=CF-539 spec=none:f12-is-a-list-item-under-f1-not-a-heading wave=none:serial-docs-lane test=tests/test_cf366_destroy_revocation.sh doc=docs/handbook/appendices/units/05-scripts-bunker-provision-sh.md evidence=docs/audits/code-factory-docs-2026-11-25-cf539-unit05.md witness=none:live-bus-revoke-not-authorized verdict=none:open-finding commit=none:open memory=/project/code-factory/docs-lane-2026-11-25-15-22-20
 
 STATUS: PASS
