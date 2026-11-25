@@ -150,6 +150,7 @@ the closed typed bodies and results; M1–M6 supply the referenced operation pro
 | `CT-28` | manager-owned `binding.prepare.v1` / `binding.commit.v1`: `{project_id, binding_generation, owner_fence, readiness_ref, readiness_digest, crier_ref, scheduler_ref, prepared_digest, active_digest}`; result participant receipts plus manager active pointer | manager is the sole activation authority: durable participant candidates/receipts precede pointer CAS+fsync; exact tuple readback from manager, Crier and Scheduler is required; stale owner/generation is `STALE_OWNER`, mismatch is `BINDING_NOT_ACTIVE`, changed replay is `BINDING_CONFLICT`, and admission remains fail-closed until convergence |
 | `CT-29` | incident/recovery `{incident_id, scope, owner_fence, checkpoint, replacement}`; result resumed/degraded/failed | old owner is fenced before replacement side effects; crash recovery re-reads state and applies only missing idempotent steps |
 | `CT-30` | manager event/metric readout `{event_version, event_id, event_type, scope, payload}` or `{metric_schema_version, samples, observed_at}` | event delivery is per-endpoint durable and replayable; missing metrics are `unknown`, not zero; receiver interpretation remains external |
+| `CT-31` | gateway config envelope merged into each Bunker's `~/.hermes/config.yaml`: `platforms.<platform>.{enabled, token_env, home_channel{platform, chat_id, thread_id, name}, allowed_chats}` plus `gateways.loop_watchdog`; pairs with the scheduler row keys `deliver` / `deliver_mode` as a routing hint | **SPEC-DERIVED (M13)** — token custody is by reference: generated files carry zero token bytes (M13 R2); scheduler routing and chat delivery are independent (M13 R3); an unresolved reference is `GATEWAY_TOKEN_REF_UNRESOLVED` (warning, lane runs scheduler-only) and a dead token fails fast with a named error (M13 R6); the schema is platform-agnostic, Telegram first (M13 R5) |
 
 **Resident Crier launch/return adapter (selected MVP path).** The scheduler persists a
 `round-admission.v1` envelope and sends it through Crier. Crier authenticates the
@@ -339,6 +340,7 @@ term/version drift exits non-zero. The source of executable examples remains
 | CT-28 / binding.prepare or binding.commit / binding.prepare.v1 or binding.commit.v1 | Part I §1.9.4 tuple/probes | same tuple/active_digest participant receipt; no dispatch until both readbacks |
 | CT-29 / round.control / execution-control.v1 | Part II F8.1 control fields with Fence/version | F8.1 ControlReceipt/checkpoint, fenced replacement only |
 | CT-30 / events.read or metrics.read / factory.v1 | GET query grammar Part I §1.9.1 | Part V §V.0.3 events/samples; M0 §16.1 defines M0–M6 telemetry exporter, not a replacement manager API |
+| CT-31 / config.emit / gateway-config.v1 (SPEC-DERIVED) | `platforms.<platform>.{enabled:boolean, token_env:Text — an env var NAME, never a value, home_channel:{platform:ID, chat_id:Text, thread_id:Text, name:Text}, allowed_chats:Text[]}` plus `gateways.loop_watchdog:object`; the scheduler row keys `deliver`/`deliver_mode` stay the routing hint | emitted/merged block in the bunker's `~/.hermes/config.yaml`; unresolved reference is `GATEWAY_TOKEN_REF_UNRESOLVED` (warning, lane runs scheduler-only) and generated files carry zero token bytes (M13 §3–§5) |
 
 Outcome remains a generic evidence vocabulary; WorkerResult uses
 pass/fail/unverified/partial/unknown and RoundReport uses pass/fail/unverified/partial/unknown. StopReason is
@@ -461,12 +463,15 @@ coverage and never in target wires or new chapters. Legacy CT-05 lane-seed cover
 is classified under CT-01; the ID CT-05 always means per-worker brief in this edition.
 
 ```json
-{"schema_version":"cf.contract-registry.v1","contracts":["CT-01","CT-02","CT-03","CT-04","CT-05","CT-06","CT-06R","CT-07","CT-08","CT-09","CT-10","CT-11","CT-12","CT-13","CT-14","CT-15","CT-16","CT-17","CT-18","CT-19","CT-20","CT-21","CT-22","CT-23","CT-24","CT-25","CT-26","CT-27","CT-28","CT-29","CT-30"],"vector_objects":["resident_foreman_contract"],"coverage_aliases":{"M1-C1":"CT-22","M1-C2":"CT-23","M0-C1":"CT-23","M5-C1":"CT-23","M5-C2":"CT-19"},"legacy_reclassification":{"CT-05:lane-seed":"CT-01"}}
+{"schema_version":"cf.contract-registry.v1","contracts":["CT-01","CT-02","CT-03","CT-04","CT-05","CT-06","CT-06R","CT-07","CT-08","CT-09","CT-10","CT-11","CT-12","CT-13","CT-14","CT-15","CT-16","CT-17","CT-18","CT-19","CT-20","CT-21","CT-22","CT-23","CT-24","CT-25","CT-26","CT-27","CT-28","CT-29","CT-30","CT-31"],"vector_objects":["resident_foreman_contract"],"coverage_aliases":{"M1-C1":"CT-22","M1-C2":"CT-23","M0-C1":"CT-23","M5-C1":"CT-23","M5-C2":"CT-19"},"legacy_reclassification":{"CT-05:lane-seed":"CT-01"}}
 ```
 
-Its count is derived from contracts (31), never hardcoded 18. It owns identity;
+Its count is derived from contracts (32), never hardcoded 18. It owns identity;
 source/evidence state lives in qualification records, so changing a citation does
-not rename a contract. A registry change updates cards, source-model projection,
+not rename a contract. CT-31 is registered as SPEC-DERIVED (M13) — its
+`docs/SYSTEM-MODEL.yaml` registration is pending, so model-derived counts
+elsewhere legitimately still read the pre-CT-31 total. A registry change updates
+cards, source-model projection,
 chapter edges and generated figures together before qualification. This wave changes
 only its assigned chapters/register; older out-of-scope projections remain explicitly
 unqualified until the consuming checker is updated. Absence of that implementation
@@ -828,7 +833,8 @@ below remains coverage and may be RED or UNVERIFIED.
 **Register requirements (normative).** Approved target behavior governs; the per-entry citations
 below are implementation coverage, not the contracts.
 
-- **One versioned registry, 31 entries.** CT-01..CT-23, `CT-06R` and CT-24..CT-30 below
+- **One versioned registry, 32 entries.** CT-01..CT-23, `CT-06R`, CT-24..CT-30 and the
+  spec-derived CT-31 below
   are the register of record. The older 18-entry assumptions in chapter headers and the build
   spine are reconciled to this count, and figures, tables and cross-references are
   generated/validated from this one versioned registry — unknown/duplicate ids, missing
@@ -887,6 +893,7 @@ below are implementation coverage, not the contracts.
 | CT-28 | manager → crier/scheduler | verified readiness and binding activation | authenticated, generation-bound | TARGET-UNIMPLEMENTED |
 | CT-29 | manager → recovery actors | incident, fence and replacement recovery | durable, idempotent | TARGET-UNIMPLEMENTED |
 | CT-30 | manager → subscribers/operators | versioned event delivery and independent metric readout | durable cursor / read-only API | TARGET-UNIMPLEMENTED |
+| CT-31 | provisioner → bunker Hermes config | gateway config envelope: `platforms.*` + `gateways.loop_watchdog` by `token_env` reference; scheduler `deliver`/`deliver_mode` as routing hint | config merge at provision/re-sync | SPEC-DERIVED (M13) — target-unimplemented |
 
 ## IV.5 Canonical record families
 

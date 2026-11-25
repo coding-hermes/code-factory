@@ -1190,6 +1190,10 @@ the acceptance oracle.
 
 Everything above is the governing contract; what follows is the measured settings
 inventory of the thirteen module chapters, retained with its first-batch discipline.
+**M13 (chat gateways) is measured nowhere**: its capability is spec-only
+(`specs/M13-chat-gateways.md`), so its rows live in their own SPEC-DERIVED section at
+the end of this part — target surface, not measured inventory — and the thirteen-chapter
+count below stays an inventory of measured modules only.
 
 Every setting the thirteen module chapters register, in one place. `Where it lives` names
 the file and the mechanism (env var, flag, config key or hardcoded constant). `Default`
@@ -1753,3 +1757,21 @@ never matches an unchanneled message.
 
 Fail-closed startup: no token file or no upstream key → `sys.exit(2)` before binding
 (`:265-270`). The `_forward` union annotation requires Python >= 3.10 (F12-5).
+
+## M13 — chat gateways
+
+**SPEC-DERIVED — target surface, not measured inventory.** The capability is specified
+(`specs/M13-chat-gateways.md`) and not implemented: `scripts/bunker_config_gen.py` emits
+no `gateways` / `token_env` / `platforms` content and boardctl has no `--deliver` flag
+today (M13 §4). Defaults below are the spec's values, not measurements; the chapter's
+§7 records which checks have run (one, the document lint).
+
+| Setting | Lives in | Default | Range | Changes | Cross-ref |
+|---|---|---|---|---|---|
+| `platforms.telegram.enabled` | bunker `~/.hermes/config.yaml` (generated, M13 §3) | absent — gateway off | boolean | on gives the bunker its own chat identity — its OWN bot token, never the control host's (M13 R1) | M13 §3 |
+| `platforms.telegram.token_env` | same | unset — provisioning reports `GATEWAY_TOKEN_REF_UNRESOLVED` and the lane runs scheduler-only | an env var NAME, never a value | custody is by reference — generated files carry zero token bytes (M13 R2); a dead referenced token fails the gateway fast (M13 R6) | M13 §3, §5 |
+| `platforms.telegram.home_channel.{platform,chat_id,thread_id,name}` | same | unset | platform key + chat/thread ids | where the bunker's chat presence lives; mirrors the control host's verified surface shape (M13 R1) | M13 §3 |
+| `platforms.telegram.allowed_chats` | same | `[]` | chat-id list | Hermes enforcement of who may command the bunker — control-host behavior, no bunker-specific path (M13 §5) | M13 §3 |
+| `gateways.loop_watchdog` | same | `{}` — inherit Hermes defaults | object | inherit or override the gateway loop watchdog; any platform key provisions without bunker-side special-casing (M13 R5) | M13 §3 |
+| `deliver` | scheduler project row (control host; already supported) | unset — scheduler-only lane | `telegram:<chat>:<thread>` | every tick attempt delivers its report link to that thread, success or failure — the M9 deliver law on bunker lanes (M13 R4) | M13 §3, M9 |
+| `deliver_mode` | scheduler project row | `link` | `link` or `full` | owner ruling 2026-11-16: link mode, into the configured thread | M13 §3 |

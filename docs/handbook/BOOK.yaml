@@ -51,6 +51,7 @@ parts:
       - chapters/M10-crier.md
       - chapters/M11-dispatcher.md
       - chapters/M12-inference-proxy.md
+      - chapters/M13-chat-gateways.md
   - id: IV
     title: Contract register
     prefix: 4
@@ -100,6 +101,7 @@ figures:
   - {code: "3.10", file: figures/module-M10.svg, caption: "M10 crier — the message bus: envelope guard, custody, delivery, replay and settlement, with the identity that makes redelivery safe."}
   - {code: "3.11", file: figures/module-M11.svg, caption: "M11 dispatcher — per-target dispatch and the serial loop that bounds fan-out, including the head-of-line case the register records as implementation evidence."}
   - {code: "3.12", file: figures/module-M12.svg, caption: "M12 inference proxy — provider routing, fallback chain ordering and usage capture, and where the boundary with the control-host session endpoint lies."}
+  - {code: "3.13", file: figures/module-M13.svg, caption: "M13 chat gateways — the bunker-side chat identity and its token-by-reference config envelope (CT-31, spec-derived): per-bunker tokens, scheduler routing independent of chat delivery, and a dead token failing fast instead of stalling a lane."}
   # Part II — per-flow diagrams F1…F16, drawn from the reconciled contracts.
   - {code: "2.1", file: figures/F1.svg, caption: "F1 dispatch and settlement — one foreman round end to end: refresh and eligibility, claim, dispatch, node execution, evidence return, verification and settlement, every step citing its chapter or contract."}
   - {code: "2.2", file: figures/F2.svg, caption: "F2 provisioning — a declared host and project becoming a node that can receive a command, with the qualification and readback that must pass before a repository is attached."}

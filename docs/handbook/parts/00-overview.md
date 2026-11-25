@@ -193,6 +193,29 @@ proof, while memory records local commit and remote synchronization separately.
 Where a promise remains unproven, the contract register (Part IV) marks that
 side RED; legacy transport success is coverage evidence, not a second contract.
 
+## The module chapters at a glance
+
+Part III carries one chapter per module. M13 is spec-derived — its capability is
+specified (`specs/M13-chat-gateways.md`) and not yet implemented, and its chapter says
+so rather than borrowing measured evidence from its neighbors.
+
+| Module | Role | Chapter |
+|---|---|---|
+| M0 | shared contract — the record shapes and vocabulary everything else sources | M0 §2 |
+| M1 | provisioning — a bare host becomes a verified node | M1 §2 |
+| M2 | dispatch — the envelope from scheduler to node and the reply back | M2 §2 |
+| M3 | repository — branch, worktree, commit and the landing proof | M3 §2 |
+| M4 | board — the append-only record of work and its state | M4 §2 |
+| M5 | harness — the editor loop inside a node, under a gate | M5 §2 |
+| M6 | documentation — intent to issue, with structural gates | M6 §2 |
+| M7 | github — forge authentication and the push/PR boundary | M7 §2 |
+| M8 | safety — the refusal surface and reclamation bounds | M8 §2 |
+| M9 | scheduler — lanes, weight budget and admission | M9 §2 |
+| M10 | crier — the message bus: custody, leases, replay, settlement | M10 §2 |
+| M11 | dispatcher — per-target dispatch and the serial loop | M11 §2 |
+| M12 | inference proxy — the node's inference path, tokens and capture | M12 §2 |
+| M13 | chat gateways — the bunker's own chat identity, token by reference (SPEC-DERIVED) | M13 §2 |
+
 ## How to read the rest
 
 | Part | Question it answers |

@@ -28,7 +28,7 @@ bottom-up: control decides, transport carries, execution does the work, memory
 remembers, governance decides whether to believe the result, and evidence is what
 a human finally reads. Counts are derived from the model's component/layer membership, including the
 GUARD responsibility and external peers, rather than frozen prose totals. The
-13 module chapters (M0–M12) remain implementation coverage; boundary peers and
+14 module chapters (M0–M13) remain implementation coverage; boundary peers and
 new target responsibilities below do not acquire invented module ownership.
 
 Four resolved decisions fix the arrangement and are repeated wherever they matter.
@@ -363,6 +363,31 @@ from approved target behavior.
   exits 2 (M12 §11); the upstream is a rumour with one side named and healthy
   streams are unframed to completion (M12 §6).
 - **Pointers:** M12 (`docs/handbook/chapters/M12-inference-proxy.md`); contracts `CT-19`, `CT-20`, M12-C1, M12-C2.
+
+**29. CHAT GATEWAYS (BUNKER HERMES)** — *SPEC-DERIVED (M13)*
+- **Purpose:** give each bunker Hermes its own chat-gateway connections — Telegram
+  first, gateway-platform agnostic — so a bunker can hold a chat identity of its own,
+  deliver tick reports into configured chat threads, and remain fully operable when
+  chat is absent (M13 §2).
+- **Form/location (target):** Hermes `platforms.*` / `gateways.*` configuration inside
+  each Bunker's `~/.hermes/config.yaml`, generated/merged by the provisioner; no
+  runtime process of its own — the gateway legs are the Hermes gateway's own.
+- **Caller/trigger:** chat platform events inbound; scheduler tick closeout outbound on
+  lanes that carry a delivery target.
+- **Owned decisions and state:** the bunker's own bot identity and its `token_env`
+  reference — never the control host's token (M13 R1/R2). Chat delivery never gates
+  task acceptance; the Crier boundary is unchanged (M13 R3).
+- **Inputs:** the gateway config envelope (CT-31) merged at provision and re-sync; the
+  referenced token variable resolved on the bunker itself.
+- **Outputs:** tick report delivery to `deliver: telegram:<chat>:<thread>` lanes under
+  the M9 deliver law (M13 R4).
+- **Consumers:** the operator's chat threads; the scheduler lane remains the
+  settlement path.
+- **Failure behavior:** a dead or missing token fails the gateway fast with a named
+  error (M13 R6); provisioning reports `GATEWAY_TOKEN_REF_UNRESOLVED` and the lane runs
+  scheduler-only — never a silent hang (M13 §5).
+- **Pointers:** M13 (`docs/handbook/chapters/M13-chat-gateways.md`); contract `CT-31`
+  (SPEC-DERIVED, Part IV); settings Part V, M13 section.
 
 ### 1.3.3 Execution — does the work
 
@@ -1988,15 +2013,19 @@ EVIDENCE: docs/handbook/parts/I-system-arrangement.md and commit recorded by the
 
 ## 1.10 The contract surface, as a count
 
-The canonical register contains 31 rows: `CT-01`…`CT-23`, the foreman-return leg
-`CT-06R`, and the seven manager contracts `CT-24`…`CT-30`. Current implementation
+The canonical register contains 32 rows: `CT-01`…`CT-23`, the foreman-return leg
+`CT-06R`, the seven manager contracts `CT-24`…`CT-30`, and `CT-31` — the M13
+chat-gateway config envelope — registered as SPEC-DERIVED with its
+`docs/SYSTEM-MODEL.yaml` registration pending. Current implementation
 coverage remains separate from this target count: historic transport coverage
 appears under each model contract's legacy_coverage. All target wires remain
 UNVERIFIED until the versioned target contract is exercised; a legacy PROVEN
 transport cannot certify a new schema. Auxiliary boundary_edges are additional
 legs of named canonical contracts, not new contract IDs. The target model has
 33 component responsibilities including external peers; captions must derive this
-count rather than retaining the former 27/28-box scope. Wave C owns the out-of-scope
+count rather than retaining the former 27/28-box scope, and while CT-31 is outside
+the model the map and its generated captions legitimately continue to derive their
+contract count from `docs/SYSTEM-MODEL.yaml`. Wave C owns the out-of-scope
 BOOK.yaml caption and rendered figure updates.
 
 ## 1.11 P5-A finding disposition and issue handoff

@@ -1962,6 +1962,24 @@ def bw_gate(svg: str, fname: str) -> str | None:
     return None
 
 
+# SPEC_MODULES — module views rendered from their spec rather than from the
+# model: docs/SYSTEM-MODEL.yaml is the model's authority and stays out of scope
+# for a render row, so a spec-derived module (M13 chat gateways,
+# specs/M13-chat-gateways.md) is drawn from this list until its model row
+# lands. Contracts stay empty: CT-31 is registered in Part IV but not yet in
+# the model's contract dict, and module_sheet skips unknown contract ids.
+SPEC_MODULES = [
+    {
+        "id": "M13",
+        "name": "CHAT GATEWAYS",
+        "blurb": "each bunker holds its own chat identity and delivers tick reports by reference — spec-derived, target-unimplemented (M13 §2)",
+        "components": ["gateway"],
+        "contracts_in": [],
+        "contracts_out": [],
+    }
+]
+
+
 def main() -> int:
     model_bytes = MODEL.read_bytes()
     model = yaml.safe_load(model_bytes)
@@ -1979,7 +1997,7 @@ def main() -> int:
         )
     )
 
-    for mod in model["modules"]:
+    for mod in model["modules"] + SPEC_MODULES:
         p = OUT / f"module-{mod['id']}.svg"
         p.write_text(module_sheet(model, mod).emit(""))
         made.append(
