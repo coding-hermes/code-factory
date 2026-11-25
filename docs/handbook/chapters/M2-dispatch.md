@@ -383,6 +383,163 @@ reaches both durable memory records. Observed: `WITNESS: PASS`, exit 0. The pyte
 
 ch:trace row=P5G-18 spec=docs/handbook/OUTLINE.md#f1-dispatch-and-settlement wave=none:serial-worker test=tests/cf253_stall_witness.py doc=docs/handbook/chapters/M2-dispatch.md evidence=tests/cf253_stall_witness.py witness=none:shipped-node-bus-worker-wall-stall-kill-ladder verdict=none:foreman-verifies-and-closes commit=none:worker-commit memory=none:foreman-writes
 
+### III.M2.S6 — Execution deduplication and mode migration (P5G-19)
+
+Board row P5G-19 (finding P5-B-12, `docs/handbook/parts/IV-contract-register.md:789`) asks what
+immutable execution key and mode-selection handshake is shared by resident, pull and central
+consumers during cutover, redelivery and compatibility operation. The answer is derived from the
+shipped node worker at code-factory commit `6450544` — every bare `:line` below is
+`scripts/node-bus-worker.py` at that commit — plus `specs/ENVELOPE.md` (§Correlation and
+idempotency, §Ack after delivery), `specs/TRACE.md` (§2 ladder), the Part IV resolutions
+(`docs/handbook/parts/IV-contract-register.md:49-54`) and M2 §15.1 (this chapter, :776-792).
+The chapter's standing rule applies in both directions: only the pull consumer ships in this
+tree, so the resident and central halves of the question are named as gaps together with the
+measurement that proves the absence, not adopted from the specification.
+
+Actor: Three dedup authorities with disjoint keys, only the first of which ships here. The
+node's bus worker owns execution deduplication: `process()` resolves the execution key and
+consults the seen-cache before any work (:1546, :1549-1554), and `once()` records the key at
+execution time and persists the cache before any delivery (:2071-2078, :2088-2092). The relay
+owns delivery deduplication: `deliver()` posts every result under a stable idempotency key
+derived by `delivery_key()` (:2113, :1011-1023), and the relay answers a second delivery
+carrying the same key inside its window (`CR_IDEMPOTENCY_WINDOW_S`, 24 h default) with the
+FIRST accept and stores nothing (:1014-1016). The scheduler owns the dispatch key: the
+payload's `idempotency_key` is the first fallback `dispatch_key()` resolves (:1005-1008), and
+`specs/ENVELOPE.md:267-270` fixes the two directions' keys as separate and never regenerated.
+The §15.1 resident supervisor — the actor that derives `execution_key` from
+`{launch_id, input_digest}` (`docs/handbook/parts/IV-contract-register.md:49-54`) — has no
+implementation in this tree, and neither does the central dispatcher replay ledger: a search
+for `ledger_put`/`ledger_load` across this repository's Python sources returns no file, so
+P5-B-12's replay-ledger half is specification-only.
+
+Data shape: The shipped execution key is a three-fallback string, `dispatch_key()` =
+`idempotency_key` or `dispatch_id` or `corr_id` or empty (:1005-1008); the delivery replay key
+is derived, never received: `delivery_key()` = `"<dispatch_key>:result"`, truncated to
+`IDEMPOTENCY_KEY_MAX` 128 because the relay caps the field (:1011-1023, constant :122), and it
+is a function of the dispatch alone — never run timing, never attempt count (:1016-1018). The
+attempt identity is separate from both: `run_identity()` = `dispatch.run_id` else
+`vars.CF_RUN_ID`, never `corr_id` (:1252-1258; `specs/TRACE.md:42-45`, ladder rule 1 — the
+scheduler mints one `run_id` per attempt). The store is one JSON dict at
+`~/.node/bus-seen.json` (:504), `dispatch_key → recorded result`, written atomically (tmp
+file, 0600, `os.replace`, :995-1002) and tail-evicted at 200 entries (`SEEN_LIMIT` :114,
+eviction :996). The §15.1 surfaces define a different shape for the resident half —
+`execution_key` derived once from `{launch_id, input_digest}`, unique-indexed, with
+`dispatch_id` and delivery ids as receipt identities that are never uniqueness authority
+(M2 §15.1, this chapter :776-783) — and nothing in this tree implements it: the worker's mode
+group is `--check`/`--once`/`--loop`/`--print-brief-digest` (:2149-2168) with `--dry-run` as a
+modifier (:2170), and `grep -ic resident` on the worker is 0.
+
+Ordering: Identity before dedup before work. `process()` refuses a dispatch missing
+`in_reply_to`/`corr_id`/`run_id` before consulting the cache (:1541-1545), then resolves the
+key (:1546). Inside one poll the order is fixed: load the cache (:2044) → execute each message
+and record its key at EXECUTION time (:2071-2078) → persist the whole cache BEFORE the first
+delivery (:2088-2092) → deliver each result under its `delivery_key` (:2099-2118) → ack only
+the delivered message ids, last (:2119-2125); an undelivered message stays unacked (:2123,
+:2126-2131). The spec-only cutover ordering (M2 §15.1, this chapter :784-792, citing Part I
+§1.9.4) is: a mode change disables admission, drains or fences every old attempt, proves old
+credential denial, then prepares and commits the new binding; pull/central adapters may only
+translate a persisted authorized admission into the same supervisor and can never allocate
+another execution key (:789-791). No shipped code performs any of those steps — the worker has
+no mode field at all — so this section records the migration handshake as TARGET-UNIMPLEMENTED,
+the same marker §15.1 already puts on the resource-side fence (:786).
+
+Failure behavior: A redelivery whose key is inside the 200-entry window returns the recorded
+result verbatim and is acked (:1549-1554); a redelivery whose key was evicted re-executes
+(:996). A failed cache write is a WARN, not a refusal: the results still deliver, but a crash
+after execution and before any persist leaves no record, and the redelivery re-runs the work
+(:2093-2097). A delivery that is not accepted (anything but 200/201) leaves the message
+unacked so the result is retried under the SAME key (:1905-1922, :2123); the relay's
+first-accept rule turns that retry into a replay (:1014-1016), and a body the relay guard
+would refuse is never posted at all — the dispatch stays unacked rather than looping a
+self-refusing reply (:1888-1898, CF-131). The resident half names its own failures in the
+specification: `LAUNCH_CONFLICT` for a reused attempt with different input (M2 §15.1, this
+chapter :766), `EXECUTION_MODE_UNSUPPORTED` for an unsupported mode (:792), and the rule that
+a different `dispatch_id` never bypasses deduplication (:791) — none of these names occurs
+anywhere in this repository's scripts or tests, which is the measurement behind the gap.
+
+Recovery rule: At-least-once delivery of the result with exactly-once STORAGE of it, never
+exactly-once execution (`specs/ENVELOPE.md:229`, `:263-266`). Redelivery under the same key
+replays the recorded result under the SAME `run_id` — the redelivered message carries it — and
+a new attempt identity comes only from the scheduler re-dispatching (`specs/TRACE.md:42-45`,
+rule 5 :51). During a cutover the specification keeps resident, pull and central consumers
+compatible by construction: all modes share one ledger, adapters cannot mint execution keys,
+and `dispatch_id` is not uniqueness authority (M2 §15.1, this chapter :779-792). The shipped
+compatibility surface is narrower and honest: only the pull worker exists, its three keys are
+derived from the dispatch payload alone and are therefore mode-agnostic by construction, and a
+future resident or central consumer can join this dedup plane only through the fields the
+envelope already defines — every dispatch carries an `idempotency_key` and every result
+carries `in_reply_to`/`corr_id`/`run_id` (`specs/ENVELOPE.md:257-266`) — because those are the
+only execution-key inputs shipped code consumes.
+
+The dedup/cutover state table is the deterministic artifact; every row cites the shipped line
+or the named gap it comes from:
+
+| # | Consumer / surface | Execution key | Store | Redelivery / cutover behavior | Shipped |
+|---|---|---|---|---|---|
+| 1 | pull worker, receive side (`--once`/`--loop`) | `dispatch_key` = `idempotency_key`‖`dispatch_id`‖`corr_id` (:1005-1008) | seen-cache `~/.node/bus-seen.json`, 200-tail (:504, :114, :996) | recorded result returned verbatim (:1549-1554); re-executes only after eviction (:996) or a failed cache write (:2093-2097) | yes |
+| 2 | pull worker, delivery leg | `delivery_key` = `<dispatch_key>:result`, cap 128 (:1011-1023, :122) | relay dedup window, first accept wins (:1014-1016) | a lost answer's retry is answered with the FIRST accept; the result is re-delivered, never re-run (:2099-2118) | yes — window enforced relay-side |
+| 3 | attempt identity, both legs | `run_identity` = `dispatch.run_id`‖`vars.CF_RUN_ID` (:1252-1258) | echoed on every result | replay keeps the SAME `run_id`; a new `run_id` only from a scheduler re-dispatch (`specs/TRACE.md:42-45`) | yes |
+| 4 | central dispatcher replay ledger | message-id-keyed recorded result | dispatcher ledger | replay the recorded result instead of a second harness run | NO — no dispatcher ships in this tree |
+| 5 | resident mode binding (§15.1) | `execution_key` = f({launch_id, input_digest}) (`docs/handbook/parts/IV-contract-register.md:49-54`) | supervisor execution journal (M2 §15.2, this chapter :796-805) | cutover: drain → prove credential denial → commit binding; `EXECUTION_MODE_UNSUPPORTED`; a different `dispatch_id` never bypasses dedup (M2 §15.1, this chapter :784-792) | NO — TARGET-UNIMPLEMENTED (:786) |
+
+Invariant the table encodes: rows 1-3 are keyed by dispatch-derived values only, so no
+redelivery can mint a second execution under a new id; rows 4-5 name gaps, not implementations,
+and a consumer that ships into either row must adopt the row-1/row-2 key fields rather than
+invent a fourth key.
+
+Validation vector (shipped, run at `6450544` from the repository root — it imports the worker
+module and drives the real key derivations, the cache round-trip and the replay branch;
+nothing is posted or acked):
+
+```bash
+python3 - <<'EOF'
+import importlib.util as u, tempfile, os, types
+spec = u.spec_from_file_location("nbw", "scripts/node-bus-worker.py")
+m = u.module_from_spec(spec); spec.loader.exec_module(m)
+d = {"idempotency_key": "cfk-1", "dispatch_id": "d-1", "corr_id": "c-1",
+     "run_id": "r-1", "vars": {"CF_RUN_ID": "shadow"}}
+print("dispatch_key", m.dispatch_key(d))
+print("key_fallback", m.dispatch_key({"dispatch_id": "d-2", "corr_id": "c-2"}))
+print("delivery_key", m.delivery_key(d, {}))
+print("delivery_key_cap", len(m.delivery_key({"idempotency_key": "K" * 200}, {})))
+print("run_identity", m.run_identity(d), m.run_identity({"vars": {"CF_RUN_ID": "v-1"}}),
+      repr(m.run_identity({"corr_id": "c-1"})))
+print("constants", m.SEEN_LIMIT, m.IDEMPOTENCY_KEY_MAX)
+fd, p = tempfile.mkstemp(); os.close(fd)
+m.save_seen(p, {f"k{i:03d}": {"n": i} for i in range(201)})
+loaded = m.load_seen(p)
+print("cache", len(loaded), "k000" in loaded, "k200" in loaded)
+os.remove(p)
+r = m.process(d, types.SimpleNamespace(agent="a", url="", project="p"), None, None,
+              {"cfk-1": {"status": "completed", "recorded": True}}, in_reply_to="m-1")
+print("replay", r[0], r[2], r[1])
+EOF
+```
+
+Observed:
+
+```
+dispatch_key cfk-1
+key_fallback d-2
+delivery_key cfk-1:result
+delivery_key_cap 128
+run_identity r-1 v-1 ''
+constants 200 128
+cache 200 False True
+  PASS  idempotent — d-1 (corr c-1) was already executed — returning the recorded result, not re-running
+replay True True {'status': 'completed', 'recorded': True}
+```
+
+exit 0. Every table value is one of these tokens: the key resolution order (row 1), the
+`<key>:result` shape and its 128 cap (row 2), the run-identity order and its refusal to accept
+`corr_id` (row 3), the 200-tail eviction keeping the newest entry and dropping the oldest
+(row 1), and the replay branch returning the recorded result with an ackable verdict (row 1)
+without re-running anything. The idempotent-redelivery arms of
+`tests/test_bus_result_delivery.py` (A5, A6) pin the same behavior end to end against a stub
+relay.
+
+ch:trace row=P5G-19 spec=docs/handbook/OUTLINE.md#f1-dispatch-and-settlement wave=none:serial-worker test=tests/test_bus_result_delivery.py doc=docs/handbook/chapters/M2-dispatch.md evidence=none:inline-shipped-code-probe witness=none:shipped-node-bus-worker-key-derivations-and-seen-cache verdict=none:foreman-verifies-and-closes commit=none:worker-commit memory=none:foreman-writes
+
 ## 7. Verification
 
 | Check | Command | Expected | Last run | Result |
