@@ -73,7 +73,17 @@ import sys
 # reports it as new instead of silently inheriting an old acceptance.
 # ACCEPTED_UNRESOLVED_DATE is the date of the newest acceptance, not of the
 # original 2026-11-16 baseline that the paragraph above measures.
-ACCEPTED_UNRESOLVED_DATE = "2026-11-22"
+# 2026-11-25 (+2, accepted on this date, row CF-535): CF-163 CF-433.
+# CF-163 is the zero-evidence class: its closure was an owner-ruled external
+# push act (board event 1014 @ fc2968dd re-pointing the published master ref at
+# 4ead64fe; anonymous-probe re-verification 2026-11-23) — no GitReins run exists
+# by construct, so the row can never resolve from a run-id store.  CF-433 named
+# run dir e46c7787 which is absent from the canonical store (291 dirs audited;
+# the only 2026-11-22 verdict naming the row is CF-321's 6bb9875d) — the
+# closure's surviving evidence is commit ea82d908 on origin/main.  Accepted
+# ids 66 -> 68, dated, so a later run that sees one of them fail again reports
+# it as new instead of silently inheriting an old acceptance.
+ACCEPTED_UNRESOLVED_DATE = "2026-11-25"
 ACCEPTED_UNRESOLVED = frozenset(
     """
     CF-007 CF-008 CF-011 CF-012 CF-013 CF-034 CF-037 CF-038 CF-041 CF-050 CF-051
@@ -82,6 +92,7 @@ ACCEPTED_UNRESOLVED = frozenset(
     CF-197 CF-198 CF-219 CF-226 CF-230 CF-244 CF-245 CF-257 CF-259 CF-270
     CF-275 CF-277 CF-280 CF-291 CF-303 CF-307 CF-320 CF-323 CF-354 CF-370
     CF-378 CF-379 CF-382 CF-401 CF-402 CF-404 CF-411 CF-470 CF-504 CF-517
+    CF-163 CF-433
     P5G-16 PERF-012 PERF-014 PERF-018 QA-CODE-FACTORY-2
     """.split()
 )
