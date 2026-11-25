@@ -78,6 +78,53 @@ evaluator:
   # budgets, zero criteria graded — the evaluator is not converging on this task, so
   # the fix is NOT another rung. Filed as CF-426 (shrink the judged evidence scope for
   # docs-only rows, or name the code path that never reaches the criterion).
+  #
+  # ── CF-426 resolution (2026-11-25) ──
+  # Code path named: engine/evaluator.py::_evaluate_loop. Criterion grading is
+  # entirely model-driven — nothing in the loop allocates budget per criterion or
+  # forces a grading checkpoint, so a judge that re-derives evidence every pass can
+  # burn its whole budget before it ever emits the verdict JSON. The dedup hint is
+  # a warning, not a bound: it fires only on an EXACT repeat (run_command keyed on
+  # the exact cmd string, read_file on the path, search_pattern on the regex —
+  # _execute_tool_with_dedup), so varying one argument re-bills the pass. Every
+  # turn re-sends the whole transcript, so input grows superlinearly with
+  # exploration; compaction (max 3, threshold 90% of the input budget) resets the
+  # iteration counter AND token tracking, so whichever budget is reached first
+  # between compactions binds — that is why the rungs above died on four different
+  # budgets with the same 0-of-1 shape.
+  #
+  # Fixture reproduction (scripts/probe_cf426_tier2_bounded_docs.py, engine 0.22.0
+  # from the ~/gitreins local build, mock judge driving the real loop/tools; the
+  # stored measurement is docs/audits/cf426-tier2-probe-evidence.json, which
+  # records the measured head per arm — re-run it to reproduce):
+  #   - UNBOUNDED arm — P5G-10's original single-blob criterion plus a
+  #     re-deriving judge reproduces the starved verdict shape exactly:
+  #     "Cap exceeded: Iteration cap (100) reached (100.1 used)", 0 of 1 criteria
+  #     graded, criterion UNVERIFIED "Not examined — evaluation ended before this
+  #     criterion was reached", 1,104,674 estimated in / 2,640 out.
+  #   - BOUNDED arm — the same engine grades a one-criterion docs task 1 of 1
+  #     PASS (verdict COMPLETE) at 6.5 iterations / 28,534 estimated in / 254 out
+  #     (deterministic across runs). Token figures are transcript-derived
+  #     estimates (chars/3.5, the engine's own _estimate_context_tokens fallback;
+  #     the starved arm's per-turn burn modelled at the measured ~14k/turn of
+  #     job-2ef71d1e) — labelled estimates, not provider-billed numbers.
+  #
+  # MEASURED BOUNDED EVIDENCE SCOPE for docs-only rows (real verdicts on this
+  # repo, disk-checked): verdict 2de7f84b — P5G-10 merits re-judge, tier2 PASS,
+  # 1/1 criteria graded, bound to 25cf3a8f; its criterion is a PROOF recipe that
+  # names exact headings and fields and reads only M4-board.md +
+  # contract-vectors.json. Verdict 402cc1f4 — one-criterion docs/shell row, tier2
+  # PASS 1/1; its PROOF is two grep/awk commands with expected outputs. Verdict
+  # 7f326496 — 4/4 graded after one-AC-per-criterion (the CF-521 coverage-gate
+  # lesson). The recipe: ONE AC per criterion; the criterion text itself carries
+  # the PROOF recipe (exact files + headings + commands + expected outputs + a
+  # FAILIF clause); grade the committed tree only — say so in the criterion
+  # ("do not re-run tests/selftest.sh, do not rebuild the handbook") — and cite
+  # pre-computed gate artifacts instead of re-deriving them. Per-verdict token
+  # attribution from .gitreins/usage.jsonl is NOT derivable (one tier2 row per
+  # pipeline step; on shared evenings the row→verdict mapping is ambiguous), so
+  # judged scope is measured in iterations here and capped-run burn is quoted
+  # from the verdict summaries' own "The run spent …" lines.
   max_iterations: 800
   static_analysis_diagnostics: false
 history:
