@@ -263,6 +263,126 @@ Observed: 12 PASS (consumer-pin, A1..A11), exit 0.
 
 ch:trace row=P5G-17 spec=docs/handbook/OUTLINE.md#f1-dispatch-and-settlement wave=none:serial-worker test=tests/test_bus_result_delivery.py doc=docs/handbook/chapters/M2-dispatch.md evidence=tests/test_bus_result_delivery.py witness=none:shipped-node-bus-worker-and-envelope-trace-specs verdict=none:foreman-verifies-and-closes commit=none:worker-commit memory=none:foreman-writes
 
+### III.M2.S5 — Leases, deadlines and cancellation races (P5G-18)
+
+Board row P5G-18 (CF2A-01 findings P5-B-11, P5-C-12, P5-C-30, P5-A-16) asks what renew/release
+request, clock and deadline hierarchy, expiry transition, cancellation winner, kill escalation
+and replacement rule govern every running round. The answer is derived from the shipped node
+worker at commit `cae82b6b` — every bare `:line` below is `scripts/node-bus-worker.py` at that
+commit — plus the custody chapters it consumes: the bus's lease grant/ack behavior is M10 §3
+(`docs/handbook/chapters/M10-crier.md`, measured against the crier registry handler), and the
+signed renew/release custody law (M10 §16) and the phase-discriminated `cancellation.v1` of
+§15.3 are specification-only targets. Where the shipped code implements none of a target
+behavior, this section names the gap instead of adopting the spec.
+
+Actor: The executing node's bus worker owns every run clock and the kill; the bus owns the
+lease. `once()` retrieves a batch with `lease_seconds` (:2001-2006), `run_harness` (:1062) is
+the only thing that ends a run — by its own wall, stall or gate clocks — and `ack` (:1922-1927)
+is the only custody verb the node ever sends besides retrieve. There is no renew, no release
+and no cancel input: `grep -icE 'renew|release|cancel' scripts/node-bus-worker.py` is **0**, so
+nobody — scheduler, operator or bus — can cancel a running round at the node. Identity is
+inherited, not minted: `run_identity()` (:1252) reads `dispatch.run_id` or `vars.CF_RUN_ID`
+(`specs/TRACE.md` ladder rule 1 — the scheduler mints `run_id` per attempt), and `attempt_id`
+only passes through the task projection (:1351).
+
+Data shape: One lease per retrieved batch. The retrieve query carries `limit`, `lease_seconds`
+and optional `wait_seconds` (:2002-2006); the bus answers with a batch `lease_id` (:2030); the
+ack consumes it with `{"lease_id", "message_ids"}` (:1922-1927) — one ack POST per poll, never
+per message. Defaults: lease 30 s (`DEFAULT_LEASE_SECONDS` :109, CLI `--lease-seconds` :2217;
+a `--dry-run` asks 5 s, :2001); per-request HTTP timeout 10 s (:110, `--timeout` :2233);
+long-poll `--wait-seconds` bounded 0..120, exit 2 outside (:2256-2260). Run clocks, innermost
+first: `CF_TIMEOUT_S` bounds one harness turn, range 1..86400 default 1800 (`SECTION5_INTS`
+:222-225, exported to the child); `limits.wall_s` from the dispatch bounds the whole run via
+`dispatch_wall` — accepted only when `0 < wall_s <= 86400`, else `--harness-wall` (default
+1800, :1831-1837); `--stall-s` (default 300, 0 disables, :113/:2230-2235; negative is a usage
+error, :2241) bounds silence; the gate runs on `gate.timeout_s` or the same wall (:1195). The
+recovery side: `dispatch_key` (:1005-1010) and `delivery_key` (`<dispatch_key>:result`, capped
+at 128 chars, :1011-1024/:122) key the seen-cache, which keeps its last 200 entries (:114,
+tail-evicted at :996).
+
+Ordering: Clocks compose by minimum, never by product — the Part IV resolution law
+(`docs/handbook/parts/IV-contract-register.md:45`): the turn timeout is bounded by the wall,
+the wall by the control-side round budget; the node never multiplies `CF_TIMEOUT_S` by turn
+count. Inside one run, `run_harness` polls every ≤0.25 s (:1143) and checks the wall BEFORE the
+stall (:1133-1141), so at simultaneous expiry the wall's verdict classifies the run; both
+boundaries feed the same kill ladder (below). Custody ordering inside one poll is fixed:
+retrieve grants the lease → each result is recorded in the seen-cache at EXECUTION time
+(:2071-2074) → the cache is persisted BEFORE the first delivery (:2085-2089) → results are
+delivered one POST each (:2096-2118) → only delivered message ids are acked with the batch
+lease_id (:2121-2122) → undelivered messages stay unacked (:2120-2127). The node never renews:
+the term it asks for at retrieve is the only lease it can express, so a harness that outlives
+30 s runs on an expired lease.
+
+Failure behavior: A wall expiry sets `wall limit Ns exceeded` (:1133-1134); a stall expiry sets
+the `stalled:` diagnosis — "the upstream may have accepted the request and produced nothing",
+a diagnosis, never proof (§III.M2.S3) — (:1136-1141). Either returns `code=None` and
+`process()` classifies the run FAILED (`status:"failed"`, `ok:false`, `error`=note, `wall_s`
+recorded, :1694-1717), and the failed result is delivered and acked like any result
+(`specs/ENVELOPE.md` §Ack after delivery). A gate past its budget returns
+`gate could not run: …` (:1206-1207) and a FAILED reason (:1755-1756). The lease boundary
+differs: expiry mutates nothing at the node — the message simply becomes redeliverable at the
+bus (M10 §3; the target custody law would hold it for reconciliation instead, M10 §16).
+Because nothing renews, the race IS shipped behavior: while a first execution is still in
+flight past the lease, another consumer of the same inbox — a second worker process sharing the
+agent identity — can retrieve the same message and execute it concurrently; the seen-cache
+cannot prevent this, since it guards only a process that has already recorded the key. That
+double-execution window is named, not hidden (the renew cadence and owner fencing of §15.3 and
+M10 §16 are specification-only). The cancellation winner question therefore has a shipped
+answer of "nobody": `cancellation.v1` has no node-side implementation, so there is no
+cancellation race to adjudicate at the node — the only competitor to harness completion is the
+worker's own wall/stall kill, and it wins by construction (:1145-1163 signals whenever the run
+did not finish first).
+
+Kill escalation is a fixed ladder, applied to the child's whole process group (the child starts
+as its own session leader, :1086):
+
+1. SIGTERM to the group (:1148) — on wall, stall, or cleanup after a completion.
+2. Grace: poll at 0.05 s for ≤5 s until the child and both output readers finish (:1151-1155).
+3. SIGKILL to the group after the grace (:1157); on a clean completion the group is still
+   killed directly (:1160-1162) to reap background children the leader left behind.
+4. `child.wait()` and reader joins. Quiescence is "child dead + pipes closed": there is no
+   descendant census, no cgroup readback and no quarantine — a descendant that escaped the
+   group with its own `setsid` is not detected (the target's proven zero-descendant
+   requirement, M11 §2, is unimplemented here).
+
+Recovery rule: At-least-once execution with exactly-once result STORAGE. An unacked message
+returns to the retrievable queue at lease expiry and the next poll finds `dispatch_key` in the
+seen-cache, returning the recorded result verbatim instead of re-running (:1548-1553, the
+`idempotent` row). The cache is persisted before the first delivery, so a crash mid-delivery
+replays the recorded result; a crash DURING execution leaves no result and the redelivery
+re-runs the work — under the SAME `run_id`, because the redelivered message carries it; a new
+attempt identity comes only from the scheduler re-dispatching (`specs/TRACE.md` §2 rule 1;
+§6 arm 6 names a killed-before-result run as a `run_id` with no result, not a vanished run).
+Two bounds: two same-key messages in one batch no longer both execute — the first execution
+records the key before the second message is processed (:2063-2079), so the §11 same-batch
+duplicate row (B10 correction) describes the ordering BEFORE `cae82b6b`, not this code; and a
+key evicted from the 200-entry window is forgotten (:996), so redelivery after eviction
+re-executes.
+
+The deadline/lease hierarchy table is the deterministic artifact; every row cites the shipped
+line that sets or checks the bound:
+
+| Clock | Bound | Set / checked at | On expiry |
+|---|---|---|---|
+| Harness turn (`CF_TIMEOUT_S`) | 1..86400, default 1800 | :222-225 (bounds), exported to the child | harness-internal; not enforced by the worker |
+| Run wall | `limits.wall_s` accepted only for `0 < w <= 86400`, else `--harness-wall` (1800) | :1831-1837, checked :1133-1134 | `wall limit Ns exceeded` → FAILED result → kill ladder |
+| Stall bound | `--stall-s` default 300; 0 disables; negative refused | :113/:2230-2241, checked :1136-1141 | `stalled: …` diagnosis → FAILED result → kill ladder |
+| Gate budget | `gate.timeout_s` or the run wall | :1195 | `gate could not run` → FAILED result |
+| Inbox lease | `--lease-seconds` default 30 (dry run 5) | :109/:2217/:2001 | message returns to the bus queue; redelivery per the recovery rule; never renewed |
+| HTTP request | `--timeout` default 10 | :110/:2237 | request fails; delivery not accepted → message stays unacked |
+| Long-poll wait | `--wait-seconds` 0..120 | :2256-2260 | exit 2 outside the range |
+| Seen-cache window | last 200 keys | :114/:996 | evicted key: redelivery re-executes |
+
+Validation vector (shipped, run at `cae82b6b` from the repository root):
+`python3 tests/cf253_stall_witness.py` drives the real `run_harness` and proves the ladder's
+arms — a silent socket dies inside the bound naming the stall (child confirmed dead), CPU
+progress without output survives, output resets the timer, `--stall-s 0` restores wall-only
+waiting, a 1 s wall wins with the detector off, a negative bound exits 2, and the stall error
+reaches both durable memory records. Observed: `WITNESS: PASS`, exit 0. The pytest twin
+`tests/test_cf253_harness_stall_bound.py` pins the same arms for the local guard.
+
+ch:trace row=P5G-18 spec=docs/handbook/OUTLINE.md#f1-dispatch-and-settlement wave=none:serial-worker test=tests/cf253_stall_witness.py doc=docs/handbook/chapters/M2-dispatch.md evidence=tests/cf253_stall_witness.py witness=none:shipped-node-bus-worker-wall-stall-kill-ladder verdict=none:foreman-verifies-and-closes commit=none:worker-commit memory=none:foreman-writes
+
 ## 7. Verification
 
 | Check | Command | Expected | Last run | Result |
