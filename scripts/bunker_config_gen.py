@@ -46,6 +46,21 @@ The agent normalization is lossy on purpose — `demo--alpha` and `demo-alpha` b
 derive `cf-demo-alpha` — so the collision is measured and refused rather than
 assumed impossible.
 
+Chat gateways (specs/M13-chat-gateways.md): `--gateways <file>` names a JSON input
+carrying the §3 gateways section — `platforms.<platform>.{enabled, token_env,
+home_channel{platform, chat_id, thread_id, name}, allowed_chats}` plus an optional
+`gateways.loop_watchdog`. Each config in the run gains a SIBLING artifact
+`<project>.gateways.json` holding exactly that block, sorted and byte-deterministic,
+so the provision path can merge it into the bunker's `~/.hermes/config.yaml` and
+`--check` can grade it on every re-sync. The block cannot ride inside the .conf
+itself: the provision config grammar is KEY=VALUE and bunker-provision.sh refuses
+unknown keys, so a new key would refuse every gateway-configured bunker at provision
+time. The input is refused by name when it is not valid JSON, when a platform entry
+misses the §3 surface, or when it carries token-shaped bytes anywhere (R2 — tokens
+ride as `token_env` references; the config never holds a value). Any platform key is
+accepted (R5); telegram is the first proven platform, not a schema constant. No
+`--gateways`, no artifact: a scheduler-only lane generates byte-identically (R3).
+
 Idempotence: a generated config is sorted by key, carries no timestamp, and the
 bytes are a pure function of the registry row set and the flags. A second run
 prints `unchanged` per file and writes nothing; a file whose bytes differ is
@@ -56,6 +71,7 @@ Usage:
   scripts/bunker_config_gen.py --server <s> --project code-factory --dry-run
   scripts/bunker_config_gen.py --server <s> --prefix code-factory --check
   scripts/bunker_config_gen.py --server <s> --prefix code-factory --force
+  scripts/bunker_config_gen.py --server <s> --project demo --gateways gateways.json
 
 Exit codes: 0 configs match or were written, 1 drift (a file differs without
 `--force`, or `--check` measured a difference), 2 refused (an unreadable
@@ -68,6 +84,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import os
 import re
 import sqlite3
@@ -308,6 +325,143 @@ def namespace_for(project: str, rows: list) -> tuple:
     )
 
 
+# --- chat gateways (specs/M13-chat-gateways.md) ---------------------------------
+
+# What a bot-token literal looks like. The R2 law: a config names a token_env, never a
+# token — so this shape is refused in any gateways input, and nothing this tool writes
+# may match it.
+GATEWAY_TOKEN_RE = re.compile(r"[0-9]{8,10}:[A-Za-z0-9_-]{35}")
+# A platform key is data (R5 — telegram, signal, discord, whatever the control host
+# accepts), but it becomes a config.yaml key, so its SHAPE is still law.
+GATEWAY_PLATFORM_RE = re.compile(r"^[a-z][a-z0-9_-]*$")
+# token_env names an environment variable: uppercase with underscores, never empty.
+TOKEN_ENV_RE = re.compile(r"^[A-Z][A-Z0-9_]*$")
+GATEWAYS_SUFFIX = ".gateways.json"
+
+
+def validate_platform(name, entry) -> None:
+    """One platform entry against the M13 §3 surface; a Refused names the key.
+
+    Extra keys are passed through untouched (the control-host surface carries fields
+    like `user_id` this fleet has no opinion on); the required surface is enforced.
+    """
+    if not GATEWAY_PLATFORM_RE.match(name):
+        raise Refused(
+            f"platform key {name!r} is not a config key (lowercase [a-z0-9_-], "
+            "leading letter) — any platform is accepted (M13 R5), the key is still data"
+        )
+    if not isinstance(entry, dict):
+        raise Refused(f"platforms.{name} must be an object")
+    for key in ("enabled", "token_env", "home_channel", "allowed_chats"):
+        if key not in entry:
+            raise Refused(
+                f"platforms.{name} has no {key} — the M13 §3 surface needs it"
+            )
+    if not isinstance(entry["enabled"], bool):
+        raise Refused(f"platforms.{name}.enabled must be true or false")
+    token_env = entry["token_env"]
+    if not isinstance(token_env, str) or not TOKEN_ENV_RE.match(token_env):
+        raise Refused(
+            f"platforms.{name}.token_env must name an environment variable "
+            f"(UPPERCASE), got {token_env!r} — tokens ride by reference (M13 R2)"
+        )
+    channel = entry["home_channel"]
+    if not isinstance(channel, dict):
+        raise Refused(f"platforms.{name}.home_channel must be an object")
+    for key in ("platform", "chat_id", "thread_id", "name"):
+        if not isinstance(channel.get(key), str):
+            raise Refused(f"platforms.{name}.home_channel.{key} must be a string")
+    if channel["platform"] != name:
+        raise Refused(
+            f"platforms.{name}.home_channel.platform is {channel['platform']!r} — "
+            "it names the platform the channel lives on"
+        )
+    if not channel["chat_id"]:
+        raise Refused(f"platforms.{name}.home_channel.chat_id is empty")
+    chats = entry["allowed_chats"]
+    if not isinstance(chats, list) or not chats:
+        raise Refused(
+            f"platforms.{name}.allowed_chats must be a non-empty list of chat ids"
+        )
+    for chat in chats:
+        if not isinstance(chat, str) or not chat:
+            raise Refused(
+                f"platforms.{name}.allowed_chats carries a non-string or empty id"
+            )
+
+
+def load_gateways(path: str) -> dict:
+    """The validated M13 §3 gateways block, or a named refusal. Never guessed."""
+    path = expand(path)
+    try:
+        with open(path, encoding="utf-8") as handle:
+            raw = handle.read()
+    except OSError as exc:
+        raise Refused(f"gateways input unreadable: {path} — {exc}") from exc
+    if GATEWAY_TOKEN_RE.search(raw):
+        raise Refused(
+            "gateways input carries token bytes (M13 R2) — name a token_env instead; "
+            "the config never holds a value"
+        )
+    try:
+        doc = json.loads(raw)
+    except ValueError as exc:
+        raise Refused(f"gateways input is not JSON: {path} — {exc}") from exc
+    if not isinstance(doc, dict):
+        raise Refused(f"gateways input must be a JSON object: {path}")
+    platforms = doc.get("platforms")
+    if not isinstance(platforms, dict) or not platforms:
+        raise Refused(
+            "gateways input declares no platforms object — omit --gateways for a "
+            "scheduler-only lane (M13 R3)"
+        )
+    for name, entry in platforms.items():
+        validate_platform(name, entry)
+    gateways = doc.get("gateways", {"loop_watchdog": {}})
+    if not isinstance(gateways, dict):
+        raise Refused("gateways must be an object when present")
+    return {"platforms": platforms, "gateways": gateways}
+
+
+def gateways_path(outdir: str, project: str) -> str:
+    return os.path.join(outdir, project + GATEWAYS_SUFFIX)
+
+
+def render_gateways(block: dict) -> str:
+    """The emitted artifact bytes: sorted keys, two-space indent, no timestamp."""
+    return json.dumps(block, indent=2, sort_keys=True) + "\n"
+
+
+def gateways_keys(block: dict) -> str:
+    """The platform keys the block carries, in the order they are reported."""
+    return ", ".join(sorted(block.get("platforms", {})))
+
+
+def gateways_differences(existing: str, wanted: str) -> list:
+    """Named reasons an emitted artifact drifted, in a deterministic order."""
+    try:
+        have = json.loads(existing)
+    except ValueError:
+        return ["artifact is not JSON"]
+    try:
+        want = json.loads(wanted)
+    except ValueError:
+        return ["expected artifact is not JSON"]
+    if not isinstance(have, dict) or not isinstance(want, dict):
+        return ["artifact is not a JSON object"]
+    out = []
+    for key in sorted(set(have) | set(want)):
+        if have.get(key) == want.get(key):
+            continue
+        if key not in want:
+            out.append(f"obsolete key {key}")
+        elif key not in have:
+            out.append(f"missing key {key}")
+        else:
+            out.append(f"{key} differs")
+    return out or ["byte difference only (whitespace or key order)"]
+
+
 # --- config text ---------------------------------------------------------------
 
 
@@ -383,7 +537,7 @@ def atomic_write(path: str, text: str) -> None:
 
 def check_mode(configs: list, opts: argparse.Namespace) -> int:
     drifted = 0
-    for project, values, path in configs:
+    for project, values, path, gateways in configs:
         wanted = render(values)
         if not os.path.exists(path):
             row("FAIL", "missing", f"{path} — no config; run without --check")
@@ -409,6 +563,7 @@ def check_mode(configs: list, opts: argparse.Namespace) -> int:
                 "match",
                 f"{path} — {len(values)} keys agree, sha256 {digest(text)}",
             )
+        drifted += gateways_check(project, path, gateways)
     if drifted:
         headline(f"BUNKER-CONFIG: DRIFT ({drifted} of {len(configs)} mismatched)")
         return EXIT_DRIFT
@@ -418,15 +573,57 @@ def check_mode(configs: list, opts: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def gateways_check(project: str, conf_path: str, gateways) -> int:
+    """Grade one project's emitted gateways artifact; returns its drift count.
+
+    No gateways input, no row — unless an artifact from an earlier gated run is still
+    on disk, which is named as an orphan rather than silently ignored.
+    """
+    gw_path = gateways_path(os.path.dirname(conf_path), project)
+    if gateways is None:
+        if not os.path.exists(gw_path):
+            return 0
+        row(
+            "WARN",
+            "gateways",
+            f"{gw_path} exists but this run passed no --gateways input — "
+            "pass the input or remove the artifact",
+        )
+        return 0
+    wanted = render_gateways(gateways)
+    if not os.path.exists(gw_path):
+        row("FAIL", "gateways", f"{gw_path} — no artifact; run without --check")
+        return 1
+    try:
+        with open(gw_path, encoding="utf-8") as handle:
+            text = handle.read()
+    except OSError as exc:
+        row("FAIL", "gateways", f"{gw_path} — {exc}")
+        return 1
+    if text != wanted:
+        reasons = gateways_differences(text, wanted)
+        row("FAIL", "gateways", f"{gw_path} — {'; '.join(reasons)}")
+        return 1
+    row(
+        "PASS",
+        "gateways",
+        f"{gw_path} — platforms: {gateways_keys(gateways)} — sha256 {digest(text)}",
+    )
+    return 0
+
+
 def print_configs(configs: list) -> None:
-    for project, values, path in configs:
+    for project, values, path, gateways in configs:
         print(f"# --- {path}")
         print(render(values), end="")
+        if gateways is not None:
+            print(f"# --- {gateways_path(os.path.dirname(path), project)}")
+            print(render_gateways(gateways), end="")
 
 
 def write_mode(configs: list, opts: argparse.Namespace) -> int:
     written = unchanged = drifted = 0
-    for project, values, path in configs:
+    for project, values, path, gateways in configs:
         wanted = render(values)
         try:
             with open(path, encoding="utf-8") as handle:
@@ -440,8 +637,7 @@ def write_mode(configs: list, opts: argparse.Namespace) -> int:
         if text == wanted:
             row("PASS", "unchanged", f"{path} — byte-identical, sha256 {digest(text)}")
             unchanged += 1
-            continue
-        if text is not None and not opts.force:
+        elif text is not None and not opts.force:
             existing, shape = parse_config(text)
             reasons = ([shape] if shape else []) + differences(existing, values)
             if not reasons:
@@ -452,16 +648,19 @@ def write_mode(configs: list, opts: argparse.Namespace) -> int:
                 f"{path} — {'; '.join(reasons)} — pass --force to rewrite",
             )
             drifted += 1
-            continue
-        try:
-            atomic_write(path, wanted)
-        except OSError as exc:
-            row("FAIL", "unwritable", f"{path} — {exc}")
-            drifted += 1
-            continue
-        verb = "rewrote" if text is not None else "wrote"
-        row("PASS", verb, f"{path} — {len(values)} keys, sha256 {digest(wanted)}")
-        written += 1
+        else:
+            try:
+                atomic_write(path, wanted)
+            except OSError as exc:
+                row("FAIL", "unwritable", f"{path} — {exc}")
+                drifted += 1
+                continue
+            verb = "rewrote" if text is not None else "wrote"
+            row("PASS", verb, f"{path} — {len(values)} keys, sha256 {digest(wanted)}")
+            written += 1
+        gw_written, gw_drifted = gateways_write(project, path, gateways, opts)
+        written += gw_written
+        drifted += gw_drifted
     if drifted:
         headline(f"BUNKER-CONFIG: DRIFT ({drifted} of {len(configs)} mismatched)")
         return EXIT_DRIFT
@@ -470,6 +669,59 @@ def write_mode(configs: list, opts: argparse.Namespace) -> int:
         f"({written} written, {unchanged} unchanged), 0 refused"
     )
     return EXIT_OK
+
+
+def gateways_write(
+    project: str, conf_path: str, gateways, opts: argparse.Namespace
+) -> tuple:
+    """Write or grade one project's gateways artifact; returns (written, drifted)."""
+    gw_path = gateways_path(os.path.dirname(conf_path), project)
+    if gateways is None:
+        if not os.path.exists(gw_path):
+            return 0, 0
+        row(
+            "WARN",
+            "gateways",
+            f"{gw_path} exists but this run passed no --gateways input — "
+            "pass the input or remove the artifact",
+        )
+        return 0, 0
+    wanted = render_gateways(gateways)
+    try:
+        with open(gw_path, encoding="utf-8") as handle:
+            text = handle.read()
+    except FileNotFoundError:
+        text = None
+    except OSError as exc:
+        row("FAIL", "gateways", f"{gw_path} — {exc}")
+        return 0, 1
+    if text == wanted:
+        row(
+            "PASS",
+            "unchanged",
+            f"{gw_path} — byte-identical ({gateways_keys(gateways)}), sha256 {digest(text)}",
+        )
+        return 0, 0
+    if text is not None and not opts.force:
+        reasons = gateways_differences(text, wanted)
+        row(
+            "FAIL",
+            "drift",
+            f"{gw_path} — {'; '.join(reasons)} — pass --force to rewrite",
+        )
+        return 0, 1
+    try:
+        atomic_write(gw_path, wanted)
+    except OSError as exc:
+        row("FAIL", "unwritable", f"{gw_path} — {exc}")
+        return 0, 1
+    verb = "rewrote" if text is not None else "wrote"
+    row(
+        "PASS",
+        verb,
+        f"{gw_path} — platforms: {gateways_keys(gateways)}, sha256 {digest(wanted)}",
+    )
+    return 1, 0
 
 
 # --- main ----------------------------------------------------------------------
@@ -520,6 +772,14 @@ def build(argv: Optional[list] = None) -> tuple:
         default="",
         help="override REPO (the registry's local: paths do not clone remotely)",
     )
+    ap.add_argument(
+        "--gateways",
+        default="",
+        metavar="FILE",
+        help="M13 §3 gateways input (JSON): platforms.<platform>.{enabled, token_env, "
+        "home_channel, allowed_chats} — emits <project>.gateways.json beside every "
+        "config in the run; tokens ride as token_env references (R2), never as bytes",
+    )
     ap.add_argument("--force", action="store_true", help="rewrite a differing config")
     ap.add_argument("--check", action="store_true", help="read-only drift check")
     ap.add_argument(
@@ -542,6 +802,21 @@ def run(opts: argparse.Namespace) -> int:
         row("FAIL", "server", "SERVER unset — a config names no host to provision on")
         headline("BUNKER-CONFIG: REFUSED (1)")
         return EXIT_REFUSED
+
+    # the gateways input is validated before the registry is even opened: a bad input
+    # refuses the whole run and nothing is written (the tool's all-or-nothing law)
+    gateways_block = None
+    if opts.gateways:
+        try:
+            gateways_block = load_gateways(opts.gateways)
+        except Refused as exc:
+            row("FAIL", "gateways", str(exc))
+            headline("BUNKER-CONFIG: REFUSED (1) — nothing written")
+            return EXIT_REFUSED
+        note(
+            f"gateways — platforms: {gateways_keys(gateways_block)} — tokens ride as "
+            "token_env references only (M13 R2); no value is read or written"
+        )
 
     refusals = []
     try:
@@ -678,7 +953,14 @@ def run(opts: argparse.Namespace) -> int:
             row("WARN", "namespace", group["namespace_note"])
         if len(users[group["agent"]]) == 1:
             row("PASS", "agent", f"{values['AGENT']} — unique across the run")
-        configs.append((project, values, os.path.join(outdir, f"{project}.conf")))
+        configs.append(
+            (
+                project,
+                values,
+                os.path.join(outdir, f"{project}.conf"),
+                gateways_block,
+            )
+        )
 
     note(
         "token files are named as paths under ~/.config/code-factory/<project>/; "

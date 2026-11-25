@@ -14,6 +14,7 @@
 #   5. the checkout the node will work is the tree origin/main has (CF-244)
 #   6. the seed the node carries is the digests its seed record still names (CF-250)
 #   7. the harness the manifest records is the one on the node (CF-006)
+#   8. the chat gateway the node carries: config parses, zero token bytes, token_env resolves (M13)
 # A version string is not evidence: step 2 must be a live HTTP answer from this host.
 # A bunker node has NO LAN address by default, so its own address is not a transport this host can
 # use: --transport published-port (a port published on the bunker host) or --transport tunnel (an
@@ -496,6 +497,131 @@ EOF
     # exactly what was NOT checked instead of letting a missing manifest look like a passing leg.
     note "harness_identity — no ~/.node/node.json on the node, so the manifest's harness name and version are not checked"
     ;;
+esac
+
+# 8. the chat gateway this node carries (specs/M13-chat-gateways.md — CF-531)
+# Legs 1-7 never open the node's own chat identity. M13 gives a bunker Hermes gateway
+# connections under `platforms.*` in ~/.hermes/config.yaml, and this leg grades the three
+# laws the spec pins on the merged result:
+#   parse      the config parses under python3+yaml and the import exits 0 (the gateway
+#              reads this file at startup);
+#   R2         zero token-shaped bytes anywhere in the node home — the config names a
+#              token_env, so the scan reports COUNTS and PATHS and never the matched
+#              bytes (a verifier that prints what it forbids republishes it);
+#   token_env  every platform's token_env resolves in the node's environment; an
+#              unresolved reference is the M13 §5 WARNING GATEWAY_TOKEN_REF_UNRESOLVED —
+#              not a failure, because the lane stays scheduler-only until it lands (R3).
+# A node with no platforms block is the R3 state: one note, no rows, exactly as before
+# this leg existed. The probe is a FIXED single-quoted body (CF-270): nothing from the
+# node is interpolated into it. Its python always exits 0 — the verdict travels in
+# gateway_* markers, because an exit code cannot carry a reason — and prints only
+# platform names, token_env NAMES and verdicts, never config content, because
+# dashboard.basic_auth shares the file and must not cross to this host. A probe that
+# answers nothing recognizable (a canned stub transport, or a probe that died) is a
+# measurement GAP this leg cannot attribute: legs 1-2 already fail a dead transport, so
+# the gap is named in a note and the verdict is left to the legs that can measure it.
+GW_PROBE='
+if [ ! -f "$HOME/.hermes/config.yaml" ]; then
+  printf "gateway_config=absent\n"
+  exit 0
+fi
+if [ -x "$HOME/hermes-venv/bin/python3" ]; then
+  GW_PY="$HOME/hermes-venv/bin/python3"
+else
+  GW_PY=python3
+fi
+"$GW_PY" - 2>/dev/null <<"GWYAML"
+import os, re
+try:
+    import yaml
+except ImportError:
+    print("gateway_yaml=missing")
+    raise SystemExit(0)
+path = os.path.join(os.path.expanduser("~"), ".hermes", "config.yaml")
+try:
+    with open(path, encoding="utf-8") as handle:
+        doc = yaml.safe_load(handle)
+except Exception:
+    print("gateway_parse=failed")
+    raise SystemExit(0)
+if not isinstance(doc, dict):
+    print("gateway_parse=failed")
+    raise SystemExit(0)
+platforms = doc.get("platforms")
+if not isinstance(platforms, dict) or not platforms:
+    print("gateway_platforms=none")
+    raise SystemExit(0)
+def clean(value):
+    return re.sub(r"[^A-Za-z0-9_.:-]", "?", str(value))[:64]
+print("gateway_platforms=" + ",".join(sorted(clean(n) for n in platforms)))
+unresolved = []
+for name in sorted(platforms):
+    label = clean(name)
+    entry = platforms.get(name)
+    ref = entry.get("token_env") if isinstance(entry, dict) else None
+    if not isinstance(ref, str) or not re.match(r"^[A-Z][A-Z0-9_]*$", ref):
+        print("gateway_shape_" + label + "=bad")
+        unresolved.append(label + ":<no token_env>")
+        continue
+    print("gateway_token_env_" + label + "=" + ref)
+    if not os.environ.get(ref):
+        unresolved.append(label + ":" + ref)
+if unresolved:
+    print("gateway_unresolved=" + ",".join(clean(u) for u in unresolved))
+GWYAML
+'
+gw_out=$(timeout 90 bunker exec --server "$SERVER" "$AGENT" -- bash -lc "$GW_PROBE" 2>/dev/null)
+case "$gw_out" in
+  *"gateway_config=absent"*)
+    note "gateway_config — no ~/.hermes/config.yaml on the node; the gateway leg has nothing to measure (M13 R3: a scheduler-only lane is unchanged)" ;;
+  *"gateway_yaml=missing"*)
+    warn "gateway_config" "PyYAML is unavailable to python3 on the node — the gateway leg cannot read ~/.hermes/config.yaml"
+    unverified "gateway_config: PyYAML unavailable on the node" ;;
+  *"gateway_parse=failed"*)
+    bad "gateway_config" "~/.hermes/config.yaml does not parse under python3+yaml — no gateway can start from it" ;;
+  *"gateway_platforms=none"*)
+    note "gateway_config — config parses, no platforms block — scheduler-only lane (M13 R3)" ;;
+  *"gateway_platforms="*)
+    gw_names=$(printf '%s\n' "$gw_out" | sed -n 's/^gateway_platforms=//p' | head -1)
+    gw_shape_rows=$(printf '%s\n' "$gw_out" | grep -c '^gateway_shape_' || true)
+    if [ "$gw_shape_rows" -gt 0 ]; then
+      gw_shapes=$(printf '%s\n' "$gw_out" | grep '^gateway_shape_' | sed 's/^gateway_shape_//; s/=bad$//' | paste -sd ' ' -)
+      bad "gateway_config" "platforms $gw_names parse, but carry a malformed M13 §3 surface (enabled/token_env/home_channel{platform,chat_id,thread_id,name}/allowed_chats): $gw_shapes"
+    else
+      ok "gateway_config" "config parses under python3+yaml; platforms: $gw_names (M13 §3)"
+    fi
+    # R2: one pass over the node home counts the matches and names the files; the matched
+    # text lands in a node-side temp file deleted in the same breath — it never reaches
+    # this log, because a verifier that prints what it forbids republishes it.
+    gw_scan=$(timeout 60 bunker exec --server "$SERVER" "$AGENT" -- bash -lc '
+      f=$(mktemp) || exit 0
+      grep -rEnI -- "[0-9]{8,10}:[A-Za-z0-9_-]{35}" "$HOME" 2>/dev/null > "$f"
+      printf "gateway_token_matches=%s\n" "$(wc -l < "$f" | tr -d "[:space:]")"
+      cut -d: -f1 "$f" | sort -u | head -3
+      rm -f "$f"' 2>/dev/null)
+    gw_count=$(printf '%s\n' "$gw_scan" | sed -n 's/^gateway_token_matches=//p' | head -1)
+    gw_files=$(printf '%s\n' "$gw_scan" | grep -v '^gateway_token_matches=' | paste -sd ' ' -)
+    case "$gw_count" in
+      ''|*[!0-9]*)
+        warn "gateway_tokens" "unverified — the token scan answered nothing readable (${gw_scan:-empty output}); R2 is unmeasured on this run"
+        unverified "gateway_tokens: the token scan over the node home produced no readable count" ;;
+      0)
+        ok "gateway_tokens" "0 token-shaped matches over the node home (M13 R2)" ;;
+      *)
+        bad "gateway_tokens" "$gw_count token-shaped match(es) over the node home at ${gw_files:-<unreadable>} — R2 violated (matched bytes never printed)" ;;
+    esac
+    gw_unresolved=""
+    case "$gw_out" in
+      *"gateway_unresolved="*) gw_unresolved=$(printf '%s\n' "$gw_out" | sed -n 's/^gateway_unresolved=//p' | head -1) ;;
+    esac
+    if [ -n "$gw_unresolved" ]; then
+      warn "gateway_token_env" "GATEWAY_TOKEN_REF_UNRESOLVED — $gw_unresolved has no value in the node environment (M13 §5: warning, not fatal — the gateway stays disabled and the lane runs scheduler-only until the variable lands)"
+    else
+      gw_refs=$(printf '%s\n' "$gw_out" | sed -n 's/^gateway_token_env_[^=]*=//p' | paste -sd ' ' -)
+      ok "gateway_token_env" "$gw_refs resolve on the node"
+    fi ;;
+  *)
+    note "gateway_config — the gateway probe answered nothing recognizable ($(printf '%s' "$gw_out" | head -1 | cut -c1-120)); the leg measured nothing on this run" ;;
 esac
 
 say ""
