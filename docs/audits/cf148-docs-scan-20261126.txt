@@ -1,0 +1,7 @@
+CF-148 documentation probe, based on b80f744c0af4466e4ce27c350d7014cf11cf279e
+
+Create a JSONL file with two rows named lane-a and lane-b, each with workdir set to the same valid local checkout root. Run:
+python3 -B scripts/lane_target.py scan <fixture.jsonl>
+Observed: exit 4; bad 2; ok false; shared_workdirs contains the checkout and both lane names; each row has ok false and a shared-workdir error. The temporary checkout path is deliberately omitted from this public artifact.
+
+Source: scripts/lane_target.py:527-563. This probe did not test remote targets, unrelated-repo identity, or the live scheduler registry.
