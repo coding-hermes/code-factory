@@ -9397,5 +9397,36 @@ else
 fi
 rm -rf "$cf537"
 
+# CF-544: one ordering rule. M4 §15.2 (ascending (created_seq, task_id), "The
+# ordering does not include priority"), the schema const (the declared only home
+# of the literal), and the CV-04/CV-19 vectors — digests included — must state
+# the SAME rule. This arm is unnumbered on purpose: the CF-198 census counts
+# numbered sections, and this is a consistency pin, not a numbered row.
+say "M4 claim ordering: chapter §15.2 and the CV-04 claim vectors state one rule (CF-544)"
+cf544=$(mktemp -d)
+if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_claim_ordering_consistency.py" \
+     >"$cf544/out" 2>&1; then
+  say "  PASS  schema const, CV-04-A/CV-04-D canonical digests and M4 §15.2 all state 'created_seq ASC, id ASC; dependencies must be settled; correction retains its original worker' with priority excluded (tests/test_claim_ordering_consistency.py)"
+else
+  say "  FAIL  the claim-ordering surfaces disagree (tests/test_claim_ordering_consistency.py)"
+  selftest_fail
+  sed 's/^/    | /' "$cf544/out"
+fi
+# Red control: a fixture copy of the chapter whose §15.2 ordering sentence is
+# reverted to the priority-first rule must make the checker exit non-zero
+# NAMING BOTH SURFACES — pointed at the fixed tree the control fails.
+sed 's/The ordering does not include priority\./Claims are ranked by priority DESC, created_seq ASC, id ASC; dependencies must be settled; correction retains its original worker./' \
+  "$HERE/docs/handbook/chapters/M4-board.md" > "$cf544/M4-board.md"
+if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_claim_ordering_consistency.py" \
+     "$HERE/docs/handbook/contract-vectors.json" "$cf544/M4-board.md" \
+     >"$cf544/red" 2>&1; then
+  say "  FAIL  reverted-chapter control did not reproduce the disagreement"
+  selftest_fail
+else
+  say "  PASS  reverted-chapter control: the checker refuses the priority-first rule naming §15.2 and the schema/vectors (fixture detects CF-544)"
+  sed 's/^/    | /' "$cf544/red"
+fi
+rm -rf "$cf544"
+
 say ""
 [ "$fails" -eq 0 ] && finish 0 || finish 1
