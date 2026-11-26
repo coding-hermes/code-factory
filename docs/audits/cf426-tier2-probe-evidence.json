@@ -1,11 +1,11 @@
 {
   "probe": "scripts/probe_cf426_tier2_bounded_docs.py",
   "engine": "gitreins 0.22.0 (~/gitreins local build)",
-  "measured_at": "2026-11-25T22:31:54.384584+00:00",
+  "measured_at": "2026-11-26T11:54:08.335178+00:00",
   "token_note": "estimated_input_tokens/estimated_output_tokens are transcript-derived estimates (chars/3.5, engine _estimate_context_tokens fallback); the starved arm models the real lane's measured ~14k input/turn (job-2ef71d1edcf148bba7bc017f864aa913). Not provider-billed numbers.",
   "arms": {
     "bounded": {
-      "head": "e3c11ec1497bf6c4dd28ba18ffbc7da09363edb5",
+      "head": "e7ffed76f40cbe00b7a408fe64455c94b10463bb",
       "verdict": "COMPLETE",
       "summary": "One-criterion docs task graded from a bounded PROOF recipe: heading located, count = 18, first entry named; 1 of 1 criteria graded.",
       "items": [
@@ -15,16 +15,16 @@
         }
       ],
       "iterations_used": 6.5,
-      "estimated_input_tokens": 28534,
+      "estimated_input_tokens": 28370,
       "estimated_output_tokens": 254,
       "llm_turns": 6,
-      "prompt_bytes": 1290,
+      "prompt_bytes": 1196,
       "arm": "bounded",
       "graded": true
     },
     "unbounded": {
       "verdict": "INCOMPLETE",
-      "summary": "Cap exceeded: Iteration cap (100) reached (100.1 used). Increase max_iterations or split criteria. Partial verdict — 0 of 1 criteria graded, 1 ungraded. The run spent 1,104,674 in / 2,640 out over 100.1 iterations.",
+      "summary": "Cap exceeded: Iteration cap (100) reached (100.1 used). Increase max_iterations or split criteria. Partial verdict — 0 of 1 criteria graded, 1 ungraded. The run spent 1,101,271 in / 2,640 out over 100.1 iterations.",
       "items": [
         {
           "status": "UNVERIFIED",
@@ -32,7 +32,7 @@
         }
       ],
       "iterations_used": 100.09999999999988,
-      "estimated_input_tokens": 1104674,
+      "estimated_input_tokens": 1101271,
       "estimated_output_tokens": 2640,
       "criteria_graded": 0,
       "llm_turns": 92,

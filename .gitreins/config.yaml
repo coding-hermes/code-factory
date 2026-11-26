@@ -125,6 +125,25 @@ evaluator:
   # pipeline step; on shared evenings the row→verdict mapping is ambiguous), so
   # judged scope is measured in iterations here and capped-run burn is quoted
   # from the verdict summaries' own "The run spent …" lines.
+  #
+  # ── CF-544 interaction (2026-11-26) — exemplar criterion freshness ──
+  # Implementation 4c192f78 (closed by cc332291) re-literal'd the claim ordering
+  # rule: M4 §15.2 and the CV-04 vectors now carry "created_seq ASC, id ASC;
+  # dependencies must be settled; correction retains its original worker" with
+  # priority excluded — 'priority DESC' no longer appears in
+  # contract-vectors.json (grep count 0 at e7ffed76). Verdict 2de7f84b above is
+  # disk-true as a VERDICT, but its criterion clause (c) quotes the RETIRED
+  # "priority DESC, created_seq ASC, id ASC" string, so a fresh same-tree
+  # rejudge reusing that criterion verbatim will FAIL (c) against this tree.
+  # The CF-426 AC3 fresh P5G-10 merits rejudge must re-author clause (c) to the
+  # current literal; clauses (a), (b), (d), (e) still hold (CLAIM_CONFLICT 409
+  # remains at M4-board.md:750). The other bounded exemplars re-verified live
+  # at e7ffed76: 402cc1f4's proof commands still reproduce (no duplicate
+  # section numbers, 76=76; cf198 mapping arms_plan=80 arms_tree=80, RESULT:
+  # OK), and the probe evidence (docs/audits/cf426-tier2-probe-evidence.json)
+  # was re-run at this tip — CF426_PROBE_PASS (COMPLETE, 1/1, 6.5 iterations /
+  # ~28k estimated in) and CF426_STARVE_REPRODUCED (0/1 graded, 100.1
+  # iterations / ~1.10M estimated in).
   max_iterations: 800
   static_analysis_diagnostics: false
 history:
