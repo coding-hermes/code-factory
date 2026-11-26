@@ -5,11 +5,11 @@ real values live in the operator's ~/.bunker/config.yaml. The node's own credent
 staged from the control-host copies (~/crier-fleet/keys/cf-node.key + the fleet bearer) and
 never printed.
 
-Outcome: row 19 measured — PASS on its own expected column (READY + reply 201 + ack 204, all
-observed against the deployed bus), with one recorded caveat: the harness child ran and
-exited 1 ("No inference provider configured") so the worker's terminal line was
-BUS WORKER: FAIL, exit=1. The bus legs — fetch, verify, gate, reply 201, ack 204,
-queue_depth 1 -> 0 — all measured PASS. The envelope (status failed, ok false, in_reply_to
+Outcome: row 19 measured — FAIL by its own rule. Every bus leg it names was observed against
+the deployed bus (READY + reply 201 + ack 204, fetch 200 with queue_depth 1 -> 0, verify and
+gate PASS), but the harness leg is part of the row's stated cycle and it failed: the child ran
+and exited 1 ("No inference provider configured"; the worker's terminal line was
+BUS WORKER: FAIL, exit=1). A failed leg therefore grades the row FAIL, not PASS. The envelope (status failed, ok false, in_reply_to
 1bf326c88357a8b6632fadfd, host dev) was delivered to the scheduler inbox (201, message
 bd3d4fe79f58c59107c657ea) and read back there.
 
