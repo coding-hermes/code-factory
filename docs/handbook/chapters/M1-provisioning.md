@@ -67,6 +67,7 @@ classification. The fleet skill copy is outside this repository and is expected 
 | S3 identity and bus membership | `node_identity.py`, `node_gateway_auth.py` | **active** | `node_gateway_auth.py` staged and run inside `bunker-provision.sh:516-528`; `node_identity.py` at `:551-566` — step 7, **after** the `node-create.sh` → `project-node.sh` ladder in step 6, so its keys land last; `project-node.sh` layer 20 runs `node_gateway_auth.py` only, and an earlier reading that attributed the `node_identity.py` call to that layer is corrected here (CF-289 — the source carries no such call). Both writers of `$HOME/.node/node.json` now merge instead of replace; see the S3 merge contract below |
 | S4 seed prompts/skills/env | `node_seed.py`, `node_seed_drift.py`, `node_env.py` | **active** | `node_seed.py build` at `bunker-provision.sh:454`; `node_env.py --check` at `:147` / `--apply` at `:426` |
 | S5 prove the node works | `verify-node.sh`, `node_freshness.py` | **active** | `verify-node.sh` is the certification ladder (`:22-510`); `node_freshness.py` is folded in at `:299-323`; the full verdict and warning contract is III.M1.S5 |
+| S6 provisioning generations and retry lifecycle | `bunker-provision.sh` (`--check`/`--apply`/`--destroy`), `project-node.sh` (layer ladder), `node_seed.py`, `node_identity.py`, `node_env.py`, `deploy_key.py`, `configure_family.py` (BUSY_ATTEMPTS retry) | **mixed: active + operator-invoked** | `bunker-provision.sh` has no in-repo invoker (S2 row above); `node_seed.py`/`node_identity.py`/`node_env.py`/`deploy_key.py` are staged and run by it (`:454`, `:551-566`, `:147`, `:426`, CF-003); `configure_family.py` is operator-invoked against the scheduler DB (CF-356). The operation/generation answer and its shipped gaps are III.M1.S6 |
 
 **S2 staged set (CF-087).** `node-create.sh --staged-files` prints the manifest of files the node
 receives, and that manifest is validated before an agent is spawned: a reference the runtime
@@ -262,7 +263,7 @@ the same stub client against the pre-fix script, which printed `PASS  agent — 
 
 | Setting | Default | Range | Governs | What breaks if changed |
 |---|---|---|---|---|
-| `--harness` | `hermes` (`:107`, `:515`) | one of the adapters this tree ships (`scripts/harness/install-*.sh`) or a name the adapter table in `specs/HARNESS.md` declares — this writer copies the flag into `HARNESS` unvalidated (`:515` → `:324`) and `bunker-provision.sh:631` forwards it to the create path, so the `--harness H` row of the `node-create.sh` table below is authoritative for how the name is judged: a typo is one named row listing the shipped set, a spec-declared adapter with no installer here is a separate row naming `specs/HARNESS.md` and CF-006, and `--help`/`-h` exit 0 with `CRIER_URL` and `BUNKER_SERVER` unset | the node's default harness — the `HARNESS` line every generated config carries | a wrong default writes a wrong `HARNESS` into every generated config; nothing here refuses it, so the name is first judged on the create path against the two sets above |
+| `--harness` | `hermes` (`:107`, `:515`) | one of the adapters this tree ships (the `scripts/harness/` installers, e.g. `scripts/harness/install-hermes.sh`) or a name the adapter table in `specs/HARNESS.md` declares — this writer copies the flag into `HARNESS` unvalidated (`:515` → `:324`) and `bunker-provision.sh:631` forwards it to the create path, so the `--harness H` row of the `node-create.sh` table below is authoritative for how the name is judged: a typo is one named row listing the shipped set, a spec-declared adapter with no installer here is a separate row naming `specs/HARNESS.md` and CF-006, and `--help`/`-h` exit 0 with `CRIER_URL` and `BUNKER_SERVER` unset | the node's default harness — the `HARNESS` line every generated config carries | a wrong default writes a wrong `HARNESS` into every generated config; nothing here refuses it, so the name is first judged on the create path against the two sets above |
 | `--ref` | `main` (`:106`, `:516`) | a git ref | the seeded branch | a wrong ref seeds the wrong tree |
 | `--ttl` | `6h` (`:108`, `:517`) | a Go duration | config TTL | a wrong TTL expires containers early |
 | `--force` / `--check` | off / off (`:523-524`) | flags | rewrite-a-differing-config / read-only drift check | `--check` is read-only; `--force` rewrites a differing config |
@@ -328,7 +329,7 @@ EVIDENCE: docs/OPERATIONS.md
 
 | Setting | Default | Range | Governs | What breaks if changed |
 |---|---|---|---|---|
-| `--harness H` | `hermes` | one of the adapters this tree ships (`scripts/harness/install-*.sh`) | which adapter runs the work inside the node | the name is judged against two run-time sets before anything is staged: a name in neither is `FAIL harness — '<h>' is not an adapter: this tree ships …` listing the derived set, and a name `specs/HARNESS.md` declares with no installer here is a different row citing the spec and CF-006, so a typo and an unshipped adapter never read the same (CF-125). `--help`/`-h` print the usage block and exit 0 with `CRIER_URL` and `BUNKER_SERVER` unset |
+| `--harness H` | `hermes` | one of the adapters this tree ships (the `scripts/harness/` installers, e.g. `scripts/harness/install-hermes.sh`) | which adapter runs the work inside the node | the name is judged against two run-time sets before anything is staged: a name in neither is `FAIL harness — '<h>' is not an adapter: this tree ships …` listing the derived set, and a name `specs/HARNESS.md` declares with no installer here is a different row citing the spec and CF-006, so a typo and an unshipped adapter never read the same (CF-125). `--help`/`-h` print the usage block and exit 0 with `CRIER_URL` and `BUNKER_SERVER` unset |
 | `--deploy-key FILE` | none | an SSH private key, owner-only mode | injects the per-repo credential at spawn | a readable key is refused (`FAIL deploy_key — … mode 0644`) **before any agent is spawned**; unset means the node clones with whatever identity it has |
 | `--gomodcache PATH` | none | an **absolute path on the node** | points the node at a sealed shared module cache | a relative path is refused (`FAIL gomodcache`); unset leaves a private cache and layer 10 prints the WARN |
 | `--ref R` | `main` (or `NODE_REF`) | a git ref | the branch or tag cloned | unchanged by CF-003 |
@@ -378,6 +379,207 @@ before it may be named in the specification, handbook, footprint, or floor.
 
 ch:trace row=CF-040 spec=docs/handbook/chapters/M1-provisioning.md#disk-floor wave=none:serial test=none:worker-doc-boundary doc=docs/handbook/chapters/M1-provisioning.md evidence=docs/handbook/chapters/M1-provisioning.md witness=none:documentation-boundary-only verdict=none:foreman-judge commit=none:worker-commit memory=none:foreman-closeout
 
+<a id="III.M1.S6"></a>
+### III.M1.S6 — Provisioning generations and retry lifecycle (P5G-20)
+
+Board row P5G-20 (CF2A-01 design-review gap, deduped root cause; source findings
+P5-B-14, P5-C-21, P5-C-22; the Part IV register maps P5-B-14 to this chapter's
+§17.2 at `docs/handbook/parts/IV-contract-register.md:791`) asks what operation
+discriminator, generation precondition, durable credential states and retry rule
+distinguish resume, upgrade, replace, rotation, revoke and conflict after a crash.
+The answer below is chapter III.M1's contribution to flow F2 PROVISIONING AND
+CERTIFICATION (`docs/handbook/OUTLINE.md`): F2's exit rule — certification legs
+passing, or the exact failed or unmeasurable legs named, with CREATED ≠ VERIFIED —
+is what this vocabulary must respect, because none of the operations below
+certifies by itself; each re-enters the §17.2 stage ladder and re-runs the §17.4
+readback before VERIFIED is reachable again. Every claim is grounded in this
+chapter's own normative surfaces (§15, §16, §17.1, §17.2, §17.4, §18.2, §18.3),
+cross-checked against M7 §15 (`docs/handbook/chapters/M7-github.md`) and M12 §15
+(`docs/handbook/chapters/M12-inference-proxy.md`), and named against the shipped
+surfaces at code-factory commit `fe3d2ee08d04e7bc046638ba1290e1732e51bd12`
+(short `fe3d2ee0`, the source revision of this change). Where the shipped tree has
+no implementation the claim stays UNVERIFIED rather than adopted, and that absence
+is named with its measurement, not papered over.
+
+Competing vocabulary, reconciled only where the sources support it: certificate
+"renewal" (§17.1 — a re-serial on the Crier registrar's separate
+registration-renewal operation), credential "rotation" (M7 §15, M12 §15 —
+owner-authorized class operations) and deploy-key "replace"
+(`scripts/deploy_key.py --replace`) are the same class of operation —
+owner-authorized, per-class generation, overlap-windowed — and §18.2 states the
+shared rule outright ("rotation is a separate operation"; tokens are never
+recreated from defaults or copied from a manifest). The chapter does not collapse
+the three names into one; it fixes the rule and leaves each class naming its own
+owner, because R4 requires separate authorities. "Revoke" is distinguished from
+"replace": a replace revokes the old credentials as a step inside fencing (§16),
+while a standalone revocation creates no generation — it invalidates at the
+current generation (`revoked_at`, M12 §15) and must be proven at the resource
+boundary (§17.1), never by deleting a file.
+
+Actor: The controller/provisioner issues every `cf.provision.v1` operation
+(discriminator `operation`: `create` | `resume` | `upgrade` | `replace` | `remove`,
+§17.2); the credential authorities are separate actors per class — the Crier
+registrar allocates `node_id`/`registration_generation` and owns the single
+renewal increment (§17.1), the forge mapping owner owns mapping generations
+(M7 §15), the proxy owner administers node-token `rotate`/`revoke`/`offboard`
+(M12 §15), the release manager owns the F13 operation journal (§18.2), and a
+controller restart reloads the last durable state and resumes by generation
+(§15). Shipped coverage at `fe3d2ee0`: the operator-invoked control-host
+provisioner (`scripts/bunker-provision.sh`), the CF-008 destroy/create replay
+helper (`scripts/node-lifecycle-supervisor.py`) and the `deploy_key.py --replace`
+rotation gate; no shipped code implements `cf.provision.v1` operations, so the
+controller/provisioner half of this answer is specification-only (UNVERIFIED).
+
+Data shape: The operation discriminator is the closed `operation` member of the
+closed `cf.provision.v1` request — `create`, `resume`, `upgrade`, `replace`,
+`remove` — with `generation` (PosInt) and `expected_generation` (UInt) as the CAS
+members and no field null (§17.2). Durable records: `cf.node.v1` carries
+`revision` (PosInt) CAS'd under the shared `.node.lock` flock (§17.4); each
+`CredentialRef` carries class/generation/expires_at/issuer (§17.1); the forge
+mapping and the node-token carry their own `generation` plus `revoked_at`
+(M7 §15, M12 §15); the seed applied record `cf.seed-applied.v1` carries
+`generation` and `manifest_digest` (§17.4). Durable credential states: per-class
+staged/active/revoked/expired inside the mapping states
+`REGISTERED → INSTALLED → PAIRED → ISSUABLE → ACTIVE`, `ACTIVE → RENEWING →
+ACTIVE`, any live state → `SUSPENDED` or `OFFBOARDED` (M7 §15); the provisioning
+state enum is the §17.2 set `DECLARED … REMOVED`, and UNVERIFIED is a check
+outcome, never a provisioning state.
+
+Ordering: create CASes `expected_generation=0` and installs generation=1;
+upgrade/replace CAS N→N+1 with a NEW operation id + idempotency key only after
+drain/fence; remove compares the current N and allocates no runtime; resume
+allocates nothing (§17.2, §16). Inside an operation the order is fixed: trust and
+enrollment precede credential-dependent private clone (§17.2 stages 3–6, P5-B-13);
+credential installation is O_EXCL temp → chmod 0600 → fsync → rename (§17.1);
+both `cf.node.v1` writers take `.node.lock`, reread `revision`, merge only their
+owned fields, increment, fsync+rename (§17.4); the seed switches wholesale through
+one atomic `current` symlink and a crash before the switch keeps the old tree
+(§17.4). Rotation ordering: certificate renewal starts at half lifetime, the new
+serial is verified by readback, overlaps the old serial for exactly 60 s for
+in-flight reads, then the old serial is revoked and mutations use only the new
+generation (§17.1); M7 renewal overlaps only when both credentials are valid and
+M12 rotation overlaps only within a declared window (M7 §15, M12 §15).
+
+Failure behavior: An exact retry (same operation id + idempotency key + input)
+replays the original receipt and allocates nothing; reusing an idempotency key
+with changed input is `IDEMPOTENCY_KEY_REUSED`, not an upgrade; a conflicting
+generation is a compare-and-swap refusal (§15, §17.2); changed grant/key under the
+same registration_id is `REGISTRATION_CONFLICT` (§17.1); an `expected_revision`
+miss at `cf.node.v1` is `IDENTITY_CONFLICT`, and malformed input preserves the old
+file and refuses (§17.4). Any nonterminal stage enters DEGRADED — an enrollment
+failure is `ENROLLMENT_FAILED` with no durable identity — and dependents do not
+run (§17.2); a failed upgrade keeps the previous generation or enters
+`REPLACEMENT_REQUIRED` and never reports the new generation ready (§16). A
+revocation is proven by a negative probe at the resource — `401
+CAPABILITY_REVOKED` or certificate refusal is the proof; deleting the file is not
+(§17.1) — and the M12 node-token invalidates immediately on revoke/decommission
+(M12 §15).
+
+Recovery rule: Resume the last completed stage after dependency readback under
+the SAME `operation_id`, `generation` and `manifest_digest` with a distinct
+request id + idempotency key (§17.2); a lost acknowledgement is resolved by `GET
+operation/{operation_id}` plus component receipts and the same-manifest retry is
+an idempotent read/continue (§18.3); a crash between effect and acknowledgement
+is closed by receipt replay — every acknowledgement is journaled/fsynced before
+it is returned (§17.2) — never by re-execution; a crash with a changed input
+cannot reuse the key, it is a new operation at N→N+1. Shipped half at `fe3d2ee0`:
+`scripts/node-lifecycle-supervisor.py replay` reconstructs destroy/create node
+state from the recorded state (`tests/test_node_lifecycle.py`, CF-008), a seed
+re-apply without `--force` preserves node-local edits and reports each one, a
+second `node_env.py --apply` is a no-op, and a different deploy key without
+`--replace` is refused so a rotation is never silent; `cf.provision.v1`
+resume-after-crash itself is UNVERIFIED (no shipped implementation).
+
+The deterministic artifact is the operation state table. Every cell is grounded
+in the surface it cites:
+
+| Operation | Discriminator | Generation precondition (CAS) | Durable transition | Crash/conflict class | Retry rule after a crash |
+|---|---|---|---|---|---|
+| create | `operation:"create"`, new operation_id + idempotency_key | compares expected_generation=0 and installs generation=1 (§17.2) | DECLARED → ADMITTED → CREATED → ENROLLED → PROVISIONED → CONNECTED → VERIFIED (§15) | duplicate (project_id,node_id,generation) is idempotent; conflicting generation is a compare-and-swap refusal (§15) | exact retry replays the original receipt and allocates nothing (§17.2) |
+| resume | same operation_id, same generation, same manifest_digest; distinct request_id + idempotency_key (§17.2) | compares the durable generation and allocates nothing | re-enters at the last completed stage of the operation journal (§17.2) | none — resume is defined as the crash-recovery operation | returns current progress, then resumes only unfinished idempotent stages after dependency readback (§17.2) |
+| upgrade | new operation_id + idempotency_key (§17.2) | compares N and installs N+1 after drain/fence (§17.2, §16) | drain Crier retrieval, refuse new admission, snapshot manifest + credential generations, install the new digest, same effective readback, switch registration only after VERIFIED (§16) | IDEMPOTENCY_KEY_REUSED (reused key, changed input — §17.2); GENERATION_CONFLICT (manifest bytes or fence changed — §18.3) | lost acknowledgement → GET operation/{operation_id} + component receipts; same-manifest retry is idempotent read/continue; a failed upgrade keeps N or REPLACEMENT_REQUIRED and never reports the new generation ready (§18.3, §16) |
+| replace | new operation_id + idempotency_key (§17.2) | compares N and installs N+1 (§17.2) | fence old Bunker, revoke its credentials, preserve evidence, then provision the new generation; revoked credentials are never inherited (§16, §15) | same class as upgrade (§18.3) | drained work settles by its recorded identity; lost acknowledgement never causes a second launch (§18.2) |
+| remove | compares current N without allocating a new runtime (§17.2) | no new generation is installed | verify no active lease, revoke all five credential classes, archive the records, delete only owned mounts, REMOVED is terminal (§16, §17.2) | unproven revocation is a failure: 401 CAPABILITY_REVOKED or certificate refusal is the proof (§17.1) | re-runnable only as a new operation; removal records are retained (§16) |
+| rotate | owner-authorized per-class operation: registrar renewal names the observed registration_generation (§17.1), forge rotate (M7 §15), node-token rotate (M12 §15) | each class increments its own generation on its own SEPARATE operation (§18.2) | ACTIVE → RENEWING → ACTIVE; renewal starts at half lifetime, new serial read back, overlaps the old for exactly 60 s, old serial then revoked (§17.1) | a rotation without recorded authorization is refused (`pass --replace to rotate it`, scripts/deploy_key.py:286-294) | the overlap window carries in-flight reads; mutations use only the new generation (§17.1) |
+| revoke | authority POST /v1/revocations naming the exact ref/serial (§17.1) | no generation increment — same-generation invalidation (`revoked_at`, M12 §15) | credential → revoked; affected readiness immediately invalidates (§17.1, M12 §15) | revocation proven by negative probe at the resource; deleting the file is not proof (§17.1) | never resurrected: restore reissues or revokes according to the recorded generation (M7 §15) |
+
+Conflict after a crash is then a numbered procedure over four conflict classes
+with disjoint keys and owners, so a crash can never be mistaken for a second
+attempt:
+
+1. Replay the operation journal for the caller's (operation_id, idempotency_key):
+   if the recorded input digest matches, return the recorded receipt — nothing
+   re-executes (§17.2 exact retry; §17.1: an identical nonce/digest returns the
+   saved receipt, and a crash after issue returns the same certificate/refs).
+2. Key matches but input differs → `IDEMPOTENCY_KEY_REUSED` (§17.2): the caller
+   must mint a new operation id + key; it is never silently an upgrade.
+3. Input matches but the durable generation or fence moved → a compare-and-swap
+   refusal / `GENERATION_CONFLICT` (§15, §18.3): re-read the durable generation,
+   then either resume under the same operation_id (step 1) or upgrade with a new
+   operation at N→N+1.
+4. The conflict plane names the owner: `REGISTRATION_CONFLICT` — changed
+   grant/key under the same registration_id, Crier registrar (§17.1);
+   `IDENTITY_CONFLICT` — `expected_revision` miss at `cf.node.v1` under
+   `.node.lock`, both identity writers reread and merge only owned fields
+   (§17.4). Malformed identity input preserves the old file and refuses.
+
+Validation of the deterministic artifact — `tests/test_p5g20_provisioning_lifecycle.py`
+parses this section and checks the five labelled lines, every cited path and each
+table row against the expected vector (the red control is the same command against
+the pre-change chapter, where the section is absent: all five arms fail, exit 1):
+
+```bash
+python3 tests/test_p5g20_provisioning_lifecycle.py
+```
+
+Observed at `fe3d2ee0` plus this change: exit 0, five tests pass (header/row-id
+citation, five labels exactly once, source revision named, every cited path
+resolves, every state-table row carries its invariant tokens).
+
+The table above is the specification-side vector. The chapter's standing rule makes
+the shipped scripts the authority for runtime behaviour, so the shipped halves named
+in the facets get their own executed vector:
+`docs/audits/p5g20-probe-provisioning-lifecycle.py` imports the shipped modules and
+drives the real bounded retry rule, the durable identity merge and the seed digest
+state machine offline (temporary directories only; no network, no bunker call,
+nothing written outside the temporary directory):
+
+```bash
+python3 docs/audits/p5g20-probe-provisioning-lifecycle.py
+```
+
+Observed at `fe3d2ee0` plus this change; exit 0, byte-identical across repeated
+runs (the only content-derived token is the fixture digest `3f4425820c31`, the
+sha256 prefix of the fixed probe fixture `seed-v1\n`):
+
+```
+retry_attempts 5
+retry_backoff [0.25, 0.5, 1.0, 2.0, 4.0]
+retry_classify busy_locked=True busy_busy=True not_busy=False
+retry_outcomes configured/already/failed reason='no project row to configure' sleeps=0
+identity_merge rc=0/0 mode=600 merged=True idempotent=True
+identity_keeps_schema ['bus', 'namespace']
+identity_refused_unreadable rc=1 untouched=True named=True
+seed_build rc=0 files=1 digest=3f4425820c31
+seed_apply rc=0 mode_ok=True applied_record=True
+seed_drift rc=1 named=True
+seed_preserve rc=0 content=node-local edit named=True
+seed_force rc=0 content=seed-v1
+P5G20 PROBE: PASS
+```
+
+exit 0. Every token is a facet value in shipped code: `retry_*` is the Recovery
+rule's bounded busy retry (`scripts/configure_family.py:63-65`, `:189-196`,
+`:209-266`); `identity_*` is the durable identity store's merge, idempotency and
+refusal contract (`scripts/node_identity.py:19-38`, `:69-79`, `:95-104`); `seed_*`
+is the digest-record state machine's build/apply/check/preserve/force rules
+(`scripts/node_seed.py:114-168`, `:205-332`, `:333-362`). The rows the probe cannot
+drive are the rows the table answers NO on — there is no `--resume`/`--upgrade`
+operation flag, no `expected_generation` comparison and no credential authority in
+the tree to call (the absence measurements in the Actor facet).
+
+ch:trace row=P5G-20 spec=docs/handbook/OUTLINE.md#node-side-modules wave=none:serial-worker test=tests/test_p5g20_provisioning_lifecycle.py doc=docs/handbook/chapters/M1-provisioning.md prompt=none:ephemeral-brief evidence=docs/audits/p5g20-provisioning-generations-2026-11-26.md witness=none:offline-deterministic-vector-no-live-node verdict=none:foreman-verifies-and-closes commit=none:worker-commit memory=none:foreman-writes
+
 ## 6. Contracts in and out
 
 M1's canonical edges are CT-22 (enrollment/registration) and CT-23 (Bunker
@@ -393,7 +595,7 @@ The following citations describe legacy source coverage, not target qualificatio
 
 | Check | Command | Expected | Last run | Result |
 |---|---|---|---|---|
-| shell parse | `for f in scripts/bunker-*.sh scripts/node-create.sh scripts/verify-node.sh scripts/bunker-crier-connect.sh scripts/install-node.sh; do bash -n "$f"; done` | exit 0 | 2026-11-07 | PASS |
+| shell parse | `for f in scripts/bunker-crier-connect.sh scripts/bunker-provision.sh scripts/bunker-server-install.sh scripts/node-create.sh scripts/verify-node.sh scripts/install-node.sh; do bash -n "$f"; done` (the three bunker scripts enumerated explicitly — this is the same set the earlier `bunker-*.sh` glob matched) | exit 0 | 2026-11-07 | PASS |
 | python compile | `python3 -m py_compile scripts/disk_floor.py scripts/node_identity.py scripts/node_gateway_auth.py scripts/node_seed.py scripts/node_seed_drift.py scripts/node_env.py scripts/node_freshness.py scripts/deploy_key.py scripts/gomodcache.py scripts/node_hygiene.py` | exit 0 | 2026-11-07 | PASS |
 | disk floor unit | `python3 tests/test_disk_floor.py` | 12 tests pass | 2026-11-06 | **PASS** (rc 0) |
 | credential / runtime / cache / footprint / reap battery | `python3 tests/test_node_provisioning.py` | 23 tests: 0644 key refused, HTTPS remote refused, public key refused, rotation gated, per-host config merge, node pin read back, wrong digest installs nothing, lying binary fails, sealed cache builds with `GOPROXY=off` and refuses to grow, footprint components exact, orphan reap spares live ids and symlinks | 2026-11-07 | **PASS** (rc 0; `MEASURED shared GOMODCACHE 2097910 bytes; sealed rebuild added 0 bytes`) |
@@ -425,7 +627,7 @@ grep -F '| A5 | Bus membership:' docs/handbook/chapters/M1-provisioning.md | gre
 
 **RED — none (absence-proved).** No provisioner script exports counters, gauges or
 histograms — `grep -nE 'prometheus|Counter|Gauge|Histogram|/metrics' scripts/bunker-provision.sh
-scripts/disk_floor.py scripts/verify-node.sh scripts/node_*.py scripts/bunker_config_gen.py
+scripts/disk_floor.py scripts/verify-node.sh scripts/node_env.py scripts/node_freshness.py scripts/node_gateway_auth.py scripts/node_gateways_merge.py scripts/node_hygiene.py scripts/node_identity.py scripts/node_seed.py scripts/node_seed_drift.py scripts/bunker_config_gen.py
 scripts/node-create.sh scripts/bunker-crier-connect.sh scripts/bunker-server-install.sh` → 0 matches.
 Provisioning rate, refusal rate and per-leg latency are answerable only by reading the log.
 
@@ -1241,3 +1443,4 @@ ch:trace row=P5G-12 spec=docs/handbook/OUTLINE.md#f13-upgrade-and-migration wave
 STATUS: partial
 TIER: T0
 EVIDENCE: docs/handbook/contract-vectors.json
+
