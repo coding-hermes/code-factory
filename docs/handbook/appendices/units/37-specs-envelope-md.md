@@ -4,14 +4,16 @@
 |---|---|
 | Path | `~/code-factory/specs/ENVELOPE.md` |
 | Repository | `code-factory` |
-| Revision | `3c4c639` (spec unchanged since — `git diff 3c4c639 -- specs/ENVELOPE.md` is empty) |
-| Status | **VERIFIED — the comparison is complete: 23 of the 24 fields the spec defines disagree with at least one implementation** |
+| Revision | `e7ffed76` (fields 15 and 17 re-derived 2026-11-26 at this revision after the CF-355/CF-133/CF-521 landings; the remaining fields stand at the 2026-11-05 readings in §2c — `git diff 3c4c639 e7ffed76 -- specs/ENVELOPE.md` is +220/-7, the CF-355 §Result law) |
+| Status | **VERIFIED — the comparison is complete: 22 of the 24 fields the spec defines disagree with at least one implementation** |
 
 VERIFIED here means *this document's comparison* is finished and re-derivable — every field is read on both
 sides with a resolving locator. It is **not** a claim that the spec is correct: the spec is the wrong side on
-15 of the 24 fields, crier on 1, the scheduler on 19 (several fields have more than one wrong side; §2e
+15 of the 24 fields, crier on 1, the scheduler on 18 (several fields have more than one wrong side; §2e
 counts them). The finding is CF-216 ("the spec matches neither implementation"), and this page is its
-field-level proof.
+field-level proof. Fields 15 and 17 were re-derived 2026-11-26 at `e7ffed76` (CF-355's verdict law and
+CF-133/CF-521's `served_model` landed after the first reading); every other field stands at the 2026-11-05
+readings in §2c.
 
 ## 1. Purpose and why it matters
 
@@ -60,7 +62,16 @@ ancestor of `origin/main` (`5d8f5e0f`). `internal/bus/dispatch.go` is byte-ident
 scheduler revisions; `internal/scheduler/dispatch_leg.go` is cited at the on-disk revision (`d9282770`),
 where `correlateDispatchReply` sits at `:402` and is the same function that sits at `:668` on `origin/main`.
 `node` = [scripts/node-bus-worker.py:921] in this repository; the live node script is
-`~/crier-fleet/dispatcher.py`.
+`~/crier-fleet/dispatcher.py`. The 2026-11-26 re-derivation (fields 15 and 17 only) reads: scheduler
+`~/coding-hermes-scheduler/coding-herms-scheduler` at `15e02f99` (`dispatchReplyStatuses` at
+`~/coding-hermes-scheduler/coding-herms-scheduler/internal/scheduler/dispatch_leg.go L736 — out-of-tree
+repo`, `dispatchReplyVerdict` at L749 in the same file, the law's table test at
+`~/coding-hermes-scheduler/coding-herms-scheduler/internal/scheduler/dispatch_verdict_test.go L42-47 —
+out-of-tree repo`), node at `e7ffed76`
+[scripts/node-bus-worker.py:1790] [scripts/node-bus-worker.py:1796] [scripts/node-bus-worker.py:1803]
+[scripts/node-bus-worker.py:1241], and the spec's §Result at `specs/ENVELOPE.md:132-146`; the in-repo
+consumer model in [tests/test_bus_result_delivery.py:409] pins the scheduler reading case-for-case (12
+anchors PASS, 2026-11-26).
 
 ### 2d. Field-by-field comparison — the 24 fields the spec defines
 
@@ -83,9 +94,9 @@ dispatcher must change, **N** the node implementation must change.
 | 12 | `idempotency_key` string, req **by the prose** (`ENVELOPE.md:64`), absent from the spec's example (`ENVELOPE.md:9`) | member, and it dedupes: a second delivery of the same key answers with the first accept and stores nothing (`~/crier/internal/registry/handler.go L112 — out-of-tree repo`) | sent, equal to `corr_id` (`~/sched-base-check/internal/bus/dispatch.go L284 — out-of-tree repo`) | S |
 | 13 | `env_version` (result) int, req | carried opaquely inside `payload`; no envelope member | never read — no `env_version` in any non-test scheduler source, so no version is checked on either leg | D |
 | 14 | `dispatch_id` (result) uuid, req | carried opaquely | never read; the correlator matches `in_reply_to`, `corr_id`, or an echoed `task.corr_id` (`~/sched-base-check/internal/scheduler/dispatch_leg.go L402 — out-of-tree repo`) and never `dispatch_id` | D |
-| 15 | `status` completed \| failed \| refused | carried opaquely | never read. Success is the boolean `ok`, and **absence of `ok` is a success** (`~/sched-base-check/internal/scheduler/dispatch_leg.go L442 — out-of-tree repo`). The in-repo node sends `status` and no `ok` [scripts/node-bus-worker.py:925], so a `failed` or `refused` result from it correlates on `corr_id` and is then read as success. The live dispatcher sends `ok` and `in_reply_to` (`~/crier-fleet/dispatcher.py L501 — out-of-tree repo`), so the live path is not bitten — the repository's own node is | D N |
+| 15 | `status` completed \| failed \| refused | carried opaquely | read and validated against `ok` (CF-355): `ok` is the verdict, `status` may not contradict it, and a reply carrying neither a boolean `ok` nor a recognised `status` is refused — silence is never laundered into a success (`dispatchReplyVerdict`, `~/coding-hermes-scheduler/coding-herms-scheduler/internal/scheduler/dispatch_leg.go L749 — out-of-tree repo`, the mapping table pinned at `~/coding-hermes-scheduler/coding-herms-scheduler/internal/scheduler/dispatch_verdict_test.go L42-47 — out-of-tree repo` and modelled case-for-case by [tests/test_bus_result_delivery.py:409]). The in-repo node sends both `status` and `ok` [scripts/node-bus-worker.py:1790] [scripts/node-bus-worker.py:1796], and the live dispatcher sends `ok` and `in_reply_to` (`~/crier-fleet/dispatcher.py L501 — out-of-tree repo`) | — |
 | 16 | `host_identity` string, req — **the node's** hostname | carried opaquely | never read; no `host_identity` in any non-test scheduler source, so the dispatch row cannot record which node ran the work | D |
-| 17 | `harness` {name, served_model}, req | carried opaquely | never read | S N D |
+| 17 | `harness` {name, served_model}, req | carried opaquely | never read; the node now carries the member in the spec's shape — `name`, `model_requested`, `served_model`, `served_model_source` [scripts/node-bus-worker.py:1803] from `harness_attribution` [scripts/node-bus-worker.py:1241] (CF-133/CF-521), matching `ENVELOPE.md:96-100` | S D |
 | 18 | `exit_codes` list, req — every exit | carried opaquely | never read | N D |
 | 19 | `gate_exit` int, req | carried opaquely | never read; `gate_exit` is `null` when no gate was dispatched [scripts/node-bus-worker.py:929] and nothing distinguishes it from "gate passed" | D |
 | 20 | `branch` `node/crier/<dispatch_id>`, req | carried opaquely | never read; the node reports the clone's *current* branch via `rev-parse --abbrev-ref HEAD` [scripts/node-bus-worker.py:930] — the branch is never created and never named per the spec | S N D |
@@ -97,9 +108,10 @@ dispatcher must change, **N** the node implementation must change.
 
 ### 2e. What the count means, per side
 
-- **23 of 24** spec fields disagree with at least one implementation. The single exception is
+- **22 of 24** spec fields disagree with at least one implementation. The exceptions are
   `idempotency_key` (row 12), where both implementations already agree with the spec's *prose* — and the
-  spec's own example omits it.
+  spec's own example omits it — and `status` (row 15), where the CF-355 landings (2026-11-25) moved the
+  scheduler and the in-repo node onto the spec's law, re-derived 2026-11-26.
 - **crier disagrees with the spec on 12 of the 24**: the 11 dispatch rows, plus the `payload`-required rule
   that turns the spec's flat example into a 400. In 10 of those 11 there is no crier member at all
   (`env_version`, `dispatch_id`, `corr_id`, `issued_at`, `lane`, `text`, `brief`, `route`, `limits`,
@@ -107,10 +119,10 @@ dispatcher must change, **N** the node implementation must change.
   object without an opinion and discards what sits beside it
   (`~/crier/internal/registry/handler.go L1152 — out-of-tree repo`). Crier is **wrong on one**: `reply_to`, where the
   same name means provenance instead of an address. It is blameless on the 12 result fields.
-- **the scheduler disagrees on 19**: all 12 result fields, plus 7 dispatch fields (`env_version`,
-  `dispatch_id`, `text`, `brief`, `route`, `limits.max_artifacts`, `gate`). It agrees on `corr_id`,
-  `issued_at`, `reply_to`, `lane`, `idempotency_key` — with `corr_id`/`lane`/`reply_to`/`issued_at` nested
-  under `payload` and `issued_at` source-correct.
+- **the scheduler disagrees on 18**: 11 of the 12 result fields (all but `status`, row 15), plus 7
+  dispatch fields (`env_version`, `dispatch_id`, `text`, `brief`, `route`, `limits.max_artifacts`,
+  `gate`). It agrees on `corr_id`, `issued_at`, `reply_to`, `lane`, `idempotency_key` — with
+  `corr_id`/`lane`/`reply_to`/`issued_at` nested under `payload` and `issued_at` source-correct.
 - **the spec is the wrong side on 15**: 14 of them also disagree with an implementation; the fifteenth is
   its own self-contradiction over `idempotency_key`. Concretely: the flat example that crier answers 400
   (`~/crier/internal/registry/handler.go L1169 — out-of-tree repo`); `reply_to` defined as an address while crier's
@@ -118,12 +130,13 @@ dispatcher must change, **N** the node implementation must change.
   against the live guard encodes it (`~/sched-base-check/internal/bus/dispatch.go L202 — out-of-tree repo`); and
   `brief`, `route.harness`, `route.served_model`, `limits.max_artifacts`, `gate`, `branch` naming and
   `artifacts` naming mechanisms that no code produces on either side.
-- **the node disagrees with the spec on 5** (`harness.served_model`, `exit_codes` cardinality, `status` vs
-  `ok`, `branch`, `artifacts`) and with the scheduler on one that matters most: the scheduler sends
-  `text_b64`, the repository's node reads `text` [scripts/node-bus-worker.py:810], so **the in-repo node
-  cannot execute a single dispatch the scheduler sends.** The live node script does
-  (`~/crier-fleet/dispatcher.py L135 — out-of-tree repo`), which is why the fleet works and this repository's node
-  script does not.
+- **the node disagrees with the spec on 3** (`exit_codes` cardinality, `branch`, `artifacts`) —
+  `status` vs `ok` moved onto the spec with CF-355 (row 15) and `harness.served_model` with
+  CF-133/CF-521 (row 17), both re-derived 2026-11-26. The scheduler-dialect sentence that used to close
+  this bullet is retired: since CF-354 (2026-11-06) the node decodes `text_b64` first
+  [scripts/node-bus-worker.py:1325], so it executes scheduler-shaped dispatches — the consumer-pin arms in
+  [tests/test_bus_result_delivery.py:409] run exactly that dialect against the real worker (PASS,
+  2026-11-26). The remaining node-side gaps are the three named above, tracked with the rest of CF-216.
 - The spec's reserved-name section is also wrong about the guard (`ENVELOPE.md:53-54`): the 403 body is
   `{"error":"GUARD_BLOCKED","guard":{…}}` with `matched_patterns` as an **array**
   (`~/crier/internal/registry/handler.go L424 — out-of-tree repo`, `~/crier/internal/guard/types.go L46 — out-of-tree repo`) —
@@ -145,6 +158,8 @@ dispatcher must change, **N** the node implementation must change.
 | the correlator's accepted shapes are pinned | `sed -n 442,462p ~/sched-base-check/internal/scheduler/dispatch_leg_test.go` | a table of `in_reply_to` / `corr_id` / `task` echoes | 2026-11-05 | PASS — `TestCorrelateDispatchReply_IdentityNotArrival` (`:449`) |
 | the node's result shape is pinned against anything | `git -C ~/sched-base-check grep -n exit_codes -- internal` | a test naming the spec's result fields | 2026-11-05 | FAIL — no scheduler test names `exit_codes` or `host_identity`; the correlator's table pins only the three keys it matches, so `status` and `ok` can diverge without a failing build (CF-133 AC3 still open) |
 | the round trip runs | `CRIER_LIVE_URL=… go test ./internal/scheduler -run TestLiveTickDispatchLeg` in the scheduler repo | `→ completed` | 2026-11-05 (report §2) | PASS — the scheduler's dialect completes a tick (`~/code-factory-reports/crier-scheduler-roundtrip-2026-11-05.md L368 — out-of-tree repo`) |
+| fields 15 and 17 re-derived after CF-355/CF-133/CF-521 | `python3 tests/test_bus_result_delivery.py` | consumer-pin PASS; the modelled verdict mirrors the shipped CF-355 mapping | 2026-11-26 | PASS — 12 anchors hold in `dispatch_leg.go` at `15e02f99`; arm A11 mirrors the mapping table row for row |
+| every locator on this page resolves (re-run) | `python3 scripts/master_doc_check.py docs/handbook/appendices/units --only 37- --strict` | `MASTER-DOC: PASS` | 2026-11-26 | FAIL — 1 error: the §6 locator naming `internal/scheduler/dispatch_leg.go` line 742 names no file (CF-541 owns that citation); the fields 15/17 re-derivation added no new locator error |
 
 There is no test in either implementation that compares the wire to `specs/ENVELOPE.md`. This page's
 evidence is the readings above, which any reviewer re-runs with the commands in the table — never a commit
