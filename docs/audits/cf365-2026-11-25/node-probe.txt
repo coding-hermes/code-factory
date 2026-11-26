@@ -1,0 +1,61 @@
+CF-365 — node worker III.M1.S5, bus-cycle row 19 probe attempt
+Date: 2026-11-25/26 UTC. Workdir: ~/code-factory. Operator: hermes worker (cli).
+Redaction: tailnet address literals are replaced with `<host>` (repo publication gate
+CF-378); the real values live in the operator's ~/.bunker/config.yaml. Nothing else
+was altered.
+Outcome: BLOCKED — required live node absent; NO dispatch was made; row 19 stays open (UNKNOWN).
+
+Preflight (given with the order):
+  bunker --server bunker-las-03 info cf-node
+    -> not_found: agent "cf-node" not found
+  bunker --server bunker-las-03 list
+    -> No agents found.
+
+Independent node-existence check (before any dispatch):
+
+1. Deployed bus still knows the agent (signed stats read, NON-consuming; control-host
+   key copy ~/crier-fleet/keys/cf-node.key, crier http://<host>:8767):
+   GET /agents/cf-node/inbox/stats, bearer + ed25519 signature
+   -> 200 {"queue_depth": 0, "leased_count": 0, "oldest_age_ms": 0,
+           "oldest_unacked": null, "contract_ttl_secs": 86400, "stale": false,
+           "unacked_count": 0}
+   A 404 would have meant "not registered" (credential ladder); 200 proves the
+   registry row + key halves still match. Queue is empty; nothing was consumed.
+
+2. Full bunker-server sweep (all 16 servers in ~/.bunker/config.yaml; full transcript
+   in this directory, sweep.txt): among reachable servers cf-node appears only on bunker-mvp:
+     cf-node  running  268.5 MB  created 2026-11-08T01:41:31Z
+   bunker-las-03 (the dispatcher roster's server): "No agents found." (--status all).
+   Unprobed surfaces, named: bunker-las-01 and bunker-las-04 offline (tailnet last
+   seen 17d / 10d ago); hermes-fleet-01 refused locally (cert_pin 62 hex, CLI config
+   defect); bunker-md-01 listed in config but CLI answers "server not found in config".
+
+3. The bunker-mvp cf-node is an UNPROVISIONED shell, not the node row 19 probes:
+   home /home/bunker-cf-node contains only docker binaries (~/bin), ~/.bunker,
+   ~/.docker, a code-factory clone (~/repo, last touched 2026-11-13). Measured:
+   - `ls ~/.node` -> No such file or directory  (no agent.key, no crier.json,
+     no node.json — the Nov-05 state the unit's Status row recorded is gone)
+   - `find ~ -name "hermes*" -o -name agent.key -o -name crier.json` -> nothing
+   - no ~/hermes-venv, no hermes binary on PATH
+   - systemctl --user list-units '*cf*' -> only bunker-share mounts (no
+     cf-inference-proxy unit; is-active -> inactive)
+   - curl 127.0.0.1:10800/api/status -> 000 (harness gateway down)
+
+4. Dispatcher divergence (why no dispatch was attempted):
+   ~/crier-fleet/fleet_agents.json maps "cf-node" -> "bunker-las-03" — a server
+   that holds no agent. fleet-dispatcher.service is active and polls every agent in
+   that roster; its last cf-node lines are 2026-11-23 retrieve failures (crier
+   down at the time), last SUCCESSFUL cf-node cycle 2026-11-05 (dispatch-ledger).
+   A scheduler dispatch could be retrieved by the dispatcher, whose configured
+   `bunker exec --server bunker-las-03 cf-node` would target an absent agent.
+   Actual fetch, harness, reply and ack behavior was not measured. Dispatch was
+   withheld to avoid consuming or stranding a job.
+
+Conclusion: row 19 (deployed-bus --once cycle on cf-node, harness gateway up) is not
+runnable: the provisioned node no longer exists anywhere reachable. The bus cycle is
+neither PASS nor FAIL — unmeasured. Row stays open. Recovery path (foreman/owner
+decision, NOT done here): re-provision cf-node (bunker-provision.sh --apply +
+bunker-crier-connect.sh), re-point fleet_agents.json, then re-run this probe.
+
+Raw transcripts: sweep.txt (16-server list --status all), node-interior.txt
+(bunker-mvp cf-node home probes).

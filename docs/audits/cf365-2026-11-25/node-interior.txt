@@ -1,0 +1,44 @@
+Node-interior probes on the only surviving cf-node agent (bunker-mvp), 2026-11-25/26 UTC.
+Carrier: `bunker exec --server bunker-mvp cf-node -- bash -lc '...'` (positional agent id).
+Home observed: /home/bunker-cf-node.
+CF-050 redaction: quoted transcript paths below are spelled with `~<name>` instead of the
+literal `/home/<name>/` form (the repo publication gate forbids absolute host-home paths in
+tracked files); the real carrier home is the agent's own bunker home. Nothing else was altered.
+
+1) Identity + services:
+   $ ls -la ~/.node/
+   ls: cannot access '~bunker-cf-node/.node/': No such file or directory
+   $ python3 -c "import json;json.load(open('~agent/.node/node.json'))"
+   FileNotFoundError: [Errno 2] No such file or directory: '~agent/.node/node.json'
+   (probed both /home/agent and /home/bunker-cf-node spellings; neither exists)
+
+   $ systemctl --user list-units "*cf*" --no-pager --no-legend
+   srv-bunker\x2dshare-cf\x2dnode.mount loaded active mounted /srv/bunker-share/cf-node
+   (mounts only — no cf-inference-proxy unit)
+   $ systemctl --user is-active cf-inference-proxy
+   inactive
+   $ curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:10800/api/status
+   000        <- harness gateway not listening
+
+2) Home inventory (no hermes anywhere):
+   $ ls ~
+   .bash_logout .bashrc bin .bunker .cache .cloud-locale-test.skip .config
+   .docker .local .profile repo rootless-install.sh
+   $ ls ~/bin
+   containerd containerd-shim-runc-v2 ctr docker dockerd
+   dockerd-rootless-setuptool.sh dockerd-rootless.sh docker-init docker-proxy
+   rootlesskit runc
+   $ ls ~/hermes-venv
+   ls: cannot access '~bunker-cf-node/hermes-venv': No such file or directory
+   $ which hermes git python3
+   git: /usr/bin/git ; python3: /usr/bin/python3 ; hermes: (none)
+   $ find ~ -maxdepth 3 -name "hermes*" -o -maxdepth 3 -name agent.key -o -maxdepth 3 -name crier.json
+   (no output)
+
+3) Repo clone present (last touch 2026-11-13):
+   $ ls ~/repo
+   AGENTS.md config docs examples LICENSE patches prompts README.md scripts skills specs tests
+   $ ls ~/repo/scripts | grep -E "bus|node" | head
+   node-bus-worker.py node-create.sh node_env.py node_freshness.py
+   node_gateway_auth.py node_hygiene.py node_identity.py node-lifecycle-supervisor.py ...
+   (worker script present; nothing on the node can run it: no key, no harness, no gateway)

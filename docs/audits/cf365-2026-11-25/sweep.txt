@@ -1,0 +1,133 @@
+CF-365 CF-378 redaction: tailnet address literals below are replaced with `<host>`
+(the repo publication gate forbids publishing them; real values live in the
+operator's ~/.bunker/config.yaml). Nothing else was altered.
+=== bunker-las-01 (2026-11-26T00:43:46Z)
+bunker: reading server "bunker-las-01"
+bunker: server "bunker-las-01" is offline: cannot reach http://<host>:19090 within the 3s connect bound (tailnet: offline, last seen 17d ago): deadline_exceeded: Post "http://<host>:19090/bunker.v1.Bunkerd/ListAgents": dial tcp <host>:19090: i/o timeout (a reachable server still gets the full 30s request deadline)
+=== bunker-las-02 (2026-11-26T00:43:49Z)
+bunker: reading server "bunker-las-02"
+No agents found.
+=== bunker-las-03 (2026-11-26T00:43:50Z)
+bunker: reading server "bunker-las-03"
+No agents found.
+=== bunker-las-04 (2026-11-26T00:43:51Z)
+bunker: reading server "bunker-las-04"
+bunker: server "bunker-las-04" is offline: cannot reach http://<host>:10001 within the 3s connect bound (tailnet: offline, last seen 10d ago): deadline_exceeded: Post "http://<host>:10001/bunker.v1.Bunkerd/ListAgents": dial tcp <host>:10001: i/o timeout (a reachable server still gets the full 30s request deadline)
+=== bunker-mvp (2026-11-26T00:43:54Z)
+bunker: reading server "bunker-mvp"
+
+══════════ Agents ══════════
+
+  Agent ID       Status     Disk Used      Max File Size  Created                   Public URL
+  ────────       ──────     ─────────      ─────────────  ───────                   ──────────
+  cf-node        running    268.5 MB       20.0 GB        2026-11-08T01:41:31Z      (no URL)
+    └ net: shared — host network namespace (no network isolation: shared loopback, global port space) — NOT tenant isolation
+  ci-e2e-01      running    17.2 GB        20.0 GB        2026-11-07T20:45:08Z      (no URL)
+    └ net: shared — host network namespace (no network isolation: shared loopback, global port space) — NOT tenant isolation
+
+Total: 2 agents (server: bunker-mvp)
+Disk Used is the agent's measured usage; Max File Size (per-file cap — not a total-disk quota)
+=== cube-las-00 (2026-11-26T00:43:54Z)
+bunker: reading server "cube-las-00"
+
+══════════ Agents ══════════
+
+  Agent ID       Status     Disk Used      Max File Size  Created                   Public URL
+  ────────       ──────     ─────────      ─────────────  ───────                   ──────────
+  2cdce4d0       running    83.3 GB        20.0 GB        2026-09-20T19:10:13Z      (no URL)
+    └ net: not reported by this daemon — it predates network-isolation reporting; the network boundary is NOT verified
+
+Total: 1 agents (server: cube-las-00)
+Disk Used is the agent's measured usage; Max File Size (per-file cap — not a total-disk quota)
+=== dedi-2 (2026-11-26T00:44:09Z)
+bunker: reading server "dedi-2"
+No agents found.
+=== hermes-fleet-01 (2026-11-26T00:44:10Z)
+bunker: reading server "hermes-fleet-01"
+bunker: list agents: unavailable: refusing to dial https://<host>:10001: tls-config-contradictory: server "hermes-fleet-01" has an unusable cert_pin: want 64 hex characters (sha256), got 62 — re-pin with: bunker connect --tls self-signed --accept-cert https://<host>:10001
+=== hermes-fleet-02 (2026-11-26T00:44:10Z)
+bunker: reading server "hermes-fleet-02"
+
+══════════ Agents ══════════
+
+  Agent ID       Status     Disk Used      Max File Size  Created                   Public URL
+  ────────       ──────     ─────────      ─────────────  ───────                   ──────────
+  deepseek-dashboard running    4.4 GB         —              2026-09-27T23:48:11Z      (no URL)
+    └ net: not reported by this daemon — it predates network-isolation reporting; the network boundary is NOT verified
+  devbox-dagger-01 running    2.9 GB         —              2026-10-19T05:17:11Z      (no URL)
+    └ net: not reported by this daemon — it predates network-isolation reporting; the network boundary is NOT verified
+  escalation-doctrine running    4.3 GB         —              2026-09-27T23:32:19Z      (no URL)
+    └ net: not reported by this daemon — it predates network-isolation reporting; the network boundary is NOT verified
+  helix          running    4.4 GB         —              2026-09-27T23:43:04Z      (no URL)
+    └ net: not reported by this daemon — it predates network-isolation reporting; the network boundary is NOT verified
+  musterflow     running    4.4 GB         —              2026-09-27T23:38:13Z      (no URL)
+    └ net: not reported by this daemon — it predates network-isolation reporting; the network boundary is NOT verified
+
+Total: 5 agents (server: hermes-fleet-02)
+Disk Used is the agent's measured usage; Max File Size (per-file cap — not a total-disk quota)
+=== hermes-fleet-03 (2026-11-26T00:44:16Z)
+bunker: reading server "hermes-fleet-03"
+
+══════════ Agents ══════════
+
+  Agent ID       Status     Disk Used      Max File Size  Created                   Public URL
+  ────────       ──────     ─────────      ─────────────  ───────                   ──────────
+  hermes4friends-infra running    4.3 GB         —              2026-09-27T23:33:01Z      (no URL)
+    └ net: not reported by this daemon — it predates network-isolation reporting; the network boundary is NOT verified
+  imhotep        running    4.4 GB         —              2026-09-27T23:54:14Z      (no URL)
+    └ net: not reported by this daemon — it predates network-isolation reporting; the network boundary is NOT verified
+  rabbit-hole    running    4.4 GB         —              2026-09-27T23:39:42Z      (no URL)
+    └ net: not reported by this daemon — it predates network-isolation reporting; the network boundary is NOT verified
+  asce           running    4.4 GB         —              2026-09-27T23:47:24Z      (no URL)
+    └ net: not reported by this daemon — it predates network-isolation reporting; the network boundary is NOT verified
+
+Total: 4 agents (server: hermes-fleet-03)
+Disk Used is the agent's measured usage; Max File Size (per-file cap — not a total-disk quota)
+=== hermes-fleet-04 (2026-11-26T00:44:21Z)
+bunker: reading server "hermes-fleet-04"
+
+══════════ Agents ══════════
+
+  Agent ID       Status     Disk Used      Max File Size  Created                   Public URL
+  ────────       ──────     ─────────      ─────────────  ───────                   ──────────
+  speclang       running    4.3 GB         —              2026-09-27T23:33:01Z      (no URL)
+    └ net: not reported by this daemon — it predates network-isolation reporting; the network boundary is NOT verified
+  temple-runner  running    4.4 GB         —              2026-09-27T23:46:39Z      (no URL)
+    └ net: not reported by this daemon — it predates network-isolation reporting; the network boundary is NOT verified
+  kobayashi-maru running    4.3 GB         —              2026-09-28T00:08:26Z      (no URL)
+    └ net: not reported by this daemon — it predates network-isolation reporting; the network boundary is NOT verified
+  rethinkdb      running    4.5 GB         —              2026-09-27T23:39:00Z      (no URL)
+    └ net: not reported by this daemon — it predates network-isolation reporting; the network boundary is NOT verified
+
+Total: 4 agents (server: hermes-fleet-04)
+Disk Used is the agent's measured usage; Max File Size (per-file cap — not a total-disk quota)
+=== hermes4friends (2026-11-26T00:44:26Z)
+bunker: reading server "hermes4friends"
+
+══════════ Agents ══════════
+
+  Agent ID       Status     Disk Used      Max File Size  Created                   Public URL
+  ────────       ──────     ─────────      ─────────────  ───────                   ──────────
+  luisa-sossa    running    12.4 GB        20.0 GB        2026-09-27T02:19:34Z      (no URL)
+    └ net: not reported by this daemon — it predates network-isolation reporting; the network boundary is NOT verified
+  yogui          running    4.7 GB         20.0 GB        2026-09-27T03:11:55Z      (no URL)
+    └ net: not reported by this daemon — it predates network-isolation reporting; the network boundary is NOT verified
+  jorge          running    6.4 GB         20.0 GB        2026-09-27T03:12:05Z      (no URL)
+    └ net: not reported by this daemon — it predates network-isolation reporting; the network boundary is NOT verified
+  ingrid         running    4.7 GB         20.0 GB        2026-10-02T01:56:58Z      (no URL)
+    └ net: not reported by this daemon — it predates network-isolation reporting; the network boundary is NOT verified
+
+Total: 4 agents (server: hermes4friends)
+Disk Used is the agent's measured usage; Max File Size (per-file cap — not a total-disk quota)
+=== judgebox (2026-11-26T00:44:27Z)
+bunker: reading server "judgebox"
+No agents found.
+=== karahermes-mde-7840hs (2026-11-26T00:44:27Z)
+bunker: reading server "karahermes-mde-7840hs"
+No agents found.
+=== hermes-fleet-05 (2026-11-26T00:44:27Z)
+bunker: reading server "hermes-fleet-05"
+No agents found.
+=== bunker-md-01 (2026-11-26T00:44:28Z)
+bunker: reading server "bunker-md-01"
+bunker: server "bunker-md-01" not found in config
