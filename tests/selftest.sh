@@ -1037,6 +1037,54 @@ if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_lane_target.py" >/dev/
 else
   say "  FAIL  lane target contract"; selftest_fail
 fi
+# CF-148: scan must refuse two lane rows that resolve to ONE workdir. The arms below
+# exercise the new leg BOTH ways: two rows on one checkout print a named FAIL (rc
+# non-zero, both lane names and the shared path in the JSON), two distinct workdirs
+# PASS (rc 0, empty shared_workdirs). The red control runs the pre-fix script (the
+# revision CF-148 was raised on, cc332291), which certifies the shared fixture ok —
+# so a revert turns the first arm red and the control green.
+say "  ..    CF-148: scan refuses lanes sharing one workdir"
+tmpd=$(mktemp -d)
+git init -q -b main "$tmpd/repo-a"
+git -C "$tmpd/repo-a" -c user.email=fixture@example.invalid -c user.name=fixture \
+  commit -qm fixture --allow-empty
+git -C "$tmpd/repo-a" remote add origin https://example.invalid/o/r.git
+git init -q -b main "$tmpd/repo-b"
+git -C "$tmpd/repo-b" -c user.email=fixture@example.invalid -c user.name=fixture \
+  commit -qm fixture --allow-empty
+git -C "$tmpd/repo-b" remote add origin https://example.invalid/o/r.git
+printf '%s\n' "{\"name\":\"cf148-a\",\"workdir\":\"$tmpd/repo-a\"}" \
+  "{\"name\":\"cf148-b\",\"workdir\":\"$tmpd/repo-a\"}" > "$tmpd/shared.jsonl"
+printf '%s\n' "{\"name\":\"cf148-a\",\"workdir\":\"$tmpd/repo-a\"}" \
+  "{\"name\":\"cf148-b\",\"workdir\":\"$tmpd/repo-b\"}" > "$tmpd/distinct.jsonl"
+shared_out=$(python3 -B "$HERE/scripts/lane_target.py" scan "$tmpd/shared.jsonl" 2>&1); shared_rc=$?
+distinct_out=$(python3 -B "$HERE/scripts/lane_target.py" scan "$tmpd/distinct.jsonl" 2>&1); distinct_rc=$?
+if [ "$shared_rc" -ne 0 ] \
+  && printf '%s\n' "$shared_out" | grep -Fq 'shared workdir' \
+  && printf '%s\n' "$shared_out" | grep -Fq "'cf148-a', 'cf148-b'" \
+  && printf '%s\n' "$shared_out" | grep -Fq "$tmpd/repo-a" \
+  && [ "$distinct_rc" -eq 0 ] \
+  && printf '%s\n' "$distinct_out" | grep -Fq '"ok": true' \
+  && printf '%s\n' "$distinct_out" | grep -Fq '"shared_workdirs": []'; then
+  say "  PASS  CF-148 scan sharing leg: shared workdir -> exit $shared_rc naming both lanes and the path; distinct workdirs -> exit $distinct_rc ok"
+else
+  say "  FAIL  CF-148 scan sharing leg (shared exit $shared_rc, distinct exit $distinct_rc)"; selftest_fail
+  printf '%s\n' "$shared_out" "$distinct_out" | sed 's/^/    | /'
+fi
+if git -C "$HERE" show cc332291:scripts/lane_target.py > "$tmpd/lane_target_prefix.py" 2>/dev/null; then
+  prefix_out=$(python3 -B "$tmpd/lane_target_prefix.py" scan "$tmpd/shared.jsonl" 2>&1); prefix_rc=$?
+  if [ "$prefix_rc" -eq 0 ] \
+    && printf '%s\n' "$prefix_out" | grep -Fq '"ok": true' \
+    && ! printf '%s\n' "$prefix_out" | grep -Fq 'shared workdir'; then
+    say "  PASS  CF-148 red control: pre-fix cc332291 scan certifies the shared fixture ok (exit $prefix_rc) — the arm is falsifiable"
+  else
+    say "  FAIL  CF-148 red control did not reproduce the pre-fix ok (exit $prefix_rc)"; selftest_fail
+    printf '%s\n' "$prefix_out" | sed 's/^/    | /'
+  fi
+else
+  say "  FAIL  CF-148 pre-fix source unavailable (git show cc332291:scripts/lane_target.py)"; selftest_fail
+fi
+rm -rf "$tmpd"
 say "12. node disk floor resolves from CLI/env/config with fail-closed values"
 if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_disk_floor.py" >/dev/null 2>&1; then
   say "  PASS  floor precedence, role defaults, malformed values refused"

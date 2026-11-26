@@ -524,7 +524,44 @@ def scan(
                 ok = False
             rows.append({"line": lineno, "name": name, "ok": ok, "target": out})
             bad += 0 if ok else 1
-    return {"file": projects_jsonl, "rows": rows, "bad": bad, "ok": bad == 0}
+    # CF-148: the per-row checks above grade each workdir in isolation, so two or
+    # more lane rows that resolve to the SAME checkout all pass and the scan
+    # certifies a shared checkout as ok. Two lanes on one workdir is itself the
+    # defect (a family mutation in one lane's repo silently changes the other's
+    # workspace), so a local target's realpath joins a sharing group and a group
+    # with more than one member fails every member with a named reason.
+    shared: dict[str, list[tuple[int, str]]] = {}
+    for idx, entry in enumerate(rows):
+        target = entry.get("target") or {}
+        if target.get("verified") != "local" or not target.get("path"):
+            continue
+        key = os.path.realpath(target["path"])
+        shared.setdefault(key, []).append(
+            (idx, entry.get("name") or f"line{entry['line']}")
+        )
+    shared_workdirs = []
+    for realpath, members in shared.items():
+        if len(members) < 2:
+            continue
+        names = ", ".join(repr(n) for _, n in members)
+        reason = (
+            f"shared workdir: {len(members)} lanes resolve to the same checkout "
+            f"{realpath!r}: {names}"
+        )
+        shared_workdirs.append({"path": realpath, "lanes": [n for _, n in members]})
+        for idx, _ in members:
+            entry = rows[idx]
+            if entry.get("ok"):
+                entry["ok"] = False
+                entry["error"] = reason
+                bad += 1
+    return {
+        "file": projects_jsonl,
+        "rows": rows,
+        "bad": bad,
+        "ok": bad == 0,
+        "shared_workdirs": shared_workdirs,
+    }
 
 
 # Satellite-family suffixes, from docs/SCHEDULER-ADMISSION.md's family table (the

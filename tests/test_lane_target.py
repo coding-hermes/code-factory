@@ -613,6 +613,55 @@ class ScanProjects(unittest.TestCase):
         self.assertTrue(names["ok-remote"])
         self.assertFalse(names["bad-relative"])
 
+    def test_scan_refuses_two_rows_on_one_workdir(self):
+        """CF-148: two lanes resolving to one checkout fail with a named reason."""
+        f = fixture()
+        tmp = fixture_root("lane-scan-shared-")
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        path = os.path.join(tmp, "projects.jsonl")
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(json.dumps({"name": "dup-a", "workdir": f["repo"]}) + "\n")
+            # A different spelling of the same checkout must share the same group.
+            fh.write(
+                json.dumps({"name": "dup-b", "workdir": "local:" + f["repo"]}) + "\n"
+            )
+
+        out = lane_target.scan(path, allow_remote=True, home=f["home"])
+        self.assertFalse(out["ok"])
+        self.assertEqual(out["bad"], 2, json.dumps(out, indent=2))
+        self.assertEqual(
+            out["shared_workdirs"],
+            [{"path": os.path.realpath(f["repo"]), "lanes": ["dup-a", "dup-b"]}],
+        )
+        reason = (
+            f"shared workdir: 2 lanes resolve to the same checkout "
+            f"{os.path.realpath(f['repo'])!r}: 'dup-a', 'dup-b'"
+        )
+        for row in out["rows"]:
+            self.assertEqual(row["error"], reason)
+
+    def test_scan_accepts_two_rows_on_distinct_workdirs(self):
+        """CF-148: the sharing leg must not fire for two different checkouts."""
+        f = fixture()
+        tmp = fixture_root("lane-scan-distinct-")
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        # A second real checkout with the remote/branch the per-row checks require.
+        second = os.path.join(tmp, "second-repo")
+        os.makedirs(second)
+        _git(second, "init", "-q", "-b", "main")
+        _git(second, "commit", "-q", "--allow-empty", "-m", "init")
+        _git(second, "remote", "add", "origin", ORIGIN_URL)
+        path = os.path.join(tmp, "projects.jsonl")
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(json.dumps({"name": "dist-a", "workdir": f["repo"]}) + "\n")
+            fh.write(json.dumps({"name": "dist-b", "workdir": second}) + "\n")
+
+        out = lane_target.scan(path, allow_remote=True, home=f["home"])
+        self.assertTrue(out["ok"], json.dumps(out, indent=2))
+        self.assertEqual(out["bad"], 0)
+        self.assertEqual(out["shared_workdirs"], [])
+        self.assertTrue(all(r["ok"] for r in out["rows"]))
+
 
 class VerifyBunker(unittest.TestCase):
     """bunker:// targets are proved by asking the agent, never assumed."""
