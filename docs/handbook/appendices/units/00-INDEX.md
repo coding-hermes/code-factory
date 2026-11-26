@@ -35,7 +35,7 @@ mismatch — a hand-added row cannot drift from its record silently.
 | 22 | [`scripts/lib.sh`](22-scripts-lib-sh.md) | code-factory | VERIFIED |
 | 23 | [`scripts/load_lane_config.py`](23-scripts-load-lane-config-py.md) | code-factory | VERIFIED |
 | 24 | [`scripts/master_doc_skeleton.py`](24-scripts-master-doc-skeleton-py.md) | code-factory | VERIFIED |
-| 25 | [`scripts/node-bus-worker.py`](25-scripts-node-bus-worker-py.md) | code-factory | RED |
+| 25 | [`scripts/node-bus-worker.py`](25-scripts-node-bus-worker-py.md) | code-factory | VERIFIED |
 | 26 | [`scripts/node-create.sh`](26-scripts-node-create-sh.md) | code-factory | VERIFIED |
 | 27 | [`scripts/node_env.py`](27-scripts-node-env-py.md) | code-factory | VERIFIED |
 | 28 | [`scripts/node_freshness.py`](28-scripts-node-freshness-py.md) | code-factory | VERIFIED |

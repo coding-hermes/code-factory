@@ -1,0 +1,2 @@
+Agent cf-node destroyed.
+Removed local SSH key ~/.config/bunker/keys/cf-node

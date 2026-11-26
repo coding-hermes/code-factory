@@ -1,0 +1,31 @@
+CF-365 — first delivery was consumed by the fleet dispatcher, not the node (measured verbatim)
+2026-11-26 UTC. This record is why the consumption window needed the dispatcher paused.
+
+Composition + first delivery (roster still cf-node -> bunker-las-03, dispatcher active):
+  dispatch: /tmp/cf365-dispatch.json — dispatch_id cf365-probe-1, corr_id cf365-corr-1,
+  project code-factory, reply_to scheduler, gate `git status --porcelain`, vars §5 six required,
+  brief cf.brief-input.v1 digest eb91320b4a2b15f8113293aea5f5248f8fbdfe1f52413c2fbe5c624cfe32a81a
+  (computed with scripts/node-bus-worker.py --print-brief-digest, the sender helper).
+  delivery: crier_client.Crier(agent_id=scheduler, key=crier-scheduler.key, bearer)
+            .deliver("cf-node", body, sender="scheduler") with the idempotency-key
+            value "cf365-probe-1" supplied as the deliver() keyword argument
+  receipt (control host, crier http://127.0.0.1:8767):
+    {"id": "8762cfc6ba25da98317b1989", "transport": "inbox",
+     "expires_at": "2026-11-27T12:49:31.795612199Z",
+     "guard": {"message_id": "8762cfc6ba25da98317b1989", "decision": "allow",
+               "risk_level": "medium", "reason": "guard_error: all providers failed: no provider api key",
+               "matched_patterns": ["b64_blob"], "policy": "default", "errored": true, "degraded": true}}
+
+Dispatcher log (~/crier-fleet/logs/dispatcher.log), verbatim:
+  2026-11-26T07:49:33-0500 dispatch 8762cfc6ba25da98317b1989 -> cf-node: CF-365 deployed-bus probe dispatch. Report the repository HEAD: run `it rev-parse --short HEAD` and reply with
+  2026-11-26T07:49:35-0500 FAILED 8762cfc6ba25da98317b1989 (cf-node) in 1.5s — reported and acked: could not create job dir: bunker: stream error: not_found: agent "cf-node" not found
+
+The dispatcher retrieved the message within 2 seconds (a long-poll was already waiting),
+tried `bunker exec --server bunker-las-03 cf-node` per its roster, found no agent, reported
+the failure to the reply target and ACKED the message. The node saw queue_depth 0. This is
+the prior probe's exact warning ("a dispatch could be consumed by the dispatcher and sent
+to that absent agent"), now measured — the failure leg the recovery plan predicted.
+
+Second delivery (roster re-pointed to dedi-2, dispatcher SIGSTOPped for the window):
+  idempotency_key "cf365-probe-1" replayed the cached receipt ("idempotent_replay": true,
+  same message id) — a NEW key ("cf365-probe-2") minted message 1bf326c88357a8b6632fadfd.

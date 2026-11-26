@@ -1,0 +1,19 @@
+{
+ "uhlp": "hermes-fleet-01",
+ "ring-runner": "hermes-fleet-01",
+ "inference-estimator": "hermes-fleet-01",
+ "totalstack": "hermes-fleet-01",
+ "escalation-doctrine": "hermes-fleet-02",
+ "musterflow": "hermes-fleet-02",
+ "helix": "hermes-fleet-02",
+ "deepseek-dashboard": "hermes-fleet-02",
+ "hermes4friends-infra": "hermes-fleet-03",
+ "rabbit-hole": "hermes-fleet-03",
+ "asce": "hermes-fleet-03",
+ "imhotep": "hermes-fleet-03",
+ "kobayashi-maru": "hermes-fleet-04",
+ "speclang": "hermes-fleet-04",
+ "rethinkdb": "hermes-fleet-04",
+ "temple-runner": "hermes-fleet-04",
+ "cf-node": "bunker-las-03"
+}

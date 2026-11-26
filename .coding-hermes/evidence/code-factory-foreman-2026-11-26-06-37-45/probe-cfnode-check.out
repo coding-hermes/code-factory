@@ -1,0 +1,26 @@
+node-bus-worker --check — agent=cf-node bus=http://127.0.0.1:8767
+  PASS  identity — ~bunker-cf-node/.node/node.json mode 0o600 project=code-factory; ~bunker-cf-node/.node/crier.json mode 0o600 project=code-factory
+  PASS  project — code-factory (the two identity files agree)
+  PASS  signing_key — ~bunker-cf-node/.node/agent.key mode 0o600 — PKCS#8 ed25519, public 69743c3431d89e107507e3701541b4c616367189f31a8994afd9b753f06e94eb
+  PASS  bus_bearer — ~bunker-cf-node/.node/auth/crier.token (mode 0o600)
+  PASS  bus_health — http://127.0.0.1:8767/health -> 200
+  PASS  inbox — GET /agents/cf-node/inbox/stats -> 200 (signed read accepted; queue_depth 0, leased_count 0)
+  PASS  key_registry — the node's key is the registered cf identity (69743c3431d89e10…)
+  PASS  harness — ~bunker-cf-node/hermes-venv/bin/hermes — Hermes Agent v0.19.0 (2026.7.20) Install directory: ~bunker-cf-node/hermes-
+  ..    contract:CF_MODEL — from the directive's `vars` (required)
+  ..    contract:CF_PROVIDER — from the directive's `vars` (required)
+  ..    contract:CF_BASE_URL — from the directive's `vars` (optional)
+  ..    contract:CF_API_KEY_FILE — from the directive's `vars` (optional)
+  ..    contract:CF_WORKDIR — from the directive's `vars` (required)
+  ..    contract:CF_NAMESPACE — from the directive's `vars` (required)
+  ..    contract:CF_RUN_ID — from the directive's `vars` (required)
+  ..    contract:CF_LANE — from the directive's `vars` (required)
+  ..    contract:CF_SKILLS_DIR — from the directive's `vars` (optional)
+  ..    contract:CF_HARNESS_OPTS — from the directive's `vars` (optional)
+  ..    contract:CF_MAX_TURNS — from the directive's `vars` (optional)
+  ..    contract:CF_TIMEOUT_S — from the directive's `vars` (optional)
+  PASS  vars_ambient — no CF_* variable is set in this worker's environment, so no lane can inherit another's
+  PASS  vars — 12 declared (6 required) and 6 optional (specs/HARNESS-MATRIX.md §5); the harness child env is the directive's `vars` and nothing else
+  PASS  gateway — http://127.0.0.1:10800/api/status -> 200
+
+BUS WORKER: READY

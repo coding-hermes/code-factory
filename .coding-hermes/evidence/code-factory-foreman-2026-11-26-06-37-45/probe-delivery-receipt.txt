@@ -1,0 +1,17 @@
+{
+ "id": "1bf326c88357a8b6632fadfd",
+ "transport": "inbox",
+ "expires_at": "2026-11-27T12:56:19.635392434Z",
+ "guard": {
+  "message_id": "1bf326c88357a8b6632fadfd",
+  "decision": "allow",
+  "risk_level": "medium",
+  "reason": "guard_error: all providers failed: no provider api key",
+  "matched_patterns": [
+   "b64_blob"
+  ],
+  "policy": "default",
+  "errored": true,
+  "degraded": true
+ }
+}

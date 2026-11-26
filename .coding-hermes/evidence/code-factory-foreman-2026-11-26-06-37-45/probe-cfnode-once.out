@@ -1,0 +1,18 @@
+node-bus-worker --once — agent=cf-node bus=http://127.0.0.1:8767 project=code-factory
+  PASS  signing_key — ~bunker-cf-node/.node/agent.key — PKCS#8 ed25519, public 69743c3431d89e10…
+  PASS  bus_bearer — ~bunker-cf-node/.node/auth/crier.token (mode 0o600)
+  PASS  bus_health — http://127.0.0.1:8767/health -> 200
+  PASS  inbox — GET /agents/cf-node/inbox -> 200, 1 message(s), lease 213eab11fa59ec7ca47e1f1cbeeaa440, queue_depth 1
+  PASS  brief_digest — cf365-probe-1 (corr cf365-corr-1) cf.brief-input.v1 e7794e24f2648e2c… binds the projected BriefInput (609 canonical bytes)
+  PASS  brief_project — cf365-probe-1 (corr cf365-corr-1) code-factory is this node's project
+  PASS  vars — cf365-probe-1 (corr cf365-corr-1) 6 §5 variable(s) from the directive: CF_LANE, CF_MODEL, CF_NAMESPACE, CF_PROVIDER, CF_RUN_ID, CF_WORKDIR (nothing read from this worker's environment)
+  ..    harness — stall bound 300s (wall 1800s): no output and no CPU progress; 0 disables
+  PASS  harness — cf365-probe-1 (corr cf365-corr-1) exit 1 in 15.5s (wall limit 1800s)
+  PASS  gate — cf365-probe-1 (corr cf365-corr-1) `git status --porcelain` exit 0 (expected 0) in 0.0s
+  WARN  memory — UNVERIFIED: DuckBrain URL is not configured; no memory write claimed
+  NOTE  harness output — hermes -z: agent failed: No inference provider configured. Run 'hermes model' to choose a provider and model, or set an API key (OPENROUTER_API_KEY, OPENAI_API_KEY, etc.) in ~/.hermes/.env.
+  PASS  reply — POST /agents/scheduler/inbox -> 201 (message bd3d4fe79f58c59107c657ea, corr_id cf365-corr-1 preserved, status failed, key cf365-probe-1:result)
+  PASS  ack — POST /agents/cf-node/inbox/ack -> 204 (1 message(s))
+
+BUS WORKER: FAIL
+exit=1

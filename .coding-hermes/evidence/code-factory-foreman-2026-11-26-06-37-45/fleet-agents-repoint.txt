@@ -1,0 +1,13 @@
+CF-365 — roster re-point + consumption-window discipline, 2026-11-26 UTC
+File lives OUTSIDE this repo (~/crier-fleet/fleet_agents.json); recorded here per the brief.
+
+before: "cf-node": "bunker-las-03"   (line 18 — a server that holds no agent; full copy in
+         fleet_agents.before.json in this directory)
+after:  "cf-node": "dedi-2"          (the server where the probe's cf-node actually runs)
+
+Dispatcher handling: the dispatcher (pid 1774889, ~/crier-fleet/dispatcher.py) long-polls
+every roster agent and had already consumed one delivery in <2s (see dispatcher-steal.txt).
+For the measured consumption window ONLY it was SIGSTOPped (state Ts) and SIGCONTed
+immediately after the node's --once returned (state Ss). No restart, no config change to
+the dispatcher; every other roster agent's polling resumed where it stopped. The window
+covered: deliver -> node --once (~30 s).

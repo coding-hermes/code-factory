@@ -1,0 +1,103 @@
+node-create — project=code-factory harness=hermes server=dedi-2
+  ..    spawning node-code-factory-074317 (ttl 2h)
+  PASS  spawn — node-code-factory-074317
+  ..    staging scripts
+Copied ~/code-factory/scripts/project-node.sh to node-code-factory-074317:node-scripts/project-node.sh
+Copied ~/code-factory/scripts/install-go.sh to node-code-factory-074317:node-scripts/install-go.sh
+Copied ~/code-factory/scripts/install-node.sh to node-code-factory-074317:node-scripts/install-node.sh
+Copied ~/code-factory/scripts/lib.sh to node-code-factory-074317:node-scripts/lib.sh
+Copied ~/code-factory/scripts/disk_floor.py to node-code-factory-074317:node-scripts/disk_floor.py
+Copied ~/code-factory/scripts/reclaim_disk.py to node-code-factory-074317:node-scripts/reclaim_disk.py
+Copied ~/code-factory/scripts/node_gateway_auth.py to node-code-factory-074317:node-scripts/node_gateway_auth.py
+Copied ~/code-factory/scripts/node_hygiene.py to node-code-factory-074317:node-scripts/node_hygiene.py
+Copied ~/code-factory/scripts/gomodcache.py to node-code-factory-074317:node-scripts/gomodcache.py
+Copied ~/code-factory/scripts/deploy_key.py to node-code-factory-074317:node-scripts/deploy_key.py
+Copied ~/code-factory/scripts/node-bus-worker.py to node-code-factory-074317:node-bus-worker.py
+Copied ~/code-factory/scripts/harness/harness-vars.sh to node-code-factory-074317:node-scripts/harness/harness-vars.sh
+Copied ~/code-factory/scripts/harness/harness_memory.py to node-code-factory-074317:harness/harness_memory.py
+Copied ~/code-factory/scripts/harness/install-hermes.sh to node-code-factory-074317:node-scripts/harness/install-hermes.sh
+  PASS  staged — project-node.sh + install-go.sh + install-node.sh + lib.sh + disk_floor.py + reclaim_disk.py + node_gateway_auth.py + node_hygiene.py + gomodcache.py + deploy_key.py + node-bus-worker.py + harness/harness-vars.sh + harness/harness_memory.py + harness/install-hermes.sh
+  ..    provisioning inside the node
+  PASS  disk_floor — 5 GiB from role-default
+node provisioning — project=code-factory harness=hermes host=dev
+[00] preflight
+  PASS  arch — x86_64 (Linux 6.8.0-90-generic)
+  PASS  role — worker (floor 5 GiB from role-default)
+  PASS  disk — 1335.7 GB free (floor 5 GB)
+  PASS  mem — 487042 MB
+  PASS  footprint — 0.0 MiB measured at ~bunker-node-code-factory-074317: repo 0.0 MiB, node_toolchain 0.0 MiB, go_toolchain 0.0 MiB, harness 0.0 MiB, node_state 0.0 MiB, modcache 0.0 MiB
+  PASS  footprint:room — 2048.0 MiB required (0.0 MiB + 2048 MiB working room), 1367786.4 MiB free, headroom 1365738.4 MiB
+  PASS  footprint:floor — 0.0 MiB of the 5 GiB floor (0.0 %) from role-default
+  PASS  crier_url — http://<host>:8767
+  FAIL  reach:http://<host>:8767/health — -> 000
+  PASS  reach:https://pypi.org/simple/ — 200
+[10] base
+  PASS  tool:python3 — /usr/bin/python3
+  PASS  tool:git — /usr/bin/git
+  PASS  tool:curl — /usr/bin/curl
+  PASS  tool:tar — /usr/bin/tar
+  PASS  tool:sha256sum — /usr/bin/sha256sum
+  PASS  python:venv — importable
+  WARN  kinds — generic fallback — no --kinds/NODE_KINDS and no kind marker in ~bunker-node-code-factory-074317/repo — grading the fixed base set only, so a Go/Rust/Node repo would go ungraded
+  ..    census: bash scripts/project-node.sh --check --project <p> --layers 10 grades one node — markers go.mod→go, Cargo.toml→rust, package.json→node, pyproject.toml|setup.py→python; CF-218 counted 61 distinct fleet repo origins: go 27, node 22, python 16, rust 5
+  PASS  tool:jq — /usr/bin/jq
+  PASS  tool:rg — /usr/bin/rg
+  WARN  tool:node — missing (some repos' tests need node)
+[20] harness
+  PASS  gateway_auth — dashboard.basic_auth present in ~bunker-node-code-factory-074317/.hermes/config.yaml; password in ~bunker-node-code-factory-074317/.node/auth/gateway.pass (mode 600, value not printed)
+harness: hermes (pin 0.19.0, port 10800)
+  ..    contract:CF_API_KEY_FILE — unset (no credential path; a paid lane supplies one)
+  ..    contract:CF_MODEL = unset
+  ..    contract:CF_PROVIDER = unset
+  ..    contract:CF_BASE_URL = unset
+  ..    contract:CF_API_KEY_FILE = unset
+  ..    contract:CF_WORKDIR = unset
+  ..    contract:CF_NAMESPACE = unset
+  ..    contract:CF_RUN_ID = unset
+  ..    contract:CF_LANE = unset
+  ..    contract:CF_SKILLS_DIR = unset
+  ..    contract:CF_HARNESS_OPTS = unset
+  ..    contract:CF_MAX_TURNS = unset
+  ..    contract:CF_TIMEOUT_S = unset
+  PASS  python — 3.12.3 (hermes-agent 0.19.0 requires >=3.11,<3.14)
+  FAIL  binary — absent — run --apply
+  ..    port — nothing on :10800 yet; --apply starts the gateway
+  FAIL  inference_key — no provider key — a turn dies at 'No inference provider configured'
+apply
+  PASS  install — Hermes Agent v0.19.0 (2026.7.20)
+  PASS  binary — ~bunker-node-code-factory-074317/hermes-venv/bin/hermes
+  PASS  gateway_start — /api/status -> 200
+  PASS  port — listening on :10800 (started by --apply)
+
+HERMES: FAIL (2)
+[30] bus
+  FAIL  crier_identity — absent — stage a bundle and re-run; a node without an identity is invisible
+[40] repo
+  ..    cloning https://github.com/coding-hermes/code-factory.git @ main
+  PASS  repo_clone — ~bunker-node-code-factory-074317/repo @ 5ae9e3e
+  PASS  freshness — branch=main head=5ae9e3e4c5b4 origin_main=5ae9e3e4c5b4 behind=0 ancestor=true
+  ..    check verdict: PASS — recorded in ~bunker-node-code-factory-074317/.node/freshness.json
+[90] manifest
+  ..    manifest is written only when every layer passes
+
+NODE: FAIL (4)
+  FAIL  provision — node reported FAIL — see the output above
+  ..    verifying from the control host
+verify node node-code-factory-074317
+  PASS  agent_alive — ALIVE dev
+  PASS  node_ip — <dedi-2-host>
+  PASS  transport — node-address <dedi-2-host>:10800 — the node's own address, probed from this host (the LAN case; a bunker node has no LAN address by default)
+  PASS  gateway_reachable — http://<dedi-2-host>:10800/api/status -> 200 (transport: node-address)
+  PASS  auth_gate — auth_required:true (a public bind must not be open)
+  PASS  unauth_refused — /api/system/stats -> 401
+  PASS  checkout_freshness — branch=main head=5ae9e3e4c5b4 origin_main=5ae9e3e4c5b4 ancestor=true behind=0
+  WARN  seed_drift — no seed record at ~bunker-node-code-factory-074317/.hermes/seed-applied.json — nothing on this seed's home is digest-recorded; pass --strict-seed to refuse it — the seed could not be measured; pass --strict-seed to refuse it
+  ..    harness_identity — no ~/.node/node.json on the node, so the manifest's harness name and version are not checked
+  ..    gateway_config — config parses, no platforms block — scheduler-only lane (M13 R3)
+
+VERIFY: UNVERIFIED — seed_drift: no seed record at ~bunker-node-code-factory-074317/.hermes/seed-applied.json — nothing on this seed's home is digest-recorded; pass --strict-seed to refuse it
+        (distinct from FAIL on purpose: nothing is broken and nothing is proven — CF-224)
+  WARN  verify — UNVERIFIED — a leg could not be measured from this host (no transport, or an unreadable seed; see the VERIFY line for which) — the node is not marked failed (CF-224/CF-291)
+
+NODE INCOMPLETE (1)
+cleanup required: bunker destroy node-code-factory-074317 --server dedi-2

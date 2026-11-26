@@ -1,0 +1,4 @@
+node-create — project=code-factory harness=hermes server=bunker-las-02
+  ..    spawning node-code-factory-074233 (ttl 2h)
+  FAIL  host — bunker-las-02 cannot spawn an agent: slice-limits; log=/mnt/ssd/tmp/cf-spawn-node-code-factory-074233-i908fh.log; final diagnostic: bunker: spawn agent: internal: spawn node-code-factory-074233 failed at stage slice-limits: containment landing did not converge within 5 reads: containment landing: memory.swap.max = "max", want "0" (bar swap)
+  ..    remedy: bunker-las-02 must let bunkerd land its per-agent slice — enable cgroup v2 swap accounting on that host so memory.swap.max can be set to 0; preflight the target from here with: bunker status --server bunker-las-02
