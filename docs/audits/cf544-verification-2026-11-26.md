@@ -58,6 +58,21 @@ AC5 states it is "a handoff condition for the CF-426 lane, not work for this row
 worker." Classified external/handoff: the P5G-10 re-judge belongs to the CF-426 lane.
 This close does not claim it.
 
+## Judge round 1 (run 01c3485d, graded b68d5c1e): real finding — fixed this tick
+The tier-2 judge graded all four registered criteria PASS with quoted replays, but
+derived a REAL defect beyond the literal ACs: the checker reconciled only top-level
+`ordering` and the embedded canonical bodies, while CV-19-A carries the normative
+literal nested at `group_claim.ordering` (contract-vectors.json:2412). Judge's
+mutation probe: reintroducing priority-first there still printed PASS (blind spot).
+Fix (this tick): tests/test_claim_ordering_consistency.py now also refuses any
+`group_claim.ordering` != schema const, and the selftest CF-544 arm gained a nested
+red control. Probe results: green rc=0; nested control rc=1 naming
+`contract-vectors.json CV-19-A.group_claim.ordering vs cf2a.board-claim.schema.json
+const`; reverted-chapter control still rc=1. The judge's tier1 `tests` red in its
+own run (selftest FAIL (52)) was environmental — the same tree printed
+`SELFTEST: PASS / EXIT=0` in this tick's two clean full runs (see AC3), and the
+judge itself called those 52 arms "unrelated pre-existing host/environment".
+
 ## Verdict binding (gitreins lifecycle)
 - gitreins task create/start CF-544 with the row's acceptance registered as criteria.
 - Verdict artifact: .gitreins/history/<date>/<run>/verdict.json (path + graded commit

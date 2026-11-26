@@ -86,6 +86,17 @@ def main() -> int:
                 "cf2a.board-claim.schema.json const",
                 f"vector carries {vec['ordering']!r}",
             )
+        # Nested group_claim.ordering (CV-19-A carries the normative literal
+        # there) is the same surface: a priority-first reintroduction must be
+        # refused, not silently skipped because the key is one level down.
+        group_claim = vec.get("group_claim")
+        if isinstance(group_claim, dict) and "ordering" in group_claim:
+            if group_claim["ordering"] != const:
+                fail(
+                    f"contract-vectors.json {vid}.group_claim.ordering",
+                    "cf2a.board-claim.schema.json const",
+                    f"group_claim carries {group_claim['ordering']!r}",
+                )
         # Every canonical claim request embeds the ordering literal in its body.
         for key in ("claim_request_canonical_json", "canonical_json"):
             body = vec.get(key)

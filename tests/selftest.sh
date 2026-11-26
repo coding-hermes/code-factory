@@ -9426,6 +9426,29 @@ else
   say "  PASS  reverted-chapter control: the checker refuses the priority-first rule naming §15.2 and the schema/vectors (fixture detects CF-544)"
   sed 's/^/    | /' "$cf544/red"
 fi
+# Red control, nested surface: CV-19-A carries the normative literal one level
+# down at group_claim.ordering — reintroducing the priority-first rule there
+# must fail too, not only the top-level/embedded spellings.
+python3 - "$HERE/docs/handbook/contract-vectors.json" "$cf544/vectors-nested.json" <<'PYCF544'
+import json, sys
+doc = json.load(open(sys.argv[1]))
+for vec in doc["vectors"]:
+    if vec.get("id") == "CV-19-A" and isinstance(vec.get("group_claim"), dict):
+        vec["group_claim"]["ordering"] = (
+            "priority DESC, created_seq ASC, id ASC; dependencies must be "
+            "settled; correction retains its original worker"
+        )
+json.dump(doc, open(sys.argv[2], "w"))
+PYCF544
+if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_claim_ordering_consistency.py" \
+     "$cf544/vectors-nested.json" "$HERE/docs/handbook/chapters/M4-board.md" \
+     >"$cf544/red-nested" 2>&1; then
+  say "  FAIL  nested group_claim.ordering control did not reproduce the disagreement"
+  selftest_fail
+else
+  say "  PASS  nested group_claim.ordering control: the checker refuses a priority-first CV-19-A (fixture detects CF-544)"
+  sed 's/^/    | /' "$cf544/red-nested"
+fi
 rm -rf "$cf544"
 
 say ""
