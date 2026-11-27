@@ -580,6 +580,61 @@ the tree to call (the absence measurements in the Actor facet).
 
 ch:trace row=P5G-20 spec=docs/handbook/OUTLINE.md#node-side-modules wave=none:serial-worker test=tests/test_p5g20_provisioning_lifecycle.py doc=docs/handbook/chapters/M1-provisioning.md prompt=none:ephemeral-brief evidence=docs/audits/p5g20-provisioning-generations-2026-11-26.md witness=none:offline-deterministic-vector-no-live-node verdict=none:foreman-verifies-and-closes commit=none:worker-commit memory=none:foreman-writes
 
+### III.M1.S7 — Bootstrap network and dependency reachability (P5G-21)
+
+This is a **target contract**, not a claim that a firewall, offline installer, or
+memory replication is implemented. Source inspection is pinned to code-factory
+commit `49f62e597dd0a4c95fbe97d474b100224f3d7e82`: the measured surfaces are
+`scripts/project-node.sh` (layer 00 and Go probe), `scripts/install-go.sh`,
+`scripts/install-node.sh`, `scripts/harness/install-hermes.sh`,
+`scripts/install-gitreins.sh`, `scripts/bunker-provision.sh`, and
+`specs/NODE.md`. These pins describe repository source, not a live node or a
+version of Crier, DuckBrain, a package index, or a firewall.
+
+Actor: The controller declares and approves the phase-specific network policy and artifact manifest; the node runs the checks and the controller independently verifies receipts. The network operator enforces the policy; neither a URL in configuration nor a successful health check proves enforcement.
+Data shape: Each dependency record contains phase, purpose, exact approved destination and port or local artifact identifier, immutable version and expected digest where applicable, and a non-secret evidence reference. A manifest must enumerate transitive packages and source revisions; credentials are file references, never payloads or logs. Runtime service addresses are deployment-specific, not universal hostnames.
+Ordering: Approve the manifest and policy before bootstrap; establish bus membership before workspace, verify artifact bytes before use, then verify each required dependency from the actual node execution context before admission. Switch to the narrower runtime policy only after bootstrap; recheck effective policy and service reachability at that boundary.
+Failure behavior: Deny undeclared egress; missing, unreachable, mismatched or unverified required dependencies block the affected stage and admission. A health response alone is not proof of package availability, memory synchronization, or policy enforcement. Do not silently fall back to public internet or report an unmeasured leg as passing.
+Recovery rule: Preserve the failed stage and non-secret diagnostic; restore the approved route or supply a verified artifact, then retry the failed idempotent stage under the same approved manifest. A changed destination, artifact, digest, or policy requires renewed approval and revalidation; never reuse stale reachability evidence as a fresh check.
+
+| Phase / purpose | Permitted destination or offline material | Required proof before proceeding |
+|---|---|---|
+| bootstrap / bus | Exact approved Crier endpoint | Node-context health and authenticated bus operation; preserve bus-before-workspace ordering |
+| bootstrap / artifacts | Exact approved artifact hosts or an approved local bundle | Manifest pin and digest verified before execution; all transitive dependencies present |
+| bootstrap / workspace | Exact approved repository endpoint or verified pinned local repository snapshot | Verify repository identity and revision before use |
+| runtime / control | Exact approved Crier and inference gateway endpoints | Node-context authenticated operation and effective policy verified |
+| runtime / memory | Exact approved DuckBrain endpoint, or approved durable offline transfer | Namespace-scoped write and independent readback at the controller; reconcile before claiming a shared view |
+| runtime / dependencies | Approved local sealed cache or explicitly approved runtime dependency endpoint | Offline build from cache or actual dependency resolution through the approved endpoint |
+| either / other | No undeclared destination | Deny; no implicit fallback |
+
+Offline material is not a blanket bypass: it must be staged into a persistent
+mount, verified against the manifest, and cover the full dependency closure. A
+cache miss blocks that operation; offline memory writes remain pending until
+transferred and independently read back, rather than being called synchronized.
+The offline alternative is a target design, not a claim that current installers
+support it. Runtime endpoints are not automatically authorized during bootstrap,
+nor are bootstrap package hosts automatically authorized at runtime.
+
+**Measured source boundary.** At the pinned commit, layer 00 probes configured
+Crier `/health` by GET and `https://pypi.org/simple/` by HEAD, requiring HTTP 200;
+it does not prove the rest of this policy. The Go installer fetches a pinned
+archive with `fetch_verified` and also probes the configured Go proxy; the Node
+installer uses a verified archive. The Hermes and GitReins installers invoke pip
+with version pins, not a complete digest-locked transitive bundle in these cited
+calls. The provisioner probes DuckBrain namespace HTTP status (including 404),
+not a write/readback synchronization. Thus offline bootstrap, full egress
+restriction, dependency closure and shared-memory convergence remain UNVERIFIED.
+A PyPI preflight failure also means the current unmodified layer 00 cannot be
+claimed to support a fully offline run, even when local artifacts exist.
+
+The deterministic validation artifact is the table above. From the repository
+root run `python3 tests/test_p5g21_network_contract.py`: it parses that table,
+checks every expected row, and tests both a positive vector and negative vectors
+(removing an allowlist restriction and the memory readback). It validates the
+specified contract only, not deployed enforcement or live reachability.
+
+ch:trace row=P5G-21 spec=docs/handbook/OUTLINE.md#node-side-modules wave=none:sync-lane-inline test=tests/test_p5g21_network_contract.py doc=docs/handbook/chapters/M1-provisioning.md prompt=none:ephemeral-brief evidence=none:deterministic-vector-in-test witness=none:offline-deterministic-vector-no-live-node verdict=none:foreman-verifies-and-closes commit=none:worker-commit memory=none:foreman-writes
+
 ## 6. Contracts in and out
 
 M1's canonical edges are CT-22 (enrollment/registration) and CT-23 (Bunker
