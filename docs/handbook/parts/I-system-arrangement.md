@@ -1504,6 +1504,57 @@ and gates after a CAS conflict. PR is an approval transport, not a fifth proof
 mode; provider automatic merges that cannot bind the exact tested tree are refused.
 [CT-12/13/14; F5]
 
+#### 1.9.7a Publication retry and exact-tree proof (P5G-24)
+
+Status: TARGET-UNIMPLEMENTED / UNVERIFIED. This is a design contract for publication
+retry and exact-tree proof, not evidence that a publication broker, its receipts or
+its CAS write are deployed. Source baseline `4000cc4f2e0eb671a8d1f391d0483054d6e5707a`
+pins this repository's Part I §1.9.7 publication policy, Part II F5 stage map
+(`docs/handbook/parts/II-flows.md`), the III.M3 repository chapter
+(`docs/handbook/chapters/M3-repository.md`) and the III.M4 board chapter
+(`docs/handbook/chapters/M4-board.md`); it pins no external forge, broker or GitReins
+version. The shipped merge-only ancestry landing (`scripts/land-node-branch.sh`,
+M3 §2/§10) is narrower: it pushes an explicit object and checks candidate ancestry
+against a fetched tracking ref, which may be stale after fetch failure. It does not
+implement the broker CAS or authoritative readback this subsection specifies.
+
+The question this subsection answers (P5-A-20, P5-B-25, P5-B-26): what idempotency
+key and state transition safely resume a failed push, handle remote movement, and
+bind completion to an immutable tree/ref without circular self-hashing.
+
+Actor: The publication broker (a target component; today an operator or an
+out-of-repo foreman step, M3 §3 F3-5) owns integration, CAS publication and readback; the commit gate (CT-12, gitreins guard) and the independent source judge (CT-13) authorize the `integrated` transition; the foreman owns evidence-bound closure through the board (III.M4, M4 §6/§11). The board never publishes and the lander never closes: stage 3 cannot create a closeout and stage 5 cannot move a ref.
+Data shape: A durable `publication_operation_id` is allocated once per task attempt and destination, before integration; a serialized, fenced broker journal allows at most one active generation per operation. An intent body contains `schema_version`, repository identity, operation ID, generation, destination ref, mode, candidate commit and tree, base commit, accepted commit and tree, criteria, dependency-lock and gate-config digests, and required gate-run IDs. Define `intent_id = SHA-256(UTF-8("publication-intent.v1") || JCS(intent))` where intent is exactly that body, excluding `intent_id`, signatures, readback, receipts and closeout. A changed input requires a new generation and key, not reuse. Retain prior generations and their outcomes. The publication receipt binds the intent and its accepted commit/tree, gate evidence, mode-specific mapping, destination and authenticated remote ref readback; its signature covers canonical receipt bytes excluding the signature. Closure (CT-14) separately references that receipt, accepted commit/tree and evidence run ID, and contains no hash of itself (`docs/handbook/parts/IV-contract-register.md`).
+Ordering: Six ordered transitions, each durably recorded before its successor: (1) integrate at the last verified remote base, run every required integrated-tree gate and record gate run ids and the merged tree — state `integrated`; (2) mint and persist the `publication-intent.v1` record — the durable intent precedes the first external effect (§1.9.2); (3) publish by remote ref CAS — old value `base_commit`, new value the accepted commit; CAS is the only write primitive and an unconditional push is refused; (4) read back the destination ref, verify accepted-commit ancestry in the read-back destination and tree equality with the integration gate's tree (the §1.9.7 mode-specific proof), and record the readback — state `confirmed`; (5) the foreman validates the receipt and evidence and closes the row with `--evidence-run-id` (`boardctl update --status complete --evidence-run-id <id>`, M4 §11) — state `closed`; (6) closure never rewrites the published commit — the accepted commit is immutable, so completion binds to an object whose hash cannot change, never to the closeout artifact's own bytes.
+Failure behavior: `PUSH_UNLANDED` requires authoritative proof of non-landing and quiescence, not merely a base readback; only then may the same key retry. A proven `CAS_CONFLICT` or `REMOTE_MOVED` supersedes the intent, and integration and all integrated-tree gates repeat at the new base with a new key. `READBACK_UNAVAILABLE` or an uncertain effect holds `published_pending`: no replacement publication or success is authorized. Any base, tree, criteria, dependency-lock or gate-config change invalidates all integrated-tree checks (§1.9.7). The same key never re-fires after supersession. An unknown push outcome is never resolved by a blind re-push.
+Recovery rule: After any possibly issued CAS, including a crash before its response was journaled, query the authoritative remote and durable effect ledger before another write. A ref containing the accepted commit confirms only after the original gate, tree and mode-specific proofs pass. A ref at base permits the same CAS only if an authoritative, durable effect record proves this operation never landed and no earlier CAS remains in flight; absent that proof or under possible ref rewind (ABA), hold `published_pending` for reconciliation. A different tip supersedes only once non-landing and quiescence are proven; otherwise hold. A confirmed operation resumes board and memory closeout without republishing. A receipt is immutable; replay the original receipt, while changed bytes for its identity conflict. A board event or commit message is not publication proof.
+
+The readback classification in the recovery rule is the exact-tree proof's decision
+point, and it is tabulated below so it can be checked without a forge.
+`ref_shows` classifies the destination ref read back after the push attempt (or after
+a restart): `accepted` — points exactly at the accepted commit; `descendant` — the
+accepted commit is an ancestor of the current tip, so the ancestry and tree proof
+still hold and the work is published exactly once; `base` — still at `base_commit`;
+`moved` — another tip that does not contain the accepted commit; `unavailable` — the
+readback failed. For these rows only, assume the original gate/tree/mode proof is valid
+and an authoritative ledger proves non-landing and quiescence for `base` and `moved`;
+without those prerequisites the result is `published_pending` and no retry. A descendant
+need not have the accepted tree itself: verify the accepted commit's tree against the gate.
+`same_key_retry = 1` permits reissuing the same intent's CAS; other rows forbid it.
+These vectors describe the contract, not a production implementation.
+
+| case | ref_shows | state | same_key_retry |
+|---|---|---|---|
+| landed_exact | accepted | confirmed | 0 |
+| landed_advanced | descendant | confirmed | 0 |
+| not_landed | base | published_pending | 1 |
+| remote_moved | moved | superseded | 0 |
+| outcome_unknown | unavailable | published_pending | 0 |
+
+Run `python3 -m unittest discover -s tests -p test_p5g24_publication_retry.py -v`
+to validate the section, the decision vector and the negative controls; this checks
+the specification artifact only, not a live forge.
+
 ### 1.9.8 Retention and compatibility
 
 Every runtime workspace, evidence object, pending memory commit and backup enters
