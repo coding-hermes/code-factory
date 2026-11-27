@@ -2,13 +2,14 @@
 # CF-099 probe — do the PRD milestone block and the acceptance plan still describe this tree?
 # Contract enforced: default mode checks the milestone/open blockers, tip-pinned board snapshot,
 # section census and PRD CF-102 layer arms; --sections-only checks only the plan/selftest census.
-# CF099_PLAN and CF099_SELFTEST override the two census inputs for fixture testing.
+# CF099_PLAN and CF099_SELFTEST override the two census inputs for fixture testing; CF099_PRD
+# overrides the PRD the same way (the blocker-leg fixture is a private PRD copy, not this tree's).
 # Usage: bash docs/audits/cf099-prd-drift-probe.sh [--sections-only] (cwd: repository root)
 set -uo pipefail
 cd "$(git rev-parse --show-toplevel)" || exit 2
 P=${CF099_PLAN:-docs/ACCEPTANCE-PLAN.md}
 S=${CF099_SELFTEST:-tests/selftest.sh}
-R=docs/PRD-code-factory.md
+R=${CF099_PRD:-docs/PRD-code-factory.md}
 # Phrasing-tolerant readers for the single "Current state" line. The plan has been written two
 # ways ("carries N sections — numbered 1 through N" and "N numbered sections"), and a parser that
 # only understands one of them reads the other as "none" and reports drift that is not there.
@@ -42,12 +43,14 @@ msec=$(grep -cE '^say "[0-9]+\.' "$S")
 block=$(awk '/^\*\*Status 20/{f=1} f&&/^$/{exit} f' "$R" | tr '\n' ' ')
 printf '%s' "$block" | grep -qE 're-measured at `[0-9a-f]{7,40}`' \
   || { echo "DRIFT: PRD milestone block does not name the tip it was re-measured at"; d=1; }
-# Leg A — the milestone's open-blocker list. The id loop below only ever sees what follows the
-# phrase "open defect(s)"; a reworded sentence ("remaining gaps …") leaves that loop with an EMPTY
-# body, and the probe then prints open_blockers= empty and certifies nothing while still passing
-# (CF-115). So a missing phrase is drift on its own, and so is a phrase with no CF-id behind it;
-# only phrase + ids makes the board-status loop meaningful.
-open_part=$(printf '%s' "$block" | sed -nE 's/.*[Oo]pen defects?//p')
+# Leg A — the milestone's open-blocker list. The id list is read from the SENTENCE that follows
+# the "open defect(s)" phrase, not from the whole tail of the block: a dated historical trail
+# sentence inside the block (e.g. "the trail for the CF-131 close") names ids that are history,
+# not current membership, and sweeping them made the probe report a completed row as a live
+# blocker while the block's own list was correct (CF-552). Sentence bounding keeps the CF-115
+# vacuity guards intact — the phrase is still required, and an id list that is not in the
+# phrase's own sentence still fails closed as "no CF-id list" rather than certifying nothing.
+open_part=$(printf '%s' "$block" | sed -nE 's/.*[Oo]pen defects?([^.]*).*/\1/p')
 open_ids=$(printf '%s' "$open_part" | grep -oE 'CF-[0-9]{3}' | sort -u | tr '\n' ' ')
 if [ -z "$open_part" ]; then
   echo "DRIFT: milestone Status block carries no open-defect phrase, so its blocker leg certifies nothing"

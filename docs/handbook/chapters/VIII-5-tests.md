@@ -133,6 +133,13 @@ CF-514, so both remain visible diagnostics rather than gate failures. The cf198 
 census counts numbered section headings, so add checks for this family inside §39 rather than
 adding a new numbered section. The cf181 sweep reads its board from the named git ref, not an
 uncommitted filesystem copy; its orphan red fixture therefore uses a scratch git repository.
+Since CF-552, the cf099 probe's board-status leg reads its open-blocker id list from the
+sentence that follows the milestone block's `open defect(s)` phrase, not from the whole tail of
+the block: a dated historical trail sentence inside the block (the `CF-131` close trail) is
+history, not current membership, so a completed row named only there no longer fails the probe,
+while a completed row named in the blocker sentence itself still does — graded by §39's
+`cf099-drift-blocker-red` fixture, which inserts `CF-099` into the sentence of a private PRD
+copy through the probe's `CF099_PRD` override.
 
 ## 5. Verification
 

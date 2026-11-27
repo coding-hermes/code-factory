@@ -3371,6 +3371,26 @@ else
 fi
 rm -rf "$tmpd"
 
+# CF-552 negative fixture: a completed row named inside the open-defect sentence must fail the
+# probe's board-status leg. CF-099 is `complete`; the fixture inserts it into the eleven-defect
+# sentence of a private PRD copy (CF099_PRD), so the insertion — not the live PRD — is what the
+# probe grades. The premise is asserted, so a PRD rewording cannot silently vacate the arm.
+tmpd=$(mktemp -d)
+sed -E 's/(eleven open defects read unchanged at `[^`]*`: )`CF-001`/\1`CF-099`, `CF-001`/' \
+  "$HERE/docs/PRD-code-factory.md" > "$tmpd/prd"
+if grep -q '`: `CF-099`, `CF-001`' "$tmpd/prd"; then
+  red=$(cd "$HERE" && CF099_PRD="$tmpd/prd" bash "$HERE/docs/audits/cf099-prd-drift-probe.sh" 2>&1); red_rc=$?
+  if ! cf099_grade "$red" "$red_rc" \
+    && printf '%s\n' "$red" | grep -q '^DRIFT: milestone lists CF-099 as an open blocker, board says complete'; then
+    say "  PASS  cf099-drift-blocker-red — complete row CF-099 named in the open-defect sentence refused (exit $red_rc)"
+  else
+    say "  FAIL  cf099-drift-blocker-red — a complete row in the open-defect sentence was accepted (exit $red_rc): $(printf '%s\n' "$red" | tail -3 | tr '\n' ' ')"; selftest_fail
+  fi
+else
+  say "  FAIL  cf099-drift-blocker-red — fixture premise lost: the open-defect sentence no longer matches the insertion anchor"; selftest_fail
+fi
+rm -rf "$tmpd"
+
 say "40. the bunker provisioner fails closed, and its config file is data not code (CF-214)"
 bash -n "$HERE/scripts/bunker-provision.sh" && say "  PASS  bash -n scripts/bunker-provision.sh" || { say "  FAIL  provision syntax"; selftest_fail; }
 bash -n "$HERE/scripts/bunker-crier-connect.sh" && say "  PASS  bash -n scripts/bunker-crier-connect.sh" || { say "  FAIL  crier-connect syntax"; selftest_fail; }
