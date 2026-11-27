@@ -348,7 +348,7 @@ from approved target behavior.
 
 **9. INFERENCE PROXY**
 - **Purpose:** the only holder of the provider credential for node inference.
-- **Form/location:** runtime process (`~/.hermes/scripts/cf-inference-proxy.py`) on the control host.
+- **Form/location:** runtime process (`~/.hermes/` + `scripts` + `/cf-inference-proxy.py`) on the control host; this is a host path, not a repository path.
 - **Caller/trigger:** node chat-completion requests.
 - **Owned decisions and state:** provider credential custody; node admission by
   token; model allowlist; stream/buffer handling (M12 §2). No anonymous paid
@@ -719,7 +719,7 @@ these peers explicitly, with no claim of a measured adapter installation.
   deviations against it — the source snapshot is evidence, not the requirement.
 - **Inputs:** `CT-16` the module status word (UNVERIFIED, see DOC GATE); chapters, model, registers.
 - **Outputs:** `CT-18` the approval artifact to the operator (UNVERIFIED — the
-  legacy renderer hardcodes `docs/master` and does not select the M*.md
+  legacy renderer hardcodes the `master` subdirectory of `docs` and does not select the M*.md
   chapters, M6 §6).
 - **Consumers:** the operator; reviewers.
 - **Failure behavior:** build and check gates fail the delivery rather than ship a silent defect.
@@ -1593,6 +1593,54 @@ all required hooks. Failure/partial execution remains failure/partial even if
 hooks pass. The scheduler increments final counters and issues follow-up only
 once per final revision; correction events identify superseded revisions.
 [CT-06/06R; F1/F3/F11]
+
+#### 1.9.9a Offline memory custody and settlement (P5G-23)
+
+Status: TARGET-UNIMPLEMENTED / UNVERIFIED. This is a design contract, not evidence
+that the manager, receipts, enforcement or synchronization are deployed. Source
+baseline `d5de281d5da8ab3ed24d548e5316d9b444930461` pins this repository's Part I
+settlement rules and Part II F3 memory flow, not external DuckBrain or Crier versions.
+The shipped node worker's missing DuckBrain integration is recorded in F3; no live
+source version or operational conformance is asserted for those external systems.
+
+Actor: The designated Bunker memory writer holds the local copy; the authenticated controller memory custodian verifies and durably receives it; the scheduler owns settlement, and the Factory manager owns storage retention and destructive resource release.
+Data shape: A `memory-custody.v1` receipt binds project, namespace, round, run, Bunker principal and registration generation, owner fence, record IDs and payload digests, local Git commit, controller sync commit, durable controller receipt ID and time, and issuer/key ID; it is signed by the authorized controller custodian over canonical receipt bytes. A local signed assertion is not controller custody.
+Ordering: Local fsync, commit and local readback precede a pending retention hold; after transfer the controller independently reads each record in the named namespace, verifies all IDs and digests and durable commit, then signs its receipt. Scheduler verifies signer authorization, signature, scope, current fence and the complete expected record set before durable receipt readback and transition to postcheck_pending. Crier report custody is not memory custody.
+Failure behavior: Offline, stale fence, invalid or missing receipt, incomplete set, conflict, failed readback or authority outage leaves awaiting_evidence; no final success, success counter or success follow-up is allowed. At the 24-hour deadline append unknown and an incident; timeout is neither receipt nor permission to destroy the only copy.
+Recovery rule: Retain the local data, Git objects and refs across restart, cleanup, rebuild and teardown until verified controller custody; reconnect, reconcile fences and retry the same IDs/digests, resolving conflicts as F3 requires. A late valid receipt appends a reconciliation revision and resumes postchecks without repeating work. If the only local copy is lost, record LOCAL_STORE_LOST and the loss interval; do not claim custody or success. Any exceptional destructive release requires explicit authorized loss acceptance, recorded as loss, never success.
+
+The hold covers the storage and identity needed to recover the records, not every
+compute resource: a worker process or compute slot may be released after its own
+termination and fencing are verified, provided doing so cannot destroy the held
+memory. Releasing the held volume, deleting its records or rebuilding over it requires
+verified controller custody or the separately authorized loss-acceptance exception.
+Receipt possession alone is insufficient: signature and current authority checks,
+controller readback, record-set completeness and digest matches must all succeed.
+Receipt replay with identical content is idempotent; a changed digest for the same
+record or receipt identity is a conflict, not an overwrite. Revocation or an unavailable
+fresh authority check blocks acceptance; preserving data is independent of whether a
+compute lease expires. Postchecks and revocation still gate final success under §1.9.9.
+
+The deterministic decision vectors below use `1` for true and `0` for false. `valid`
+means every receipt, authority, scope, fence, full-set, digest and controller-readback
+check above succeeds; `expired` means the evidence deadline has elapsed; `loss`
+means authorized loss acceptance was durably recorded. `memory_release` concerns
+only the held local memory, not a compute slot. An already recorded `unknown` stays
+immutable: later valid custody creates a new revision. These vectors describe the
+contract, not a production implementation.
+
+| case | valid | expired | loss | state | memory_release |
+|---|---|---|---|---|---|
+| disconnected | 0 | 0 | 0 | awaiting_evidence | 0 |
+| invalid_receipt | 0 | 0 | 0 | awaiting_evidence | 0 |
+| deadline | 0 | 1 | 0 | unknown | 0 |
+| accepted_loss | 0 | 1 | 1 | unknown | 1 |
+| controller_custody | 1 | 0 | 0 | postcheck_pending | 1 |
+| late_custody | 1 | 1 | 0 | postcheck_pending | 1 |
+
+Run `python3 -m unittest discover -s tests -p test_p5g23_memory_settlement.py -v`
+to validate the section, decision vectors and negative controls; this checks the
+specification artifact only, not a live service.
 
 ### 1.9.10 Integrated authority, activation and terminal-state contracts (P6-01/08/10/12)
 
