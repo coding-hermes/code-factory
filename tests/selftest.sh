@@ -3418,6 +3418,16 @@ else
   say "  FAIL  a bunker exec budget above the 300s ceiling reached the network (CF-247)"; selftest_fail
 fi
 
+# ch:trace row=P5G-21 spec=docs/handbook/chapters/M1-provisioning.md#iiim1s7 wave=none:sync-lane-inline test=tests/test_p5g21_network_contract.py doc=docs/handbook/chapters/M1-provisioning.md evidence=tests/test_p5g21_network_contract.py::ContractTest::test_positive_and_negative_vectors witness=none:offline-deterministic-vector-no-live-node verdict=none:foreman-will-run-gitreins commit=none:worker-commit memory=none:foreman-close
+# P5G-21: the S7 bootstrap-network table is the row's deterministic artifact. This arm keeps
+# its validator (one positive vector, two negative vectors, scoped to the S7 section) reachable
+# from the repository gate, so the contract table cannot regress while the suite stays green.
+if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_p5g21_network_contract.py" >/dev/null 2>&1; then
+  say "  PASS  bootstrap network contract table validates with discriminating negative vectors (P5G-21)"
+else
+  say "  FAIL  bootstrap network contract table no longer validates (P5G-21)"; selftest_fail
+fi
+
 # ch:trace row=CF-253 spec=docs/handbook/chapters/M2-dispatch.md#iiim2s3--result-attribution-cf-133 test=tests/cf253_stall_witness.py doc=docs/handbook/chapters/M2-dispatch.md evidence=tests/cf253_stall_witness.py:arm_silent_socket witness=none:local-fixture verdict=none:foreman-will-run-gitreins commit=none:worker-commit memory=none:foreman-close
 # CF-253: this gate is pytest-free (CI installs go and ruff only), so the arm runs the
 # plain-python witness. tests/test_cf253_harness_stall_bound.py pins the same behaviour
