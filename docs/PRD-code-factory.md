@@ -49,6 +49,24 @@ One project (crier), one node, one directive that travelled over crier and reach
 gateway, one commit produced there, one artifact digest verified back on the control host, and a
 recorded FAIL when the gate is made to fail.
 
+**Status 2026-11-27T18:45Z (board re-measured at `34fb1aa7` — 643 task rows, 1073 events: 262
+complete, 17 in_progress, 5 blocked, 359 pending; 0 duplicate ids, 0 malformed lines): NOT MET,
+membership unchanged, one leg-adjacent probe now in flight.** Thirty rows closed `complete` since
+the `daf27fbb` paragraph (`CF-163`, `CF-240`, `CF-246`, `CF-335`, `CF-345`, `CF-346`, `CF-355`,
+`CF-360`, `CF-361`, `CF-366`, `CF-385`, `CF-475`, `CF-526`, `CF-528`, `CF-529`, `CF-533`,
+`CF-534`, `CF-535`, `CF-538`, `CF-539`, `CF-542`, `CF-544`, `CF-546`, `CF-547`, and the tightened
+P5G wave rows `P5G-17` through `P5G-22`). A keyword scan of titles and acceptance fields found
+12 candidate rows, but this is not an exhaustive search for milestone evidence and the closure
+claims were not independently verified. A fresh end-to-end demonstration remains unverified; the
+open defects below prevent claiming the milestone is met. The eleven open defects read unchanged at `34fb1aa7`: `CF-001`, `CF-002`, `CF-004`,
+`CF-136`, `CF-137`, `CF-138`, `CF-139` (`in_progress`); `CF-080`, `CF-132` (`pending`);
+`CF-110`, `CF-112` (`blocked`). Leg-adjacent rows outside the blocker list, one clause each:
+`CF-365` (in_progress on the board) calls for a directive-leg probe: one scheduler dispatch
+consumed by the node bus worker `--once`; its current execution status was not verified here.
+`CF-347` (blocked) is the node credential-law spec gap and stops
+none of the four legs. The 2026-11-22T15:58Z paragraph below remains the trail for the
+`CF-131` close.
+
 **Status 2026-11-22T15:58Z (board re-measured at `daf27fbb` — 619 task rows, 1007 events: 232
 complete, 17 in_progress, 4 blocked, 366 pending; 0 duplicate ids): NOT MET, one leg closed and
 the open list shrinks.** Supersedes the open-defects membership of the `14:25Z` paragraph below:
