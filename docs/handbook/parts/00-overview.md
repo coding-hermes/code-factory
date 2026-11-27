@@ -145,6 +145,48 @@ of the arrangement (Part I §1.1) and registered in `docs/SYSTEM-MODEL.yaml`.
 `CF2A-01/P5-A` is the target model revision; the rendered issue identifies the
 model digest and derives its component/contract totals from that exact input.
 
+## P5G-22 — Memory topology, merge and durability
+
+This is the overview of the target memory flow (Part II F3, Part V supported
+memory profile, Part VII §VII.18.1 and Part IV CT-09/CT-15). The source baseline
+is commit `a4fee6e0ede8cf564635a7bca2066e12e7e5bcff`, pinning those handbook
+contracts and the implementation in `scripts/node-bus-worker.py` and
+`scripts/harness/harness_memory.py`; it is not evidence of a live deployment.
+
+Actor: Each Bunker and the controller have a project namespace view; the designated local writer commits records, and a fenced sync owner publishes through the broker. Local-only without a shared repository is single-host, not cross-host convergence.
+Data shape: `memory-record.v1` identifies namespace, record, writer and worker/wave/round correlation, with a digest of the record excluding its digest field. The local and synchronized commit receipts are separate.
+Ordering: Recall before briefing; write worker records, wave summaries and then the round summary. Fsync record data, Git objects and ref transaction and read back before local acknowledgement; synchronize and verify controller readback separately.
+Failure behavior: A missing local commit is PERSISTENCE_UNAVAILABLE; an outage after local commit leaves pending-sync and blocks round settlement. Same ID and digest replay once; differing digests preserve both as MEMORY_CONFLICT, never last-writer-wins.
+Recovery rule: Retain pending records, retry on reconnect through the fenced broker, fetch and recompute after a CAS conflict without force push, and release the hold only after controller readback. Resolve conflicting digests with an authorized new resolution record; loss of an unsynchronized host is reported as loss, not remote success.
+
+Deterministic target decision table (F3 and VII.18; not a test of a live
+service):
+
+| Local commit | Controller readback | Same ID has changed digest | Result |
+|---|---|---|---|
+| no | no | no | PERSISTENCE_UNAVAILABLE |
+| yes | no | no | pending-sync |
+| yes | yes | no | synchronized |
+| yes | no | yes | MEMORY_CONFLICT |
+
+Validate the exact table in this source, including row order, with this single
+command from the repository root (exit 0 means the table matches this vector;
+it does not exercise a memory implementation):
+
+```sh
+grep -xF -A5 '| Local commit | Controller readback | Same ID has changed digest | Result |' docs/handbook/parts/00-overview.md | diff -u <(printf '%s\n' '| Local commit | Controller readback | Same ID has changed digest | Result |' '|---|---|---|---|' '| no | no | no | PERSISTENCE_UNAVAILABLE |' '| yes | no | no | pending-sync |' '| yes | yes | no | synchronized |' '| yes | no | yes | MEMORY_CONFLICT |') -
+```
+
+The merge target unions validated record paths, indexes conflicts and sorts unique
+parent OIDs; the canonical merge uses a fixed identity and maximum parent timestamp.
+Identical parents and records yield the same commit, while different intermediate
+histories need only yield the same index/view digest. These are target rules, not
+proof the deployed system implements them. At the pinned baseline the node worker
+has an R1/R2 HTTP export and exact-key readback path; the file-backed I3 test writer
+is hermetic and does not establish Git fsync, brokered merging or cross-host
+settlement. The F3 historical claim that the worker makes zero DuckBrain calls is
+therefore stale for this source baseline; target CT-09 completeness remains unproven.
+
 ## How a row moves
 
 ![FIGURE 0.2](figures/board-lifecycle.svg)
