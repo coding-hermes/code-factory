@@ -144,6 +144,41 @@ evaluator:
   # was re-run at this tip — CF426_PROBE_PASS (COMPLETE, 1/1, 6.5 iterations /
   # ~28k estimated in) and CF426_STARVE_REPRODUCED (0/1 graded, 100.1
   # iterations / ~1.10M estimated in).
+  #
+  # ── P5G-35 (2026-11-28) — bound the poll loop, not the budget ──
+  # The ladder above stops at 800 deliberately: the 800 rung died on the input
+  # budget at 716.3 iterations with 0 of 1 graded, so raising it again is
+  # measured NOT to converge. scripts/probe_p5g35_tier2_poll_bound.py
+  # (regression: tests/test_p5g35_tier2_iteration_cap.py; measurement:
+  # docs/audits/p5g35-tier2-evidence.json) drives the real evaluator loop with
+  # scripted judges and measures the failure and the remedies:
+  #   - WHY the rungs die: a sleep-0 poll loop is ~980 iterations per second
+  #     of wall clock (red-proof arm: max_time pinned 1s + max_iterations
+  #     1000000 → "Cap exceeded: Time cap (1s) exceeded (1s elapsed)" after
+  #     977.8 iterations / 888 sleep/grep poll calls), so any iteration rung
+  #     is consumed in seconds while the whole transcript is re-sent every
+  #     turn — the input budget takes the hit, which is exactly the job-2ef71d1e
+  #     shape (716.3 iterations, 10.07M in, 0 of 1 graded).
+  #   - The dedup hint is not a bound (measured): the starved arm's
+  #     varied-argument poller logged 3 _dedup_warning markers (exact repeats
+  #     interleaved) and STILL burned 8.7/8 iterations with 0 of 1 criteria
+  #     graded and the criterion UNVERIFIED "Not examined — evaluation ended
+  #     before this criterion was reached". Its literal cap line:
+  #     "Cap exceeded: Iteration cap (8) reached (8.7 used)"; wall clock
+  #     0.38s against max_time 30m and 40 output tokens against 1m — neither
+  #     of those rungs bound; the iteration rung did.
+  #   - The remedy THIS repo owns is the read-once bounded evidence recipe
+  #     (verdicts 2de7f84b, 402cc1f4, 7f326496 above): the bounded arm grades
+  #     1 of 1 EXAMINED (PASS with a detail naming the log's decisive lines)
+  #     at 4.3 iterations with 1 log read and 0 poll calls, inside the same
+  #     cap that starved the poller. Authors of one-criterion rows: the
+  #     criterion text itself must carry the read-once PROOF recipe and forbid
+  #     polling and re-derivation.
+  #   - A structural per-tool poll cap would live in the gitreins engine
+  #     (engine/evaluator.py::_evaluate_loop is model-driven; that seam is
+  #     gitreins-repo work, not code-factory). Until it exists, keep
+  #     max_iterations here and grade single-criterion rows via read-once
+  #     recipes, recording the run's poll count beside the cap it used.
   max_iterations: 800
   static_analysis_diagnostics: false
 history:

@@ -1,0 +1,79 @@
+{
+  "probe": "scripts/probe_p5g35_tier2_poll_bound.py",
+  "engine": "gitreins 0.22.x (~/gitreins local build)",
+  "measured_at": "2026-11-28T08:21:34.795893+00:00",
+  "head": "a5e27685430a0a7fd0a01bd715b113854cd9a382",
+  "token_note": "input/output token figures are transcript-derived estimates (chars/3.5, engine _estimate_context_tokens scale); not provider-billed numbers. Poll/read counts are measured from the evaluator's own _tool_record and the message transcript (_dedup_warning markers).",
+  "arms": {
+    "bounded": {
+      "task": "P5G-35-PROBE",
+      "criterion": "PROOF: read the recorded gate log 'gate.log' exactly once — never poll it (no sleep/grep run_command…",
+      "verdict": "COMPLETE",
+      "outcome": null,
+      "summary": "Read-once recipe: log read once, graded from its final tally and exit lines; 1 of 1 criteria graded, examined with named evidence.",
+      "items": [
+        {
+          "status": "PASS",
+          "detail": "Evidence: gate.log read once — final tally line 'SELFTEST: PASS', exit line 'EXIT=0'; no poll, no re-run.",
+          "evidence_named": true
+        }
+      ],
+      "criteria_graded": 1,
+      "criteria_unexamined": 0,
+      "cap_used": {
+        "max_iterations": 8,
+        "max_time": "30m",
+        "max_output_tokens": "1m"
+      },
+      "cap_line": "",
+      "binding_rung": "",
+      "iterations_used": 4.3,
+      "elapsed_s": 0.06,
+      "input_tokens_used_est": 4316,
+      "output_tokens_used_est": 184,
+      "max_time_seconds": 1800.0,
+      "time_not_binding": true,
+      "max_output_tokens": 1000000,
+      "output_not_binding": true,
+      "llm_turns": 4,
+      "poll_count": 0,
+      "log_reads": 1,
+      "dedup_warnings": 0
+    },
+    "starved": {
+      "task": "P5G-35-PROBE",
+      "criterion": "PROOF: read the recorded gate log 'gate.log' exactly once — never poll it (no sleep/grep run_command…",
+      "verdict": "INCOMPLETE",
+      "outcome": null,
+      "summary": "Cap exceeded: Iteration cap (8) reached (8.7 used). Increase max_iterations or split criteria. Partial verdict — 0 of 1 criteria graded, 1 ungraded. The run spent 33,410 in / 40 out over 8.7 iterations.",
+      "items": [
+        {
+          "status": "UNVERIFIED",
+          "detail": "Not examined — evaluation ended before this criterion was reached (no judgement was made about it)",
+          "evidence_named": false
+        }
+      ],
+      "criteria_graded": 0,
+      "criteria_unexamined": 1,
+      "cap_used": {
+        "max_iterations": 8,
+        "max_time": "30m",
+        "max_output_tokens": "1m"
+      },
+      "cap_line": "Iteration cap (8) reached (8.7 used)",
+      "binding_rung": "iterations",
+      "iterations_used": 8.7,
+      "elapsed_s": 0.43,
+      "input_tokens_used_est": 33410,
+      "output_tokens_used_est": 40,
+      "max_time_seconds": 1800.0,
+      "time_not_binding": true,
+      "max_output_tokens": 1000000,
+      "output_not_binding": true,
+      "llm_turns": 8,
+      "poll_count": 8,
+      "log_reads": 0,
+      "dedup_warnings": 3
+    }
+  }
+}
