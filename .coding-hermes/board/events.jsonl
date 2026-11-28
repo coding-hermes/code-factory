@@ -1078,3 +1078,4 @@
 {"id": 1075, "timestamp": "2026-11-28T08:33:45Z", "event_type": "task_updated", "task_id": "P5G-35", "actor": "foreman", "detail": "{\"status\":\"in_progress\"}"}
 {"id": 1076, "timestamp": "2026-11-28T08:38:54Z", "event_type": "task_updated", "task_id": "P5G-35", "actor": "foreman", "detail": "{\"status\":\"pending\"}"}
 {"id": 1077, "timestamp": "2026-11-28T09:59:59Z", "event_type": "task_completed", "task_id": "CF-426", "actor": "foreman", "detail": "{\"status\":\"complete\"}"}
+{"id": 1078, "timestamp": "2026-11-28T10:53:17Z", "event_type": "task_completed", "task_id": "P5G-23", "actor": "foreman", "detail": "{\"status\":\"complete\"}"}
