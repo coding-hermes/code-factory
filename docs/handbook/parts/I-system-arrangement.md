@@ -1422,9 +1422,18 @@ status or the result is `RESULT_CONFLICT`. [CT-01/02/04/05]
 
 The board broker publishes a single Git commit containing both appended task row
 and event plus `.coding-hermes/board/transactions/<operation_id>.json`:
-`{schema_version: board-transaction.v1, operation_id, parent_revision,
-task_id, claim_id, claim_generation, tasks_sha256, events_sha256}`. The two hashes
-cover complete resulting files. The canonical ref is the project's configured
+`{schema_version: board-transaction.v1, operation_id, project_id, board_id,
+transition, claim_group_id, group_claim, wave_plan_digest, tasks_digest,
+events_digest}`. M4 §15.2 step 3 owns this membership, and it is closed:
+`group_claim` carries the ordered `task_id`, `claim_id`, `claim_generation`,
+`new_revision`, `row_digest` and `event_digest` members; `wave_plan_digest` is
+present exactly for `transition:"claim"` and absent for `renew`/`release`; the two
+whole-file digests cover the complete resulting bytes. The marker carries no self
+digest, no signature and no candidate OID. An earlier revision of this section
+described the marker as `{operation_id, parent_revision, task_id, claim_id,
+claim_generation, tasks_sha256, events_sha256}`; that shape is superseded, not an
+alternative spelling, and a marker in it is a competing contract. The canonical
+ref is the project's configured
 `refs/heads/<destination>`; the broker uses Git receive-pack compare-old-OID to
 new-OID ref update. The candidate has the advertised old OID as parent, cannot
 force-rewrite history, and the server rejects if old OID changed. A local lock
